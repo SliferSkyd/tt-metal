@@ -7,13 +7,13 @@ import torch.nn as nn
 from torch import Tensor
 import torch.nn.functional as F
 from typing import List, Optional
-from models.experimental.DETR3D.reference.model_utils import (
+from models.experimental.detr3d.reference.model_utils import (
     QueryAndGroup,
-    SharedMLP,
     GatherOperation,
     FurthestPointSampling,
     shift_scale_points,
     BoxProcessor,
+    Conv2d,
 )
 import copy
 import math
@@ -39,6 +39,37 @@ def truncate_nested_list(lst, max_items=3):
     return lst
 
 
+class SharedMLP(nn.Sequential):
+    def __init__(
+        self,
+        args: List[int],
+        *,
+        bn: bool = False,
+        activation=nn.ReLU(inplace=True),
+        preact: bool = False,
+        first: bool = False,
+        name: str = "",
+    ):
+        super().__init__()
+
+        for i in range(len(args) - 1):
+            # print(
+            #     "i and args are  ",
+            #     i,
+            #     ((not first or not preact or (i != 0)) and bn),
+            # )
+            self.add_module(
+                name + "layer{}".format(i),
+                Conv2d(
+                    args[i],
+                    args[i + 1],
+                    bn=(not first or not preact or (i != 0)) and bn,
+                    activation=activation if (not first or not preact or (i != 0)) else None,
+                    preact=preact,
+                ),
+            )
+
+
 # 1: PointnetSAModuleVotes
 class PointnetSAModuleVotes(nn.Module):
     """Modified based on _PointnetSAModuleBase and PointnetSAModuleMSG
@@ -60,10 +91,10 @@ class PointnetSAModuleVotes(nn.Module):
         ret_unique_cnt: bool = False,
     ):
         super().__init__()
-        # params = {k: v for k, v in locals().items() if k != 'self'}
+        params = {k: v for k, v in locals().items() if k != "self"}
         print("ref PointnetSAModuleVotes init is called with params:")
-        # for k, v in params.items():
-        #     print(f"  {k}: {v}")
+        for k, v in params.items():
+            print(f"  {k}: {v}")
 
         self.npoint = npoint
         self.radius = radius
@@ -93,6 +124,7 @@ class PointnetSAModuleVotes(nn.Module):
         mlp_spec = mlp
         if use_xyz and len(mlp_spec) > 0:
             mlp_spec[0] += 3
+        # print("inputs to SharedMLP", mlp_spec, bn)
         self.mlp_module = SharedMLP(mlp_spec, bn=bn)
         self.gather_operation = GatherOperation()
         self.furthest_point_sample = FurthestPointSampling()
@@ -119,17 +151,17 @@ class PointnetSAModuleVotes(nn.Module):
         inds: torch.Tensor
             (B, npoint) tensor of the inds
         """
-        # params = {k: v for k, v in locals().items() if k != 'self'}
+        params = {k: v for k, v in locals().items() if k != "self"}
         print(f"ref PointnetSAModuleVotes forward called with params:")
-        # for k, v in params.items():
-        #     if isinstance(v, torch.Tensor):
-        #         print(f"  {k}: Tensor(shape={tuple(v.shape)}, dtype={v.dtype})")
-        #     elif isinstance(v, (int, float, bool)):
-        #         print(f"  {k}: {v}")
-        #     elif v is None:
-        #         print(f"  {k}: None")
-        #     else:
-        #         print(f"  {k}: {type(v).__name__}")
+        for k, v in params.items():
+            if isinstance(v, torch.Tensor):
+                print(f"  {k}: Tensor(shape={tuple(v.shape)}, dtype={v.dtype})")
+            elif isinstance(v, (int, float, bool)):
+                print(f"  {k}: {v}")
+            elif v is None:
+                print(f"  {k}: None")
+            else:
+                print(f"  {k}: {type(v).__name__}")
 
         # xyz: torch.Tensor,features: torch.Tensor ,inds: torch.Tensor",xyz.shape,features.shape,inds.shape
         xyz_flipped = xyz.transpose(1, 2).contiguous()
@@ -147,7 +179,7 @@ class PointnetSAModuleVotes(nn.Module):
             grouped_features, grouped_xyz, unique_cnt = self.grouper(
                 xyz, new_xyz, features
             )  # (B, C, npoint, nsample), (B,3,npoint,nsample), (B,npoint)
-
+        # print("input to shared mlpforward ", grouped_features.shape)
         new_features = self.mlp_module(grouped_features)  # (B, mlp[-1], npoint, nsample)
         if self.pooling == "max":
             new_features = F.max_pool2d(new_features, kernel_size=[1, new_features.size(3)])  # (B, mlp[-1], npoint, 1)
@@ -187,7 +219,7 @@ class TransformerEncoderLayer(nn.Module):
     ):
         super().__init__()
         # params = {k: v for k, v in locals().items() if k != 'self'}
-        print("TransformerEncoderLayer init is called")
+        # print("TransformerEncoderLayer init is called")
         # for k, v in params.items():
         #     print(f"  {k}: {v}")
         if dropout_attn is None:
@@ -220,17 +252,17 @@ class TransformerEncoderLayer(nn.Module):
         src_key_padding_mask: Optional[Tensor] = None,
         pos: Optional[Tensor] = None,
     ):
-        print("TransformerEncoderLayer forwardpost is called")
+        # print("TransformerEncoderLayer forwardpost is called")
         params = {k: v for k, v in locals().items() if k != "self"}
-        for k, v in params.items():
-            if isinstance(v, torch.Tensor):
-                print(f"  {k}: Tensor(shape={tuple(v.shape)}, dtype={v.dtype})")
-            elif isinstance(v, (int, float, bool)):
-                print(f"  {k}: {v}")
-            elif v is None:
-                print(f"  {k}: None")
-            else:
-                print(f"  {k}: {type(v).__name__}")
+        # for k, v in params.items():
+        #     if isinstance(v, torch.Tensor):
+        #         print(f"  {k}: Tensor(shape={tuple(v.shape)}, dtype={v.dtype})")
+        #     elif isinstance(v, (int, float, bool)):
+        #         print(f"  {k}: {v}")
+        #     elif v is None:
+        #         print(f"  {k}: None")
+        #     else:
+        #         print(f"  {k}: {type(v).__name__}")
         q = k = self.with_pos_embed(src, pos)
         value = src
         src2 = self.self_attn(q, k, value=value, attn_mask=src_mask, key_padding_mask=src_key_padding_mask)[0]
@@ -251,7 +283,7 @@ class TransformerEncoderLayer(nn.Module):
         pos: Optional[Tensor] = None,
         return_attn_weights: Optional[Tensor] = False,
     ):
-        print("TransformerEncoderLayer forwardpre is called")
+        # print("TransformerEncoderLayer forwardpre is called")
         # params = {k: v for k, v in locals().items() if k != 'self'}
         # for k, v in params.items():
         #     if isinstance(v, torch.Tensor):
@@ -285,7 +317,7 @@ class TransformerEncoderLayer(nn.Module):
         pos: Optional[Tensor] = None,
         return_attn_weights: Optional[Tensor] = False,
     ):
-        print("TransformerEncoderLayer forwardddd is called")
+        # print("TransformerEncoderLayer forwardddd is called")
         # params = {k: v for k, v in locals().items() if k != 'self'}
         # for k, v in params.items():
         #     if isinstance(v, torch.Tensor):
@@ -316,9 +348,9 @@ class TransformerEncoder(nn.Module):
     def __init__(self, encoder_layer, num_layers, norm=None, weight_init_name="xavier_uniform"):
         super().__init__()
         params = {k: v for k, v in locals().items() if k != "self"}
-        print("TransformerEncoder init is called")
-        for k, v in params.items():
-            print(f"  {k}: {v}")
+        # print("TransformerEncoder init is called")
+        # for k, v in params.items():
+        #     print(f"  {k}: {v}")
         self.layers = get_clones(encoder_layer, num_layers)
         self.num_layers = num_layers
         self.norm = norm
@@ -346,9 +378,9 @@ class MaskedTransformerEncoder(TransformerEncoder):
     ):
         super().__init__(encoder_layer, num_layers, norm=norm, weight_init_name=weight_init_name)
         params = {k: v for k, v in locals().items() if k != "self"}
-        print("MaskedTransformerEncoder init is called")
-        for k, v in params.items():
-            print(f"  {k}: {v}")
+        # print("MaskedTransformerEncoder init is called")
+        # for k, v in params.items():
+        #     print(f"  {k}: {v}")
         assert len(masking_radius) == num_layers
         self.masking_radius = masking_radius
         self.interim_downsampling = interim_downsampling
@@ -371,17 +403,17 @@ class MaskedTransformerEncoder(TransformerEncoder):
         xyz: Optional[Tensor] = None,
         transpose_swap: Optional[bool] = False,
     ):
-        print("MaskedTransformerEncoder forward is called")
+        # print("MaskedTransformerEncoder forward is called")
         params = {k: v for k, v in locals().items() if k != "self"}
-        for k, v in params.items():
-            if isinstance(v, torch.Tensor):
-                print(f"  {k}: Tensor(shape={tuple(v.shape)}, dtype={v.dtype})")
-            elif isinstance(v, (int, float, bool)):
-                print(f"  {k}: {v}")
-            elif v is None:
-                print(f"  {k}: None")
-            else:
-                print(f"  {k}: {type(v).__name__}")
+        # for k, v in params.items():
+        #     if isinstance(v, torch.Tensor):
+        #         print(f"  {k}: Tensor(shape={tuple(v.shape)}, dtype={v.dtype})")
+        #     elif isinstance(v, (int, float, bool)):
+        #         print(f"  {k}: {v}")
+        #     elif v is None:
+        #         print(f"  {k}: None")
+        #     else:
+        #         print(f"  {k}: {type(v).__name__}")
         if transpose_swap:
             bs, c, h, w = src.shape
             src = src.flatten(2).permute(2, 0, 1)
@@ -442,7 +474,7 @@ class GenericMLP(nn.Module):
     ):
         super().__init__()
         params = {k: v for k, v in locals().items() if k != "self"}
-        print("GenericMLP init is called")
+        # print("GenericMLP init is called")
         # for k, v in params.items():
         #     print(f"  {k}: {v}")
         activation = nn.ReLU
@@ -459,6 +491,7 @@ class GenericMLP(nn.Module):
         layers = []
         prev_dim = input_dim
         for idx, x in enumerate(hidden_dims):
+            # print("hiii")
             if use_conv:
                 layer = nn.Conv1d(prev_dim, x, 1, bias=hidden_use_bias)
             else:
@@ -477,6 +510,7 @@ class GenericMLP(nn.Module):
         layers.append(layer)
 
         if output_use_norm:
+            # print("iwbefiuwbefw")
             layers.append(norm(output_dim))
 
         if output_use_activation:
@@ -487,6 +521,8 @@ class GenericMLP(nn.Module):
         if weight_init_name is not None:
             self.do_weight_init(weight_init_name)
 
+        # print("wifne", self.layers)
+
     def do_weight_init(self, weight_init_name):
         func = None
         for _, param in self.named_parameters():
@@ -494,8 +530,8 @@ class GenericMLP(nn.Module):
                 func(param)
 
     def forward(self, x):
-        print("GenericMLP forward is called")
-        # params = {k: v for k, v in locals().items() if k != 'self'}
+        # print("GenericMLP forward is called")
+        params = {k: v for k, v in locals().items() if k != "self"}
         # for k, v in params.items():
         #     if isinstance(v, torch.Tensor):
         #         print(f"  {k}: Tensor(shape={tuple(v.shape)}, dtype={v.dtype})")
@@ -506,6 +542,9 @@ class GenericMLP(nn.Module):
         #     else:
         #         print(f"  {k}: {type(v).__name__}")
         output = self.layers(x)
+        # for i, layer in enumerate(self.layers):
+        #     output = layer(x)
+        #     print(f"torch layer no{i} out is",output.shape)
         return output
 
 
@@ -524,10 +563,10 @@ class PositionEmbeddingCoordsSine(nn.Module):
         gauss_scale=1.0,
     ):
         super().__init__()
-        print("PositionEmbeddingCoordsSine init is called")
+        # print("PositionEmbeddingCoordsSine init is called")
         params = {k: v for k, v in locals().items() if k != "self"}
-        for k, v in params.items():
-            print(f"  {k}: {v}")
+        # for k, v in params.items():
+        #     print(f"  {k}: {v}")
         self.temperature = temperature
         self.normalize = normalize
         if scale is not None and normalize is False:
@@ -672,7 +711,7 @@ class TransformerDecoderLayer(nn.Module):
         norm_fn_name="ln",
     ):
         super().__init__()
-        print("TransformerDecoderLayer init is called")
+        # print("TransformerDecoderLayer init is called")
         # params = {k: v for k, v in locals().items() if k != 'self'}
         # for k, v in params.items():
         #     print(f"  {k}: {v}")
@@ -712,7 +751,7 @@ class TransformerDecoderLayer(nn.Module):
         query_pos: Optional[Tensor] = None,
         return_attn_weights: Optional[bool] = False,
     ):
-        print("TransformerDecoderLayer forward post is called")
+        # print("TransformerDecoderLayer forward post is called")
         q = k = self.with_pos_embed(tgt, query_pos)
         tgt2 = self.self_attn(q, k, value=tgt, attn_mask=tgt_mask, key_padding_mask=tgt_key_padding_mask)[0]
         tgt = tgt + self.dropout1(tgt2)
@@ -745,7 +784,7 @@ class TransformerDecoderLayer(nn.Module):
         query_pos: Optional[Tensor] = None,
         return_attn_weights: Optional[bool] = False,
     ):
-        print("TransformerDecoderLayer forward pre is called")
+        # print("TransformerDecoderLayer forward pre is called")
         tgt2 = self.norm1(tgt)
         q = k = self.with_pos_embed(tgt2, query_pos)
         tgt2 = self.self_attn(q, k, value=tgt2, attn_mask=tgt_mask, key_padding_mask=tgt_key_padding_mask)[0]
@@ -778,7 +817,7 @@ class TransformerDecoderLayer(nn.Module):
         query_pos: Optional[Tensor] = None,
         return_attn_weights: Optional[bool] = False,
     ):
-        print("TransformerDecoderLayer forwarddd is called")
+        # print("TransformerDecoderLayer forwarddd is called")
         # params = {k: v for k, v in locals().items() if k != 'self'}
         # for k, v in params.items():
         #     if isinstance(v, torch.Tensor):
@@ -822,10 +861,10 @@ class TransformerDecoder(nn.Module):
         self, decoder_layer, num_layers, norm_fn_name="ln", return_intermediate=False, weight_init_name="xavier_uniform"
     ):
         super().__init__()
-        print("TransformerDecoder init is called")
+        # print("TransformerDecoder init is called")
         params = {k: v for k, v in locals().items() if k != "self"}
-        for k, v in params.items():
-            print(f"  {k}: {v}")
+        # for k, v in params.items():
+        #     print(f"  {k}: {v}")
         self.layers = get_clones(decoder_layer, num_layers)
         self.num_layers = num_layers
         self.norm = None
@@ -853,17 +892,17 @@ class TransformerDecoder(nn.Module):
         transpose_swap: Optional[bool] = False,
         return_attn_weights: Optional[bool] = False,
     ):
-        print("TransformerDecoder forward is called")
+        # print("TransformerDecoder forward is called")
         params = {k: v for k, v in locals().items() if k != "self"}
-        for k, v in params.items():
-            if isinstance(v, torch.Tensor):
-                print(f"  {k}: Tensor(shape={tuple(v.shape)}, dtype={v.dtype})")
-            elif isinstance(v, (int, float, bool)):
-                print(f"  {k}: {v}")
-            elif v is None:
-                print(f"  {k}: None")
-            else:
-                print(f"  {k}: {type(v).__name__}")
+        # for k, v in params.items():
+        #     if isinstance(v, torch.Tensor):
+        #         print(f"  {k}: Tensor(shape={tuple(v.shape)}, dtype={v.dtype})")
+        #     elif isinstance(v, (int, float, bool)):
+        #         print(f"  {k}: {v}")
+        #     elif v is None:
+        #         print(f"  {k}: None")
+        #     else:
+        #         print(f"  {k}: {type(v).__name__}")
         if transpose_swap:
             bs, c, h, w = memory.shape
             memory = memory.flatten(2).permute(2, 0, 1)  # memory: bs, c, t -> t, b, c
@@ -908,7 +947,7 @@ class TransformerDecoder(nn.Module):
 
 def build_preencoder(args):
     mlp_dims = [3 * int(args.use_color), 64, 128, args.enc_dim]
-    print("pre encoder is PointnetSAModuleVotes")
+    # print("pre encoder is PointnetSAModuleVotes")
     preencoder = PointnetSAModuleVotes(
         radius=0.2,
         nsample=64,
@@ -1019,7 +1058,7 @@ class Model3DETR(nn.Module):
         num_queries=256,
     ):
         super().__init__()
-        print("Model3DETR init is called")
+        # print("Model3DETR init is called")
         self.pre_encoder = pre_encoder
         self.encoder = encoder
         if hasattr(self.encoder, "masking_radius"):
@@ -1037,6 +1076,12 @@ class Model3DETR(nn.Module):
             output_use_norm=True,
             output_use_bias=False,
         )
+        # print(
+        #     "args are",
+        #     encoder_dim,
+        #     hidden_dims,
+        #     decoder_dim,
+        # )
         self.pos_embedding = PositionEmbeddingCoordsSine(d_pos=decoder_dim, pos_type=position_embedding, normalize=True)
         self.query_projection = GenericMLP(
             input_dim=decoder_dim,
@@ -1206,10 +1251,11 @@ class Model3DETR(nn.Module):
         }
 
     def forward(self, inputs, encoder_only=False):
-        print("Model3DETR forward is called")
+        # print("Model3DETR forward is called")
         point_clouds = inputs["point_clouds"]
 
         enc_xyz, enc_features, enc_inds = self.run_encoder(point_clouds)
+        # print("input tn gen", enc_features.shape)
         enc_features = self.encoder_to_decoder_projection(enc_features.permute(1, 2, 0)).permute(2, 0, 1)
         # encoder features: npoints x batch x channel
         # encoder xyz: npoints x batch x 3
