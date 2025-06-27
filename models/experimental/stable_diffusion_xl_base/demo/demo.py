@@ -268,65 +268,190 @@ def run_demo_inference(
     if not is_ci_env and not os.path.exists("output"):
         os.mkdir("output")
 
-    images = []
-    logger.info("Starting ttnn inference...")
-    for iter in range(len(prompts) // batch_size):
-        logger.info(
-            f"Running inference for prompts {iter * batch_size + 1}-{iter * batch_size + batch_size}/{len(prompts)}"
-        )
-        prepare_input_tensors(
-            [
-                tt_latents,
-                *tt_prompt_embeds[iter],
-                tt_add_text_embeds[iter][0],
-                tt_add_text_embeds[iter][1],
-            ],
-            [tt_latents_device, *tt_prompt_embeds_device, *tt_text_embeds_device],
-        )
-        imgs, tid, output_device, output_shape, tid_vae = run_tt_image_gen(
-            ttnn_device,
-            tt_unet,
-            tt_scheduler,
-            tt_latents_device,
-            tt_prompt_embeds_device,
-            tt_time_ids_device,
-            tt_text_embeds_device,
-            ttnn_timesteps,
-            extra_step_kwargs,
-            guidance_scale,
-            scaling_factor,
-            [B, C, H, W],
-            tt_vae if vae_on_device else pipeline.vae,
-            batch_size,
-            tid=tid,
-            output_device=output_device,
-            output_shape=output_shape,
-            tid_vae=tid_vae,
-        )
-
-        logger.info(f"Image gen for {batch_size} prompts completed in {profiler.times['image_gen'][-1]:.2f} seconds")
-        logger.info(
-            f"Denoising loop for {batch_size} promts completed in {profiler.times['denoising_loop'][-1]:.2f} seconds"
-        )
-        logger.info(
-            f"{'On device VAE' if vae_on_device else 'Host VAE'} decoding completed in {profiler.times['vae_decode'][-1]:.2f} seconds"
-        )
-
-        for idx, img in enumerate(imgs):
-            if iter == len(prompts) // batch_size - 1 and idx >= batch_size - needed_padding:
+    i = 0
+    while True:
+        torch.manual_seed(0)
+        if i > 1:
+            response = input("Would you like to generate images again? (y/n): ")
+            if response.lower() == "n":
                 break
-            img = img.unsqueeze(0)
-            img = pipeline.image_processor.postprocess(img, output_type="pil")[0]
-            images.append(img)
-            if is_ci_env:
-                logger.info(f"Image {len(images)}/{len(prompts) // batch_size} generated successfully")
-            else:
-                img.save(f"output/output{len(images) + start_from}.png")
-                logger.info(f"Image saved to output/output{len(images) + start_from}.png")
-    if capture_trace:
-        ttnn.release_trace(ttnn_device, tid)
-        if vae_on_device:
-            ttnn.release_trace(ttnn_device, tid_vae)
+        if i > 0:
+            input("Press Enter to continue after you've typed input prompts to inputs.txt")
+
+        with open("inputs.txt", "r") as f:
+            prompts = [line.strip() for line in f if line.strip()]
+        needed_padding = (batch_size - len(prompts) % batch_size) % batch_size
+        prompts = prompts + [""] * needed_padding
+        all_embeds = [
+            pipeline.encode_prompt(
+                prompt=prompt,
+                prompt_2=None,
+                device=cpu_device,
+                num_images_per_prompt=1,
+                do_classifier_free_guidance=True,
+                negative_prompt=None,
+                negative_prompt_2=None,
+                prompt_embeds=None,
+                negative_prompt_embeds=None,
+                pooled_prompt_embeds=None,
+                negative_pooled_prompt_embeds=None,
+                lora_scale=None,
+                clip_skip=None,
+            )
+            for prompt in prompts
+        ]
+
+        # Reorder all_embeds to prepare for splitting across devices
+        items_per_core = len(all_embeds) // batch_size  # this will always be a multiple of batch_size because of padding
+
+        if batch_size > 1:  # If batch_size is 1, no need to reorder
+            reordered = []
+            for i in range(batch_size):
+                for j in range(items_per_core):
+                    index = i + j * batch_size
+                    reordered.append(all_embeds[index])
+            all_embeds = reordered
+
+        prompt_embeds, negative_prompt_embeds, pooled_prompt_embeds, negative_pooled_prompt_embeds = zip(*all_embeds)
+
+        prompt_embeds_torch = torch.split(torch.cat(prompt_embeds, dim=0), batch_size, dim=0)
+        negative_prompt_embeds_torch = torch.split(torch.cat(negative_prompt_embeds, dim=0), batch_size, dim=0)
+        pooled_prompt_embeds_torch = torch.split(torch.cat(pooled_prompt_embeds, dim=0), batch_size, dim=0)
+        negative_pooled_prompt_embeds_torch = torch.split(
+            torch.cat(negative_pooled_prompt_embeds, dim=0), batch_size, dim=0
+        )
+
+        # Prepare timesteps
+        ttnn_timesteps, num_inference_steps = retrieve_timesteps(
+            pipeline.scheduler, num_inference_steps, cpu_device, None, None
+        )
+
+        num_channels_latents = pipeline.unet.config.in_channels
+        assert num_channels_latents == 4, f"num_channels_latents is {num_channels_latents}, but it should be 4"
+
+        latents = pipeline.prepare_latents(
+            1,
+            num_channels_latents,
+            height,
+            width,
+            prompt_embeds[0].dtype,
+            cpu_device,
+            None,
+            None,
+        )
+
+        extra_step_kwargs = pipeline.prepare_extra_step_kwargs(None, 0.0)
+        add_text_embeds = pooled_prompt_embeds
+        text_encoder_projection_dim = pipeline.text_encoder_2.config.projection_dim
+        assert (
+            text_encoder_projection_dim == 1280
+        ), f"text_encoder_projection_dim is {text_encoder_projection_dim}, but it should be 1280"
+
+        original_size = (height, width)
+        target_size = (height, width)
+        crops_coords_top_left = (0, 0)
+        add_time_ids = pipeline._get_add_time_ids(
+            original_size,
+            crops_coords_top_left,
+            target_size,
+            dtype=prompt_embeds[0].dtype,
+            text_encoder_projection_dim=text_encoder_projection_dim,
+        )
+        negative_add_time_ids = add_time_ids
+
+        scaling_factor = ttnn.from_torch(
+            torch.Tensor([pipeline.vae.config.scaling_factor]),
+            dtype=ttnn.bfloat16,
+            device=ttnn_device,
+            layout=ttnn.TILE_LAYOUT,
+            memory_config=ttnn.DRAM_MEMORY_CONFIG,
+            mesh_mapper=ttnn.ReplicateTensorToMesh(ttnn_device),
+        )
+
+        B, C, H, W = latents.shape
+
+        # All device code will work with channel last tensors
+        tt_latents = torch.permute(latents, (0, 2, 3, 1))
+        tt_latents = tt_latents.reshape(1, 1, B * H * W, C)
+        tt_latents, tt_prompt_embeds, tt_add_text_embeds = create_user_tensors(
+            ttnn_device=ttnn_device,
+            latents=tt_latents,
+            negative_prompt_embeds=negative_prompt_embeds_torch,
+            prompt_embeds=prompt_embeds_torch,
+            negative_pooled_prompt_embeds=negative_pooled_prompt_embeds_torch,
+            add_text_embeds=pooled_prompt_embeds_torch,
+        )
+
+        tt_latents_device, tt_prompt_embeds_device, tt_text_embeds_device, tt_time_ids_device = allocate_input_tensors(
+            ttnn_device=ttnn_device,
+            tt_latents=tt_latents,
+            tt_prompt_embeds=tt_prompt_embeds,
+            tt_text_embeds=tt_add_text_embeds,
+            tt_time_ids=[negative_add_time_ids, add_time_ids],
+        )
+
+        images = []
+        logger.info("Starting ttnn inference...")
+        if i != 0:
+            for iter in range(len(prompts) // batch_size):
+                logger.info(
+                    f"Running inference for prompts {iter * batch_size + 1}-{iter * batch_size + batch_size}/{len(prompts)}"
+                )
+                prepare_input_tensors(
+                    [
+                        tt_latents,
+                        *tt_prompt_embeds[iter],
+                        tt_add_text_embeds[iter][0],
+                        tt_add_text_embeds[iter][1],
+                    ],
+                    [tt_latents_device, *tt_prompt_embeds_device, *tt_text_embeds_device],
+                )
+                imgs, tid, output_device, output_shape, tid_vae = run_tt_image_gen(
+                    ttnn_device,
+                    tt_unet,
+                    tt_scheduler,
+                    tt_latents_device,
+                    tt_prompt_embeds_device,
+                    tt_time_ids_device,
+                    tt_text_embeds_device,
+                    ttnn_timesteps,
+                    extra_step_kwargs,
+                    guidance_scale,
+                    scaling_factor,
+                    [B, C, H, W],
+                    tt_vae if vae_on_device else pipeline.vae,
+                    batch_size,
+                    tid=tid,
+                    output_device=output_device,
+                    output_shape=output_shape,
+                    tid_vae=tid_vae,
+                )
+
+                logger.info(f"Image gen for {batch_size} prompts completed in {profiler.times['image_gen'][-1]:.2f} seconds")
+                logger.info(
+                    f"Denoising loop for {batch_size} promts completed in {profiler.times['denoising_loop'][-1]:.2f} seconds"
+                )
+                logger.info(
+                    f"{'On device VAE' if vae_on_device else 'Host VAE'} decoding completed in {profiler.times['vae_decode'][-1]:.2f} seconds"
+                )
+
+                for idx, img in enumerate(imgs):
+                    if iter == len(prompts) // batch_size - 1 and idx >= batch_size - needed_padding:
+                        break
+                    img = img.unsqueeze(0)
+                    img = pipeline.image_processor.postprocess(img, output_type="pil")[0]
+                    images.append(img)
+                    if is_ci_env:
+                        logger.info(f"Image {len(images)}/{len(prompts) // batch_size} generated successfully")
+                    else:
+                        img.save(f"output/output{len(images) + start_from}.png")
+                        logger.info(f"Image saved to output/output{len(images) + start_from}.png")
+            if capture_trace:
+                ttnn.release_trace(ttnn_device, tid)
+                if vae_on_device:
+                    ttnn.release_trace(ttnn_device, tid_vae)
+        i = i + 1
+
     return images
 
 
