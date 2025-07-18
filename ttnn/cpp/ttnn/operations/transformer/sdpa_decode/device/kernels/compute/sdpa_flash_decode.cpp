@@ -49,6 +49,8 @@ void MAIN {
     constexpr bool use_attention_mask = get_compile_time_arg_val(21) == 1;
     constexpr uint32_t max_dynamic_chunk_size = get_compile_time_arg_val(22);
     constexpr bool tilize_q = get_compile_time_arg_val(23) == 1;
+    constexpr uint32_t scale_fp32 = get_compile_time_arg_val(24);
+
     constexpr uint32_t q_chunk_tiles = Sq_chunk_t * DHt;
     constexpr uint32_t out_chunk_tiles = Sq_chunk_t * DHt;
     constexpr bool untilize_output = tilize_q;
@@ -63,6 +65,7 @@ void MAIN {
     constexpr uint32_t cb_m_in = tt::CBIndex::c_6;
     constexpr uint32_t cb_l_in = tt::CBIndex::c_7;
     constexpr uint32_t cb_q_rm = tt::CBIndex::c_10;
+    constexpr uint32_t cb_col_identity = tt::CBIndex::c_11;
 
     constexpr uint32_t cb_qk_im = tt::CBIndex::c_24;
     constexpr uint32_t cb_out_im = tt::CBIndex::c_25;
@@ -205,7 +208,8 @@ void MAIN {
             cb_exp_max_diff,
             cb_out_o,
             cb_out_m,
-            cb_out_l>(
+            cb_out_l,
+            scale_fp32>(
             k_chunk_start,
             k_chunk_end,
             Sk_chunk_t_dynamic,
@@ -228,59 +232,46 @@ void MAIN {
                 // This indicates that there are computes done by other workers. Needs to wait for them and send to
                 // reducer's compute
                 for (uint32_t i = 0; i < num_cores_to_wait; i++) {
-                    // reconfig_data_format(cb_q_in, cb_q_in); // DEBUG
-                    // pack_reconfig_data_format(cb_out_accumulate_im_2);
                     copy_block(cb_out_o, cb_out_accumulate_im_2, q_chunk_tiles);
                     copy_block(cb_l_in, cb_prev_sum_2, Sq_chunk_t);
                     max_block(cb_m_in, cb_prev_max, cb_cur_max, Sq_chunk_t);  // pushed, pushed, popped
 
                     // l = torch.exp(m_2 - m) * l_2 + torch.exp(m_1 - m) * l_1
-                    /// l1 = torch.exp(m_2 - m) * l_2
-                    // reconfig_data_format(cb_prev_max_2, cb_cur_max); // DEBUG
-                    // pack_reconfig_data_format(cb_exp_max_diff_2);
-                    sub_exp_block(cb_m_in, cb_cur_max, cb_exp_max_diff_2, Sq_chunk_t);
-                    mul_block_inplace(cb_prev_sum_2, cb_exp_max_diff_2, Sq_chunk_t);
-                    /// l2 = torch.exp(m_1 - m) * l_1
-                    // reconfig_data_format(cb_prev_max, cb_cur_max); // DEBUG
-                    // pack_reconfig_data_format(cb_exp_max_diff);
-                    sub_exp_block(cb_prev_max, cb_cur_max, cb_exp_max_diff, Sq_chunk_t);
-                    mul_block_inplace(cb_prev_sum, cb_exp_max_diff, Sq_chunk_t);
+
+                    /// l1 = torch.exp((m_2 - m) * scale) * l_2
+                    sub_exp_block<scale_fp32>(cb_m_in, cb_cur_max, cb_exp_max_diff_2, Sq_chunk_t);
+                    mul_block_bcast_cols_inplace(cb_prev_sum_2, cb_exp_max_diff_2, Sq_chunk_t, DHt);
+
+                    /// l2 = torch.exp((m_1 - m)  * scale) * l_1
+                    sub_exp_block<scale_fp32>(cb_prev_max, cb_cur_max, cb_exp_max_diff, Sq_chunk_t);
+                    mul_block_bcast_cols_inplace(cb_prev_sum, cb_exp_max_diff, Sq_chunk_t, DHt);
+
                     /// l = l1 + l2
-                    // reconfig_data_format(cb_cur_sum, cb_prev_sum); // DEBUG
-                    // pack_reconfig_data_format(cb_cur_sum);
                     add_block(cb_prev_sum_2, cb_prev_sum, cb_cur_sum, Sq_chunk_t);
 
-                    // reconfig_data_format(cb_out_accumulate_im, cb_exp_max_diff); // DEBUG
-                    // pack_reconfig_data_format(cb_out_accumulate_im);
                     mul_block_bcast_cols_inplace(cb_out_accumulate_im, cb_exp_max_diff, Sq_chunk_t, DHt);
                     mul_block_bcast_cols_inplace(cb_out_accumulate_im_2, cb_exp_max_diff_2, Sq_chunk_t, DHt);
 
-                    // reconfig_data_format(cb_out_accumulate_im, cb_out_accumulate_im_2);
-                    // pack_reconfig_data_format(cb_out_accumulate_im);
                     add_block_inplace<true>(cb_out_accumulate_im, cb_out_accumulate_im_2, q_chunk_tiles);
 
                     // copy tiles
-                    // reconfig_data_format(cb_cur_max, cb_cur_max); // DEBUG
-                    // pack_reconfig_data_format(cb_prev_max);
                     cb_pop_front(cb_prev_max, Sq_chunk_t);
                     cb_pop_front(cb_m_in, Sq_chunk_t);
                     copy_block(cb_cur_max, cb_prev_max, Sq_chunk_t);
                     copy_block(cb_cur_sum, cb_prev_sum, Sq_chunk_t);
                 }
             }
+            /**
+             * Performs final row-reduction on the partial sum.
+             */
+            matmul_reduce<Sq_chunk_t>(cb_col_identity, cb_prev_sum);
+            copy_block(cb_prev_sum, cb_cur_sum, Sq_chunk_t);
 
             /* cb_cur_sum = 1.0 / cb_cur_sum */
-            cb_push_back(cb_cur_sum, Sq_chunk_t);
-
-            reconfig_data_format(cb_cur_sum, cb_cur_sum);  // DEBUG
-            pack_reconfig_data_format(cb_cur_sum);
             recip_block_inplace(cb_cur_sum, Sq_chunk_t);
 
             /* cb_out_accumulate_im *= cb_cur_sum */
-            reconfig_data_format(cb_out_accumulate_im, cb_cur_sum);  // DEBUG
-            pack_reconfig_data_format(cb_out_accumulate_im);
             mul_block_bcast_cols_inplace(cb_out_accumulate_im, cb_cur_sum, Sq_chunk_t, DHt);
-            pack_reconfig_data_format(cb_out_final);
 
             if constexpr (untilize_output) {
                 if constexpr (use_pack_untilize) {
@@ -300,10 +291,8 @@ void MAIN {
             } else {
                 copy_block(cb_out_accumulate_im, cb_out_final, out_chunk_tiles);
             }
-
             // free up cb_prev_max after K chunks
             cb_pop_front(cb_prev_max, Sq_chunk_t);
-            cb_pop_front(cb_prev_sum, Sq_chunk_t);
         }
     }
     cb_pop_front(cb_q_in, q_chunk_tiles);
