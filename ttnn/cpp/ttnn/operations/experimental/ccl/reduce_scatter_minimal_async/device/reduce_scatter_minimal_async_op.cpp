@@ -97,11 +97,12 @@ void ReduceScatterMinimalAsync::validate_with_output_tensors(
             output_tensor.value().memory_config().memory_layout());
     }
 
-    // Each direction has a ready semaphore and there's a global sync semaphore, per link.
+    // Ring requires 2 semaphores, Line requires 1
+    uint32_t expected_semaphore_size = this->topology == ttnn::ccl::Topology::Ring ? 2 : 1;
     TT_FATAL(
-        semaphore.size() == num_links * 3,
+        semaphore.size() == expected_semaphore_size,
         "Error, semaphore size should be {} but has {}",
-        num_links * 3,
+        expected_semaphore_size,
         semaphore.size());
 }
 
@@ -194,27 +195,18 @@ tt::tt_metal::operation::ProgramWithCallbacks ReduceScatterMinimalAsync::create_
 
 tt::tt_metal::operation::Hash ReduceScatterMinimalAsync::compute_program_hash(
     const std::vector<Tensor>& input_tensors) const {
-    log_trace(tt::LogOp, "compute_program_hash is called");
-    auto input_shape = input_tensors[0].get_padded_shape();
-    auto input_memory_layout = input_tensors[0].get_layout();
-    auto input_dtype = input_tensors[0].get_dtype();
-    auto input_memory_config = input_tensors[0].memory_config();
-    uint32_t semaphore_address = this->semaphore.at(0).address();
     return tt::tt_metal::operation::hash_operation<ReduceScatterMinimalAsync>(
         this->dim,
         this->num_links,
         this->ring_size,
         this->output_mem_config,
         this->topology,
+        this->sub_device_id,
         this->cluster_axis,
         this->chunks_per_sync,
         this->num_workers_per_link,
         this->num_buffers_per_channel,
-        input_shape,
-        input_memory_layout,
-        input_dtype,
-        input_memory_config,
-        semaphore_address);
+        input_tensors);
 }
 
 namespace operations {
@@ -260,10 +252,7 @@ Tensor reduce_scatter_minimal_async_impl(
     if (num_devices == 2) {
         ccl_topology = ttnn::ccl::Topology::Linear;
     }
-    uint32_t ring_size = num_devices;
-    if (cluster_axis.has_value()) {
-        ring_size = (cluster_axis.value() == 0) ? 8 : 4;
-    }
+
     log_debug(tt::LogOp, "DEBUG: creating line_fabric with num devices: {}, num links: {}", devices.size(), num_links);
     log_debug(tt::LogOp, "DEBUG: line_fabric is created");
 
@@ -281,7 +270,7 @@ Tensor reduce_scatter_minimal_async_impl(
                    devices,
                    dim,
                    num_links,
-                   ring_size,
+                   num_devices,
                    memory_config.value_or(input_tensor.memory_config()),
                    ccl_topology,
                    multi_device_global_semaphore,

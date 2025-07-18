@@ -11,11 +11,10 @@ from tests.tt_eager.python_api_testing.sweep_tests.comparison_funcs import comp_
 from models.utility_functions import skip_for_blackhole
 
 
-def create_global_semaphores(mesh_device, num_devices, cores, initial_value, num_links):
+def create_global_semaphores(mesh_device, topology, cores, initial_value, num_links):
     # create global semaphore handles
-    ccl_semaphore_handles = [
-        ttnn.create_global_semaphore(mesh_device, cores, initial_value) for _ in range(3 * num_links)
-    ]
+    n_sems = 2 if topology == ttnn.Topology.Ring else 1
+    ccl_semaphore_handles = [ttnn.create_global_semaphore(mesh_device, cores, initial_value) for _ in range(n_sems)]
     return ccl_semaphore_handles
 
 
@@ -62,7 +61,7 @@ def run_reduce_scatter_impl(
 
     # create global semaphore handles
     ccl_semaphore_handles = [
-        create_global_semaphores(t3k_mesh_device, num_devices, ccl_sub_device_crs, 0, num_links)
+        create_global_semaphores(t3k_mesh_device, rs_topology, ccl_sub_device_crs, 0, num_links)
         for _ in range(num_iters)
     ]
 
@@ -267,6 +266,77 @@ def run_reduce_scatter_impl(
     ids=["fabric_ring", "fabric_linear"],
 )
 def test_reduce_scatter_async(
+    t3k_mesh_device,
+    num_devices,
+    num_links,
+    rs_input_shape,
+    dim,
+    layout,
+    rs_input_dtype,
+    mem_config_input,
+    mem_config_rs,
+    enable_trace,
+    num_iters,
+    ones_tensor,
+    rs_topology,
+):
+    run_reduce_scatter_impl(
+        t3k_mesh_device,
+        num_devices,
+        rs_input_shape,
+        dim,
+        num_links,
+        rs_input_dtype,
+        layout,
+        mem_config_input,
+        mem_config_rs,
+        rs_topology=rs_topology,
+        enable_trace=enable_trace,
+        num_iters=num_iters,
+        ones_tensor=ones_tensor,
+    )
+
+
+@skip_for_blackhole("Requires wormhole_b0 to run")
+@pytest.mark.parametrize("num_links", [1], ids=["1link"])
+@pytest.mark.parametrize(
+    "num_devices, rs_input_shape, dim, layout, rs_input_dtype",
+    [
+        (8, [1, 1, 100, 1024], 3, ttnn.TILE_LAYOUT, ttnn.bfloat16),  # use batching when fused
+        (8, [2, 1, 333, 2560], 3, ttnn.TILE_LAYOUT, ttnn.bfloat16),  # use batching when fused
+    ],
+)
+@pytest.mark.parametrize(
+    "mem_config_input, mem_config_rs",
+    [
+        (
+            ttnn.MemoryConfig(ttnn.TensorMemoryLayout.INTERLEAVED, ttnn.BufferType.DRAM),
+            ttnn.MemoryConfig(ttnn.TensorMemoryLayout.INTERLEAVED, ttnn.BufferType.DRAM),
+        )
+    ],
+)
+@pytest.mark.parametrize(
+    "enable_trace, num_iters",
+    [
+        (False, 1),
+    ],
+)
+@pytest.mark.parametrize(
+    "ones_tensor",
+    [
+        False,
+    ],
+)
+@pytest.mark.parametrize(
+    "device_params, rs_topology",
+    [
+        ({"fabric_config": ttnn.FabricConfig.FABRIC_1D_RING, "trace_region_size": 90112}, ttnn.Topology.Ring),
+        ({"fabric_config": ttnn.FabricConfig.FABRIC_1D, "trace_region_size": 90112}, ttnn.Topology.Linear),
+    ],
+    indirect=["device_params"],
+    ids=["fabric_ring", "fabric_linear"],
+)
+def test_reduce_scatter_async_padded_input(
     t3k_mesh_device,
     num_devices,
     num_links,

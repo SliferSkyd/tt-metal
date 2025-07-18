@@ -438,10 +438,10 @@ tt::tt_metal::operation::ProgramWithCallbacks ring_reduce_scatter_minimal_async_
                 reader_kernel_ids.push_back(worker_sender_reader_kernel_id);
 
                 std::vector<uint32_t> reader_rt_args = {
-                    input_tensor.buffer()->address(),                 // input_tensor_address
-                    intermediate_tensor.buffer()->address(),          // intermediate_tensor_address
-                    semaphore.at(dir).address(),                      // out_ready_semaphore
-                    semaphore.at(num_directions_per_link).address(),  // batch_ready_semaphore
+                    input_tensor.buffer()->address(),         // input_tensor_address
+                    intermediate_tensor.buffer()->address(),  // intermediate_tensor_address
+                    semaphore.at(0).address(),                // out_ready_semaphore
+                    semaphore.at(1).address(),                // batch_ready_semaphore
                     worker_id,
                     num_workers,
                     input_tensor_Wt / ring_size,  // slice_Wt
@@ -498,12 +498,12 @@ tt::tt_metal::operation::ProgramWithCallbacks ring_reduce_scatter_minimal_async_
                 writer_kernel_ids.push_back(worker_sender_writer_kernel_id);
 
                 std::vector<uint32_t> writer_rt_args = {
-                    intermediate_tensor.buffer()->address(),          // intermediate_tensor_address
-                    output_tensor.buffer()->address(),                // output_tensor_address
-                    virtual_core.x,                                   // out_ready_sem_noc0_x
-                    virtual_core.y,                                   // out_ready_sem_noc0_y
-                    semaphore.at(dir).address(),                      // out_ready_fwd_semaphore
-                    semaphore.at(num_directions_per_link).address(),  // batch_ready_semaphore
+                    intermediate_tensor.buffer()->address(),  // intermediate_tensor_address
+                    output_tensor.buffer()->address(),        // output_tensor_address
+                    virtual_core.x,                           // out_ready_sem_noc0_x
+                    virtual_core.y,                           // out_ready_sem_noc0_y
+                    semaphore.at(0).address(),                // out_ready_fwd_semaphore
+                    semaphore.at(1).address(),                // batch_ready_semaphore
                     worker_id,
                     num_workers,
                     input_tensor_Wt / ring_size,  // slice_Wt
@@ -565,6 +565,8 @@ tt::tt_metal::operation::ProgramWithCallbacks ring_reduce_scatter_minimal_async_
             const auto& output = output_tensors[1];
             const auto& intermed = output_tensors[0];
 
+            const auto& semaphores = static_cast<const ReduceScatterMinimalAsync*>(operation)->semaphore;
+
             // update senders
             uint32_t core_idx = 0;
             for (uint32_t link = 0; link < num_links; link++) {
@@ -583,10 +585,14 @@ tt::tt_metal::operation::ProgramWithCallbacks ring_reduce_scatter_minimal_async_
                         auto& worker_reader_sender_runtime_args = reader_runtime_args[core.x][core.y];
                         worker_reader_sender_runtime_args[0] = input.buffer()->address();
                         worker_reader_sender_runtime_args[1] = intermed.buffer()->address();
+                        worker_reader_sender_runtime_args[2] = semaphores.at(0).address();
+                        worker_reader_sender_runtime_args[3] = semaphores.at(1).address();
                         // sender writer
                         auto& worker_writer_sender_runtime_args = writer_runtime_args[core.x][core.y];
                         worker_writer_sender_runtime_args[0] = intermed.buffer()->address();
                         worker_writer_sender_runtime_args[1] = output.buffer()->address();
+                        worker_writer_sender_runtime_args[4] = semaphores.at(0).address();
+                        worker_writer_sender_runtime_args[5] = semaphores.at(1).address();
 
                         core_idx++;
                     }
@@ -926,7 +932,7 @@ tt::tt_metal::operation::ProgramWithCallbacks line_reduce_scatter_minimal_async_
                     input_tensor.buffer()->address(),         // input_tensor_address
                     intermediate_tensor.buffer()->address(),  // intermediate_tensor_address
                     output_tensor.buffer()->address(),        // output_tensor_address
-                    semaphore.at(0 + link * 3).address(),     // remote transfer sync semaphore
+                    semaphore.at(0).address(),                // remote transfer sync semaphore
                     link * num_workers_per_direction + worker,
                     num_links * num_workers_per_direction,
                     fwd_bwd_semaphore_address};
@@ -983,9 +989,7 @@ tt::tt_metal::operation::ProgramWithCallbacks line_reduce_scatter_minimal_async_
                     output_tensor.buffer()->address(),        // output_tensor_address
                     virtual_core.x,                           // out_ready_sem_noc0_x
                     virtual_core.y,                           // out_ready_sem_noc0_y
-                    semaphore.at(0 + link * 3).address(),     // remote transfer sync semaphore
-                    semaphore.at(1 + link * 3).address(),     // final reduction slot semaphore
-                    semaphore.at(2 + link * 3).address(),     // batch_ready_semaphore
+                    semaphore.at(0).address(),                // remote transfer sync semaphore
                     link * num_workers_per_direction + worker,
                     num_links * num_workers_per_direction,
                     fwd_bwd_semaphore_address,
@@ -1045,27 +1049,24 @@ tt::tt_metal::operation::ProgramWithCallbacks line_reduce_scatter_minimal_async_
 
             // update senders
             uint32_t core_idx = 0;
+            const auto* reduce_scatter_operation = static_cast<const ReduceScatterMinimalAsync*>(operation);
+            const auto& semaphores = reduce_scatter_operation->semaphore;
+
             for (uint32_t link = 0; link < num_links; link++) {
                 for (uint32_t dir = 0; dir < num_directions_per_link; dir++) {
+                    uint32_t mux_core_offset = link * num_cores_per_link +
+                                               dir * (num_mux_cores_per_direction_per_link + num_workers_per_direction);
                     for (uint32_t worker = 0; worker < num_workers_per_direction; worker++) {
-                        uint32_t mux_core_offset =
-                            link * num_cores_per_link +
-                            dir * (num_mux_cores_per_direction_per_link + num_workers_per_direction);
                         CoreCoord core = all_cores[mux_core_offset + num_mux_cores_per_direction_per_link + worker];
-                        std::vector<std::vector<RuntimeArgsData>> reader_runtime_args =
-                            GetRuntimeArgs(program, reader_kernel_ids[core_idx]);
-                        std::vector<std::vector<RuntimeArgsData>> writer_runtime_args =
-                            GetRuntimeArgs(program, writer_kernel_ids[core_idx]);
-
-                        // sender reader
-                        auto& worker_reader_sender_runtime_args = reader_runtime_args[core.x][core.y];
-                        worker_reader_sender_runtime_args[0] = input.buffer()->address();
-                        worker_reader_sender_runtime_args[1] = intermed.buffer()->address();
-                        worker_reader_sender_runtime_args[2] = output.buffer()->address();
-                        // sender writer
-                        auto& worker_writer_sender_runtime_args = writer_runtime_args[core.x][core.y];
-                        worker_writer_sender_runtime_args[0] = intermed.buffer()->address();
-                        worker_writer_sender_runtime_args[1] = output.buffer()->address();
+                        auto& reader_runtime_args = GetRuntimeArgs(program, reader_kernel_ids[core_idx], core);
+                        auto& writer_runtime_args = GetRuntimeArgs(program, writer_kernel_ids[core_idx], core);
+                        reader_runtime_args[0] = input.buffer()->address();
+                        reader_runtime_args[1] = intermed.buffer()->address();
+                        reader_runtime_args[2] = output.buffer()->address();
+                        reader_runtime_args[3] = semaphores.at(0).address();
+                        writer_runtime_args[0] = intermed.buffer()->address();
+                        writer_runtime_args[1] = output.buffer()->address();
+                        writer_runtime_args[4] = semaphores.at(0).address();
 
                         core_idx++;
                     }
