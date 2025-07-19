@@ -123,4 +123,46 @@ TEST(BigMeshDualRankTestT3K, DistributedHostBuffer) {
     host_buffer.apply(validate_local_shards);
 }
 
+/*
+TEST(BigMeshDualRankTestT3K, TensorReadWriteLoopback) {
+    auto mesh_device = MeshDevice::create(MeshDeviceConfig(MeshShape(2, 4)));
+
+    const tt::tt_metal::Shape shape{1, 1, 32, 32};
+    const tt::tt_metal::TensorSpec tensor_spec =
+        tt::tt_metal::TensorSpec(shape, tt::tt_metal::TensorLayout(tt::tt_metal::DataType::FLOAT32, tt::tt_metal::Layout::ROW_MAJOR, tt::tt_metal::MemoryConfig{}));
+
+    std::vector<float> host_data(shape.volume());
+    std::iota(host_data.begin(), host_data.end(), 0);
+
+    // Prepare host tensor to offload on device.
+    tt::tt_metal::Tensor input_host_tensor = tt::tt_metal::Tensor::from_vector(host_data, tensor_spec);
+    EXPECT_TRUE(input_host_tensor.storage_type() == tt::tt_metal::StorageType::HOST);
+    EXPECT_EQ(input_host_tensor.tensor_spec().logical_shape(), shape);
+
+    // Write host tensor to device.
+    tt::tt_metal::Tensor device_tensor =
+        tt::tt_metal::tensor_impl::to_device_mesh_tensor_wrapper(input_host_tensor, mesh_device.get(), tt::tt_metal::MemoryConfig{});
+    EXPECT_EQ(device_tensor.tensor_spec().logical_shape(), shape);
+
+    auto* device_storage = std::get_if<tt::tt_metal::DeviceStorage>(&device_tensor.storage());
+    ASSERT_NE(device_storage, nullptr);
+    EXPECT_NE(device_storage->mesh_buffer, nullptr);
+    EXPECT_THAT(device_storage->coords, SizeIs(mesh_device->num_devices()));
+
+    // Read the tensor back, and compare it with input data.
+    tt::tt_metal::Tensor output_host_tensor = tt::tt_metal::tensor_impl::to_host_mesh_tensor_wrapper(device_tensor);
+    EXPECT_TRUE(output_host_tensor.storage_type() == tt::tt_metal::StorageType::MULTI_DEVICE_HOST);
+    EXPECT_EQ(output_host_tensor.tensor_spec().logical_shape(), shape);
+
+    // TODO: Re-evaluate this. ttnn::distributed::get_device_tensors only returns local set
+    auto tensors = ttnn::distributed::get_device_tensors(output_host_tensor);
+    EXPECT_THAT(tensors, SizeIs(mesh_device->local_shape().mesh_size()));
+
+    for (const auto& tensor : tensors) {
+        EXPECT_EQ(tensor.tensor_spec().logical_shape(), shape);
+        EXPECT_THAT(tensor.to_vector<float>(), ::testing::Pointwise(::testing::FloatEq(), host_data));
+    }
+}
+*/
+
 }  // namespace tt::tt_metal::distributed

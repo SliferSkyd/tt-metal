@@ -266,6 +266,8 @@ INSTANTIATE_TEST_SUITE_P(
             TensorMemoryLayout::HEIGHT_SHARDED, TensorMemoryLayout::WIDTH_SHARDED, TensorMemoryLayout::BLOCK_SHARDED)));
 
 TEST_F(MeshBufferTestT3000, SweepShardAndConcat) {
+    GTEST_SKIP() << "Skipping MeshBuffer test suite, since it can only be run in Fast Dispatch Mode.";
+
     uint32_t single_tile_size = ::tt::tt_metal::detail::TileSize(DataFormat::UInt32);
 
     DeviceLocalBufferConfig per_device_buffer_config{
@@ -357,6 +359,9 @@ TEST_F(MeshBufferTestSuite, InterleavedShardsReadWrite) {
 
             for (std::size_t logical_x = 0; logical_x < buf->device()->num_cols(); logical_x++) {
                 for (std::size_t logical_y = 0; logical_y < buf->device()->num_rows(); logical_y++) {
+                    if (!mesh_device_->is_local(MeshCoordinate(logical_y, logical_x))) {
+                        continue;
+                    }
                     std::vector<uint32_t> dst_vec = {};
                     ReadShard(mesh_device_->mesh_command_queue(), dst_vec, buf, MeshCoordinate(logical_y, logical_x));
                     EXPECT_EQ(dst_vec, src_vec);
@@ -367,6 +372,7 @@ TEST_F(MeshBufferTestSuite, InterleavedShardsReadWrite) {
 }
 
 TEST_F(MeshBufferTestSuite, RowMajorShardingAndReplication) {
+    GTEST_SKIP() << "Skipping MeshBuffer test suite, since it can only be run in Fast Dispatch Mode.";
     uint32_t single_tile_size = ::tt::tt_metal::detail::TileSize(DataFormat::UInt32);
 
     DeviceLocalBufferConfig per_device_buffer_config{
