@@ -322,29 +322,25 @@ B = 1
 
 # Enumerate the post-commit cases explicitly
 @skip_for_grayskull("Requires eth connected devices to run")
-@pytest.mark.parametrize("dim", [3])
+@pytest.mark.parametrize("dim", [2])
 @pytest.mark.parametrize(
     "num_devices, num_links, output_shape, layout",
     [
-        # (4, 1, [1, 1, 64, 512], ttnn.TILE_LAYOUT),
-        # (4, 1, [1, 1, 32, 32768], ttnn.TILE_LAYOUT),
-        # (4, 1, [1, 1, 2048, 16384], ttnn.TILE_LAYOUT),
-        # (8, 1, [1, 1, 32, 1280], ttnn.TILE_LAYOUT),
-        # (4, 1, [1, 1, 1, 2048], ttnn.TILE_LAYOUT), #-- hangs on dim 2
-        # (4, 1, [1, 1, 1, 1], ttnn.TILE_LAYOUT), # pcc -- tile padding
-        # (4, 1, [1, 1, 1, 8], ttnn.TILE_LAYOUT), # pcc -- tile padding
-        # (4, 1, [1, 1, 1, 16], ttnn.TILE_LAYOUT), # pcc -- tile padding
+        # (4, 1, [1, 1, 1, 2048], ttnn.TILE_LAYOUT), # hangs on dim 2
+        (4, 1, [1, 1, 1, 1], ttnn.TILE_LAYOUT),  # pcc on last 2 dims
+        (4, 1, [1, 1, 1, 8], ttnn.TILE_LAYOUT),  # pcc on last 2 dims
+        (4, 1, [1, 1, 1, 16], ttnn.TILE_LAYOUT),  # pcc on last 2 dims
         # (4, 1, [B, 32, 2048, 8], ttnn.TILE_LAYOUT), # hangs on dim 3
         # (4, 1, [B, 32, 2048, 16], ttnn.TILE_LAYOUT), # hangs on dim 3
-        # (4, 1, [B, 32, 2048, 64], ttnn.TILE_LAYOUT),
-        # (4, 1, [1, 1, 8, 8], ttnn.TILE_LAYOUT),
-        # (4, 1, [1, 1, 16, 16], ttnn.TILE_LAYOUT),
-        (4, 1, [1, 1, 32, 32], ttnn.TILE_LAYOUT),
-        # (4, 1, [1, 1, 1, 4096], ttnn.TILE_LAYOUT),
-        # (4, 1, [1, 1, 1, 32], ttnn.TILE_LAYOUT),
+        (4, 1, [B, 32, 2048, 64], ttnn.TILE_LAYOUT),  # pass
+        (4, 1, [1, 1, 8, 8], ttnn.TILE_LAYOUT),  # pcc on last 2 dims
+        (4, 1, [1, 1, 16, 16], ttnn.TILE_LAYOUT),  # pcc on last 2 dims
+        (4, 1, [1, 1, 32, 32], ttnn.TILE_LAYOUT),  # pass
+        # (4, 1, [1, 1, 1, 4096], ttnn.TILE_LAYOUT), # hangs on dim 2
+        (4, 1, [1, 1, 1, 32], ttnn.TILE_LAYOUT),  # pcc on dim 2
         # (4, 1, [B, 32, 4096, 16], ttnn.TILE_LAYOUT), # hangs on dim 3
-        (4, 1, [B, 32, 4096, 32], ttnn.TILE_LAYOUT),  #
-        (4, 1, [B, 32, 4096, 64], ttnn.TILE_LAYOUT),
+        (4, 1, [B, 32, 4096, 32], ttnn.TILE_LAYOUT),  # pass
+        (4, 1, [B, 32, 4096, 64], ttnn.TILE_LAYOUT),  # pass
     ],
 )
 @pytest.mark.parametrize(
@@ -362,7 +358,7 @@ B = 1
 )
 @pytest.mark.parametrize("num_iters", [10])
 @pytest.mark.parametrize("device_params", [{"fabric_config": ttnn.FabricConfig.FABRIC_1D}], indirect=True)
-def test_all_gather_atul(
+def test_all_gather_tt_train(
     t3k_mesh_device,
     # pcie_mesh_device,
     num_devices,

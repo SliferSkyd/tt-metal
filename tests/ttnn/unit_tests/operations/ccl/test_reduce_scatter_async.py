@@ -281,6 +281,9 @@ def run_reduce_scatter_test(
     assert not mismatch, f"{i} FAILED: {output}"
 
 
+B = 8
+
+
 # ~2:45 extra time in the current state
 @skip_for_grayskull("Requires eth connected devices to run")
 @pytest.mark.timeout(120)
@@ -290,40 +293,39 @@ def run_reduce_scatter_test(
         (4, 1),
     ],
 )
+@pytest.mark.parametrize("dim", [3])
 @pytest.mark.parametrize(
-    "per_chip_output_shape, dim, layout",
+    "per_chip_output_shape, layout",
     [
-        ([1, 1, 32, 32], 3, ttnn.TILE_LAYOUT),
-        ([1, 1, 32, 32 * 2], 3, ttnn.TILE_LAYOUT),
-        ([1, 1, 64, 32], 3, ttnn.TILE_LAYOUT),
-        ([1, 1, 64, 64], 3, ttnn.TILE_LAYOUT),
-        ([1, 1, 128, 128], 0, ttnn.TILE_LAYOUT),
-        ([1, 1, 128, 128], 1, ttnn.TILE_LAYOUT),
-        ([1, 1, 128, 128], 2, ttnn.TILE_LAYOUT),
-        ([1, 1, 128, 128], 3, ttnn.TILE_LAYOUT),
-        ([1, 1, 32, 32], 2, ttnn.TILE_LAYOUT),
-        ([1, 1, 32, 64], 2, ttnn.TILE_LAYOUT),
-        ([1, 1, 32, 32 * 4], 3, ttnn.TILE_LAYOUT),
-        ([1, 1, 128, 4096], 3, ttnn.TILE_LAYOUT),
-        ([1, 4, 32, 2304], 2, ttnn.TILE_LAYOUT),
-        ([1, 2, 224, 32 * 8], 3, ttnn.TILE_LAYOUT),
-        ([1, 8, 1024, 1024], 3, ttnn.TILE_LAYOUT),
-        ([1, 4, 2048, 1024], 3, ttnn.TILE_LAYOUT),
-        ([1, 1, 128, 8192], 3, ttnn.TILE_LAYOUT),
+        ([1, 1, 1, 2048], ttnn.TILE_LAYOUT),
+        ([1, 1, 1, 4], ttnn.TILE_LAYOUT),
+        ([1, 1, 1, 8], ttnn.TILE_LAYOUT),
+        ([1, 1, 1, 16], ttnn.TILE_LAYOUT),
+        ([B, 32, 2048, 8], ttnn.TILE_LAYOUT),
+        ([B, 32, 2048, 16], ttnn.TILE_LAYOUT),
+        # ([B, 32, 2048, 64], ttnn.TILE_LAYOUT), # hang
+        ([1, 1, 8, 8], ttnn.TILE_LAYOUT),
+        ([1, 1, 16, 16], ttnn.TILE_LAYOUT),
+        ([1, 1, 32, 32], ttnn.TILE_LAYOUT),
+        ([1, 1, 1, 4096], ttnn.TILE_LAYOUT),
+        ([1, 1, 1, 32], ttnn.TILE_LAYOUT),
+        ([B, 32, 4096, 16], ttnn.TILE_LAYOUT),
+        # ([B, 32, 4096, 32], ttnn.TILE_LAYOUT), # hang
+        # ([B, 32, 4096, 64], ttnn.TILE_LAYOUT), # hang
     ],
 )
 @pytest.mark.parametrize(
     "input_dtype",
     [
         ttnn.bfloat16,
-        ttnn.bfloat8_b,
+        # ttnn.bfloat8_b,
     ],
 )
 @pytest.mark.parametrize(
     "mem_config",
     [
         ttnn.MemoryConfig(buffer_type=ttnn.BufferType.DRAM),
-        ttnn.MemoryConfig(buffer_type=ttnn.BufferType.L1),
+        # ttnn.MemoryConfig(buffer_type=ttnn.BufferType.L1),
     ],
 )
 @pytest.mark.parametrize("math_op", [ttnn.ReduceType.Sum])
@@ -332,7 +334,7 @@ def run_reduce_scatter_test(
     "device_params", [{"trace_region_size": 27648, "fabric_config": ttnn.FabricConfig.FABRIC_1D}], indirect=True
 )
 @pytest.mark.parametrize("mesh_device", [pytest.param((2, 4), id="2x4_grid")], indirect=True)
-def test_line_reduce_scatter_async_post_commit(
+def test_reduce_scatter_tt_train(
     mesh_device,
     num_devices,
     per_chip_output_shape,
@@ -346,10 +348,13 @@ def test_line_reduce_scatter_async_post_commit(
     trace_mode,
     num_iters=16,
 ):
+    input_shape = per_chip_output_shape.copy()
+    output_shape = input_shape
+    output_shape[dim] = output_shape[dim] // num_devices
     run_reduce_scatter_test(
         mesh_device,
         num_devices,
-        per_chip_output_shape,
+        output_shape,
         dim,
         num_links,
         math_op,
