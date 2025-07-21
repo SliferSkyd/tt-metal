@@ -82,7 +82,7 @@ FORCE_INLINE void read_window_with_top_left_index(uint32_t ind, uint32_t in_l1_r
     // otherwise we can reduce 8 tiles at a time.
     constexpr uint32_t MAX_TILES_PER_REDUCTION = (is_avg_pool && is_large_kernel) ? 4 : 8;
     constexpr uint32_t MAX_ELE_PER_REDUCTION = MAX_TILES_PER_REDUCTION * TILE_WIDTH * BYTES_PER_ELEM;
-    static_assert(in_c % TILE_WIDTH == 0, "in_c must be a multiple of TILE_WIDTH");
+    static_assert(in_c % TILE_WIDTH == 0 || in_c == 16, "in_c must be a multiple of TILE_WIDTH or 16");
     constexpr uint32_t in_ntiles_c = in_c / TILE_WIDTH;
     constexpr bool tilize_reconfig =
         in_nblocks_c > 1 && in_ntiles_c % MAX_TILES_PER_REDUCTION != 0 && (window_h * window_w) <= 16;
