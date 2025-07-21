@@ -34,10 +34,8 @@ void MeshCommandQueueBase::write_sharded_buffer(const MeshBuffer& buffer, const 
     auto num_shards_x = global_buffer_shape.width() / shard_shape.width();
     auto num_shards_y = global_buffer_shape.height() / shard_shape.height();
 
-    auto* mesh_device = buffer.device();
-    TT_FATAL(mesh_device != nullptr, "MeshBuffer's device cannot be null in write_sharded_buffer");
-    uint32_t num_devices_x = mesh_device->num_cols();
-    uint32_t num_devices_y = mesh_device->num_rows();
+    uint32_t num_devices_x = buffer.device()->num_cols();
+    uint32_t num_devices_y = buffer.device()->num_rows();
 
     uint32_t device_x = 0;
     uint32_t device_y = 0;
@@ -120,9 +118,7 @@ void MeshCommandQueueBase::read_sharded_buffer(MeshBuffer& buffer, void* dst) {
     auto total_write_size_per_shard = single_write_size * shard_shape.height();
     auto num_shards_x = global_buffer_shape.width() / shard_shape.width();
     auto num_shards_y = global_buffer_shape.height() / shard_shape.height();
-    auto* mesh_device = buffer.device();
-    TT_FATAL(mesh_device != nullptr, "MeshBuffer's device cannot be null in read_sharded_buffer");
-    uint32_t num_devices_x = mesh_device->num_cols();
+    uint32_t num_devices_x = buffer.device()->num_cols();
     uint32_t num_devices_y = buffer.device()->num_rows();
 
     uint32_t device_x = 0;
@@ -279,8 +275,6 @@ void MeshCommandQueueBase::enqueue_read(
     const std::optional<std::unordered_set<MeshCoordinate>>& shards,
     bool blocking) {
     std::vector<ShardDataTransfer> shard_data_transfers;
-    auto* device = buffer->device();
-    TT_FATAL(device != nullptr, "MeshBuffer's device cannot be null in enqueue_read");
     for (const auto& coord : MeshCoordinateRange(buffer->device()->shape())) {
         if (shards.has_value() && !shards->contains(coord)) {
             continue;
