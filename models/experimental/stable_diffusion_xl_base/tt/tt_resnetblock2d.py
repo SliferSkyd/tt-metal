@@ -32,6 +32,8 @@ class TtResnetBlock2D(nn.Module):
 
         self.device = device
         self.split_conv = split_in > 1 or split_out > 1
+        # if parallelism_strategy == SdxlParallelism.TP2:
+        #     self.split_conv = False
         self.split_in = split_in
         self.split_out = split_out
         self.parallelism_strategy = parallelism_strategy
@@ -149,35 +151,35 @@ class TtResnetBlock2D(nn.Module):
                 weight_split_dim=weight_split_dim,
             )
 
-            self.conv2_config = model_config.get_conv_config(
-                conv_path=f"{module_path}.conv2", parallelism_strategy=self.parallelism_strategy
-            )
-            (
-                self.compute2_config,
-                self.tt_conv2_weights,
-                self.tt_conv2_bias,
-                self.conv2_params,
-            ) = prepare_conv_params(
-                device,
-                conv_weights_2,
-                conv_bias_2,
-                self.conv2_config.weights_dtype,
-                fp32_dest_acc_en=(self.conv2_config.weights_dtype == ttnn.bfloat8_b)
-                and (self.conv2_config.shard_layout != ttnn.TensorMemoryLayout.HEIGHT_SHARDED),
-                weight_split_dim=weight_split_dim,
-            )
+        self.conv2_config = model_config.get_conv_config(
+            conv_path=f"{module_path}.conv2", parallelism_strategy=self.parallelism_strategy
+        )
+        (
+            self.compute2_config,
+            self.tt_conv2_weights,
+            self.tt_conv2_bias,
+            self.conv2_params,
+        ) = prepare_conv_params(
+            device,
+            conv_weights_2,
+            conv_bias_2,
+            self.conv2_config.weights_dtype,
+            fp32_dest_acc_en=(self.conv2_config.weights_dtype == ttnn.bfloat8_b)
+            and (self.conv2_config.shard_layout != ttnn.TensorMemoryLayout.HEIGHT_SHARDED),
+            weight_split_dim=weight_split_dim,
+        )
 
-            mm_path = f"{module_path}.linear"
-            self.linear_program_config = model_config.get_matmul_config(matmul_path=f"{module_path}.linear")
-            assert self.linear_program_config is not None, "linear_program_config should not be None"
-            self.default_compute_config = model_config.get_mm_compute_config(mm_path)
+        mm_path = f"{module_path}.linear"
+        self.linear_program_config = model_config.get_matmul_config(matmul_path=f"{module_path}.linear")
+        assert self.linear_program_config is not None, "linear_program_config should not be None"
+        self.default_compute_config = model_config.get_mm_compute_config(mm_path)
 
     def forward(self, input_tensor, temb, input_shape):
-        print(f"Conv weights1 shape: {self.tt_conv1_weights.shape}")
-        print(f"Conv bias1 shape: {self.tt_conv1_bias.shape}")
-        print(f"Conv weights2 shape: {self.tt_conv2_weights.shape}")
-        print(f"Conv bias2 shape: {self.tt_conv2_bias.shape}")
-        print(f"Input tensor shape: {input_tensor.shape}")
+        #        print(f"Conv weights1 shape: {self.tt_conv1_weights.shape}")
+        #       print(f"Conv bias1 shape: {self.tt_conv1_bias.shape}")
+        #      print(f"Conv weights2 shape: {self.tt_conv2_weights.shape}")
+        #     print(f"Conv bias2 shape: {self.tt_conv2_bias.shape}")
+        #    print(f"Input tensor shape: {input_tensor.shape}")
 
         B, C, H, W = input_shape
         hidden_states = input_tensor
@@ -229,6 +231,7 @@ class TtResnetBlock2D(nn.Module):
         print("Everything before conv1 done!")
 
         if self.split_conv:
+            print("Conv split run!")
             hidden_states = ttnn.to_layout(hidden_states, ttnn.ROW_MAJOR_LAYOUT)
             hidden_states, [C, H, W], [self.tt_conv1_weights, self.tt_conv1_bias] = split_conv2d(
                 device=self.device,
@@ -277,27 +280,37 @@ class TtResnetBlock2D(nn.Module):
         ttnn.synchronize_device(self.device)
 
         if self.parallelism_strategy == SdxlParallelism.TP2:
-            sharded_mem_config_per_device = hidden_states.memory_config()
-            shard_shape_gathered = (
-                sharded_mem_config_per_device.shard_spec.shape[0],
-                sharded_mem_config_per_device.shard_spec.shape[1] * 2,
-            )
-            shard_spec_gathered = ttnn.ShardSpec(
-                sharded_mem_config_per_device.shard_spec.grid,
-                shard_shape_gathered,
-                sharded_mem_config_per_device.shard_spec.orientation,
-            )
-            mem_config_gathered = ttnn.MemoryConfig(
-                sharded_mem_config_per_device.memory_layout,
-                sharded_mem_config_per_device.buffer_type,
-                shard_spec_gathered,
-            )
-            hidden_states = ttnn.all_gather(
-                hidden_states,
-                dim=-1,
-                num_links=1,
-                memory_config=mem_config_gathered,
-            )
+            if hidden_states.memory_config().buffer_type == ttnn.types.BufferType.DRAM:
+                print("DRAM AG")
+                hidden_states = ttnn.all_gather(
+                    hidden_states,
+                    dim=-1,
+                    num_links=1,
+                    memory_config=ttnn.DRAM_MEMORY_CONFIG,
+                )
+            else:
+                sharded_mem_config_per_device = hidden_states.memory_config()
+                print(f"Sharded mem config per device: {sharded_mem_config_per_device}")
+                shard_shape_gathered = (
+                    sharded_mem_config_per_device.shard_spec.shape[0],
+                    sharded_mem_config_per_device.shard_spec.shape[1] * 2,
+                )
+                shard_spec_gathered = ttnn.ShardSpec(
+                    sharded_mem_config_per_device.shard_spec.grid,
+                    shard_shape_gathered,
+                    sharded_mem_config_per_device.shard_spec.orientation,
+                )
+                mem_config_gathered = ttnn.MemoryConfig(
+                    sharded_mem_config_per_device.memory_layout,
+                    sharded_mem_config_per_device.buffer_type,
+                    shard_spec_gathered,
+                )
+                hidden_states = ttnn.all_gather(
+                    hidden_states,
+                    dim=-1,
+                    num_links=1,
+                    memory_config=mem_config_gathered,
+                )
 
         print("All gather done!")
         temb = ttnn.silu(temb)

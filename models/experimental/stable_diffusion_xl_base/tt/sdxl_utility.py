@@ -131,6 +131,9 @@ def prepare_split_conv_params(
     Cout_split = Cout // split_out
     Cin_split = Cin // split_in
 
+    print(f"Prepare weights for split conv: split_in{split_in} split_out {split_out}")
+    print(f"Cin {Cin} Cout: {Cout} Cin split: {Cin_split}, Cout split: {Cout_split}")
+
     if split_out > 1:
         weight_chunks = list(torch.split(weights, Cout_split, 0))
     else:
@@ -139,32 +142,141 @@ def prepare_split_conv_params(
     for i in range(len(weight_chunks)):
         weight_chunks[i] = torch.split(weight_chunks[i], Cin_split, 1)
 
-    tt_weights = [
-        [
-            ttnn.from_torch(
-                weight,
-                dtype=ttnn.float32,
-            )
-            for weight in weights_Cout_split
-        ]
-        for weights_Cout_split in weight_chunks
-    ]
+    # if weight_split_dim == -1:
+    #     tt_weights = ttnn.from_torch(weights, dtype, mesh_mapper=ttnn.ReplicateTensorToMesh(device))
+    # elif weight_split_dim == 1:  # split weights along the out channel dimension
+    #     tt_weights = ttnn.from_torch(weights, dtype, mesh_mapper=ttnn.ttnn.ShardTensorToMesh(device, dim=0))
+    # elif weight_split_dim == 2:  # split weights along the in channel dimension
+    #     tt_weights = ttnn.from_torch(weights, dtype, mesh_mapper=ttnn.ttnn.ShardTensorToMesh(device, dim=1))
+    # tt_bias = None
+    # if bias is not None:
+    #     if weight_split_dim != 1:
+    #         tt_bias = ttnn.from_torch(bias, dtype, mesh_mapper=ttnn.ReplicateTensorToMesh(device))
+    #     elif weight_split_dim == 1:
+    #         tt_bias = ttnn.from_torch(bias, dtype, mesh_mapper=ttnn.ttnn.ShardTensorToMesh(device, dim=-1))
+    #     elif weight_split_dim == 2:
+    #         tt_bias = ttnn.from_torch(bias, dtype, mesh_mapper=ttnn.ttnn.ShardTensorToMesh(device, dim=1))
 
-    if bias is not None:
-        if split_out > 1:
-            bias_chunks = list(torch.split(bias, Cout_split, 3))
+    if weight_split_dim == -1:
+        tt_weights = [
+            [
+                ttnn.from_torch(
+                    weight,
+                    dtype=ttnn.float32,
+                    mesh_mapper=ttnn.ReplicateTensorToMesh(device),
+                )
+                for weight in weights_Cout_split
+            ]
+            for weights_Cout_split in weight_chunks
+        ]
+
+        if bias is not None:
+            if split_out > 1:
+                bias_chunks = list(torch.split(bias, Cout_split, 3))
+            else:
+                bias_chunks = [bias]
+
+            tt_bias = [
+                ttnn.from_torch(
+                    bias,
+                    dtype=ttnn.float32,
+                    mesh_mapper=ttnn.ReplicateTensorToMesh(device),
+                )
+                for bias in bias_chunks
+            ]
         else:
-            bias_chunks = [bias]
+            tt_bias = [None]
 
-        tt_bias = [
-            ttnn.from_torch(
-                bias,
-                dtype=ttnn.float32,
-            )
-            for bias in bias_chunks
+    elif weight_split_dim == 1:
+        tt_weights = [
+            [
+                ttnn.from_torch(
+                    weight,
+                    dtype=ttnn.float32,
+                    mesh_mapper=ttnn.ttnn.ShardTensorToMesh(device, dim=0),
+                )
+                for weight in weights_Cout_split
+            ]
+            for weights_Cout_split in weight_chunks
         ]
+
+        if bias is not None:
+            if split_out > 1:
+                bias_chunks = list(torch.split(bias, Cout_split, 3))
+            else:
+                bias_chunks = [bias]
+
+            tt_bias = [
+                ttnn.from_torch(
+                    bias,
+                    dtype=ttnn.float32,
+                    mesh_mapper=ttnn.ttnn.ShardTensorToMesh(device, dim=-1),
+                )
+                for bias in bias_chunks
+            ]
+        else:
+            tt_bias = [None]
+
+    elif weight_split_dim == 2:
+        tt_weights = [
+            [
+                ttnn.from_torch(
+                    weight,
+                    dtype=ttnn.float32,
+                    mesh_mapper=ttnn.ttnn.ShardTensorToMesh(device, dim=1),
+                )
+                for weight in weights_Cout_split
+            ]
+            for weights_Cout_split in weight_chunks
+        ]
+
+        if bias is not None:
+            if split_out > 1:
+                bias_chunks = list(torch.split(bias, Cout_split, 3))
+            else:
+                bias_chunks = [bias]
+
+            tt_bias = [
+                ttnn.from_torch(
+                    bias,
+                    dtype=ttnn.float32,
+                    mesh_mapper=ttnn.ttnn.ShardTensorToMesh(device, dim=1),
+                )
+                for bias in bias_chunks
+            ]
+        else:
+            tt_bias = [None]
+
     else:
-        tt_bias = [None]
+        raise ValueError(f"Unsupported weight_split_dim: {weight_split_dim}")
+
+    # tt_weights = [
+    #     [
+
+    #         ttnn.from_torch(
+    #             weight,
+    #             dtype=ttnn.float32,
+    #         )
+    #         for weight in weights_Cout_split
+    #     ]
+    #     for weights_Cout_split in weight_chunks
+    # ]
+
+    # if bias is not None:
+    #     if split_out > 1:
+    #         bias_chunks = list(torch.split(bias, Cout_split, 3))
+    #     else:
+    #         bias_chunks = [bias]
+
+    #     tt_bias = [
+    #         ttnn.from_torch(
+    #             bias,
+    #             dtype=ttnn.float32,
+    #         )
+    #         for bias in bias_chunks
+    #     ]
+    # else:
+    #     tt_bias = [None]
 
     conv_params = [
         [
@@ -200,6 +312,8 @@ def split_conv2d(
     assert hidden_states.layout == ttnn.ROW_MAJOR_LAYOUT, "Input tensor must be in ROW_MAJOR layout"
 
     B, C, H, W = input_shape
+
+    print("Split in:", split_in)
 
     if split_in > 1:
         hidden_states_split = ttnn.split(hidden_states, C // split_in, 3)
