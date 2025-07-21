@@ -400,6 +400,7 @@ class TtResnetBlock2D(nn.Module):
             if self.parallelism_strategy == SdxlParallelism.TP2:
                 full_channels *= 2
             input_tensor_pre_conv = input_tensor
+            print(f"Conv3 call!")
             input_tensor = ttnn.linear(
                 input_tensor,
                 self.tt_conv3_weights,

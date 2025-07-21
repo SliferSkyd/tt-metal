@@ -156,6 +156,20 @@ class ModelOptimisations:
             act_block_h_override=32 * 2,
         )
 
+        self.conv_configs["ABH_128_ADB_WDB_BS_DB1_TP2"] = ttnn.Conv2dConfig(
+            weights_dtype=self.conv_ws_dtype,
+            shard_layout=ttnn.TensorMemoryLayout.BLOCK_SHARDED,
+            deallocate_activation=True,
+            reallocate_halo_output=False,
+            enable_act_double_buffer=True,
+            enable_weights_double_buffer=True,
+            enable_split_reader=False,
+            enable_subblock_padding=False,
+            reshard_if_not_optimal=True,
+            act_block_w_div=1,
+            act_block_h_override=64,
+        )
+
         self.conv_configs["ABH_128_ADB_WDB_BS"] = ttnn.Conv2dConfig(
             weights_dtype=self.conv_ws_dtype,
             shard_layout=ttnn.TensorMemoryLayout.BLOCK_SHARDED,
@@ -233,6 +247,7 @@ class ModelOptimisations:
             act_block_w_div=1,
             act_block_h_override=256,
         )
+
         self.conv_configs["ABH_256_NO_ADB_WDB_BS"] = ttnn.Conv2dConfig(
             weights_dtype=self.conv_ws_dtype,
             shard_layout=ttnn.TensorMemoryLayout.BLOCK_SHARDED,
@@ -246,6 +261,21 @@ class ModelOptimisations:
             act_block_w_div=1,
             act_block_h_override=256,
         )
+
+        self.conv_configs["ABH_256_NO_ADB_WDB_BS_TP2"] = ttnn.Conv2dConfig(
+            weights_dtype=self.conv_ws_dtype,
+            shard_layout=ttnn.TensorMemoryLayout.HEIGHT_SHARDED,
+            deallocate_activation=True,
+            reallocate_halo_output=True,
+            enable_act_double_buffer=False,
+            enable_weights_double_buffer=False,
+            enable_split_reader=False,
+            enable_subblock_padding=False,
+            reshard_if_not_optimal=True,
+            act_block_w_div=1,
+            act_block_h_override=32,
+        )
+
         self.conv_configs["ABH_256_ADB_WDB_NO_DEALLOC_BS"] = ttnn.Conv2dConfig(
             weights_dtype=self.conv_ws_dtype,
             shard_layout=ttnn.TensorMemoryLayout.BLOCK_SHARDED,
@@ -857,6 +887,8 @@ class ModelOptimisations:
         if conv_path is None:
             return None
 
+        print(f"Conv config file is: {conv_path}")
+
         if not ("decoder" in conv_path):
             if "conv_in" == conv_path:
                 return self.conv_configs["ABH_256_ADB"]
@@ -872,9 +904,15 @@ class ModelOptimisations:
 
             # DOWN BLOCK 1
             elif "down_blocks.1.resnets.0.conv1" == conv_path:
-                return self.conv_configs["ABH_256_NO_ADB_WDB_BS"]  # Note: ABH should be 256 with no ABD/WDB (OOM)
+                if parallelism_strategy == SdxlParallelism.NoParallelism:
+                    return self.conv_configs["ABH_256_NO_ADB_WDB_BS"]  # Note: ABH should be 256 with no ABD/WDB (OOM)
+                else:
+                    return self.conv_configs["ABH_256_NO_ADB_WDB_BS_TP2"]
             elif ("down_blocks.1.resnets.0.conv2" == conv_path) or ("down_blocks.1.resnets.1" in conv_path):
-                return self.conv_configs["ABH_128_ADB_WDB_BS"]  # Note: should have ADB
+                if parallelism_strategy == SdxlParallelism.NoParallelism:
+                    return self.conv_configs["ABH_128_ADB_WDB_BS"]  # Note: should have ADB
+                else:
+                    return self.conv_configs["ABH_128_ADB_WDB_BS_DB1_TP2"]
             elif "down_blocks.1.downsamplers.0" == conv_path:
                 return self.conv_configs["ABH_128_ADB_WDB_NO_DEALLOC_BS"]
 
