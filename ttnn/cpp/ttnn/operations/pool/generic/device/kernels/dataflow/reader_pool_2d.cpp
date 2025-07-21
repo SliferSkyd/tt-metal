@@ -97,7 +97,7 @@ FORCE_INLINE void read_window_with_top_left_index(uint32_t ind, uint32_t in_l1_r
         cb_reserve_back(in_cb_id, 1);
         // reade each row of the window contiguously
         for (uint32_t h = 0; h < window_h; ++h) {
-            auto check_row_count = [&]() {
+            auto check_row_count = [&]() __attribute__((always_inline)) {
                 if ((processed_rows % max_rows_for_reduction) == 0 || processed_rows == total_elems_to_reduce) {
                     noc_async_read_barrier();
                     cb_push_back(in_cb_id, 1);
@@ -120,7 +120,7 @@ FORCE_INLINE void read_window_with_top_left_index(uint32_t ind, uint32_t in_l1_r
                     chunk++;
                 }
             };
-            auto read_contiguous_row = [&]() {
+            auto read_contiguous_row = [&]() __attribute__((always_inline)) {
                 const uint32_t stick_offset = ind + h * in_w_padded;
                 const uint32_t read_offset =
                     in_l1_read_base_addr + (stick_offset * in_nbytes_c + c_i * MAX_ELE_PER_REDUCTION);
@@ -129,7 +129,7 @@ FORCE_INLINE void read_window_with_top_left_index(uint32_t ind, uint32_t in_l1_r
                 processed_rows += window_w;
                 check_row_count();
             };
-            auto read_elemental_row = [&]() {
+            auto read_elemental_row = [&]() __attribute__((always_inline)) {
                 for (uint32_t w = 0; w < window_w; ++w) {
                     const uint32_t stick_offset = ind + w + h * in_w_padded;
                     const uint32_t read_offset =
