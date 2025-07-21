@@ -47,8 +47,8 @@ TEST(BigMeshDualRankTestT3K, LocalRankBinding) {
 TEST(BigMeshDualRankTestT3K, SystemMeshValidation) {
     EXPECT_NO_THROW({
         const auto& system_mesh = SystemMesh::instance();
-        EXPECT_EQ(system_mesh.shape(), MeshShape(2,4));
-        EXPECT_EQ(system_mesh.local_shape(), MeshShape(2,2));
+        EXPECT_EQ(system_mesh.shape(), MeshShape(2, 4));
+        EXPECT_EQ(system_mesh.local_shape(), MeshShape(2, 2));
     });
 }
 
@@ -56,8 +56,13 @@ TEST(BigMeshDualRankTestT3K, SystemMeshValidation) {
 class BigMeshDualRankTestT3KFixture : public ::testing::Test, public ::testing::WithParamInterface<MeshShape> {};
 
 TEST_P(BigMeshDualRankTestT3KFixture, MeshDeviceValidation) {
-    MeshShape mesh_shape = GetParam();
-    auto mesh_device = MeshDevice::create(MeshDeviceConfig(mesh_shape), DEFAULT_L1_SMALL_SIZE, DEFAULT_TRACE_REGION_SIZE, 1, tt::tt_metal::DispatchCoreType::WORKER);
+    const MeshShape& mesh_shape = GetParam();
+    auto mesh_device = MeshDevice::create(
+        MeshDeviceConfig(mesh_shape),
+        DEFAULT_L1_SMALL_SIZE,
+        DEFAULT_TRACE_REGION_SIZE,
+        1,
+        tt::tt_metal::DispatchCoreType::WORKER);
     EXPECT_EQ(mesh_device->shape(), mesh_shape);
 }
 
@@ -73,9 +78,7 @@ INSTANTIATE_TEST_SUITE_P(
         MeshShape(2, 2),
         */
         MeshShape(1, 8),
-        MeshShape(8, 1)
-    )
-);
+        MeshShape(8, 1)));
 
 TEST(BigMeshDualRankTestT3K, SystemMeshShape) {
     const auto& system_mesh = SystemMesh::instance();
@@ -103,7 +106,6 @@ TEST(BigMeshDualRankTestT3K, DistributedHostBuffer) {
 
     DistributedHostBuffer host_buffer = DistributedHostBuffer::create(mesh_device->get_view());
     auto rank = control_plane.get_local_host_rank_id_binding();
-    const auto EXPECTED_RANK_VALUE = (rank == HostRankId{0}) ? 0 : 1;
 
     host_buffer.emplace_shard(MeshCoordinate(0, 0), []() { return HostBuffer(std::vector<int>{0, 0, 0}); });
     host_buffer.emplace_shard(MeshCoordinate(0, 1), []() { return HostBuffer(std::vector<int>{0, 0, 0}); });
@@ -115,11 +117,14 @@ TEST(BigMeshDualRankTestT3K, DistributedHostBuffer) {
     host_buffer.emplace_shard(MeshCoordinate(1, 2), []() { return HostBuffer(std::vector<int>{1, 1, 1}); });
     host_buffer.emplace_shard(MeshCoordinate(1, 3), []() { return HostBuffer(std::vector<int>{1, 1, 1}); });
 
-    auto validate_local_shards = [EXPECTED_RANK_VALUE](const HostBuffer& buffer) {
-        fmt::print("Rank {}: {}\n", EXPECTED_RANK_VALUE, std::vector<int>(buffer.view_as<int>().begin(), buffer.view_as<int>().end()));
+    auto validate_local_shards = [rank](const HostBuffer& buffer) {
+        fmt::print(
+            "Rank {}: {}\n",
+            *rank,
+            std::vector<int>(buffer.view_as<int>().begin(), buffer.view_as<int>().end()));
         auto span = buffer.view_as<int>();
         for (const auto& value : span) {
-            EXPECT_EQ(value, EXPECTED_RANK_VALUE);
+            EXPECT_EQ(value, *rank);
         }
     };
 
@@ -173,6 +178,5 @@ TEST(BigMeshDualRankTestT3K, SimpleShardedBufferTest) {
     }
     EXPECT_TRUE(is_correct);
 }
-
 
 }  // namespace tt::tt_metal::distributed
