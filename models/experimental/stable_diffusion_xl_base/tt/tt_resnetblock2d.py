@@ -96,7 +96,9 @@ class TtResnetBlock2D(nn.Module):
             )
 
             self.conv_output_dtype = model_config.get_conv_output_dtype()
-            self.conv1_config = model_config.get_conv_config(conv_path=f"{module_path}.conv1")
+            self.conv1_config = model_config.get_conv_config(
+                conv_path=f"{module_path}.conv1", parallelism_strategy=self.parallelism_strategy
+            )
             if conv_shortcut:
                 self.tt_conv3_weights, self.tt_conv3_bias = prepare_linear_params(
                     device, conv_weights_3, conv_bias_3, model_config.conv_w_dtype
@@ -147,7 +149,9 @@ class TtResnetBlock2D(nn.Module):
                 weight_split_dim=weight_split_dim,
             )
 
-            self.conv2_config = model_config.get_conv_config(conv_path=f"{module_path}.conv2")
+            self.conv2_config = model_config.get_conv_config(
+                conv_path=f"{module_path}.conv2", parallelism_strategy=self.parallelism_strategy
+            )
             (
                 self.compute2_config,
                 self.tt_conv2_weights,

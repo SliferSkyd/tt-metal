@@ -4,6 +4,7 @@
 
 import ttnn
 import re
+from models.experimental.stable_diffusion_xl_base.tt.sdxl_utility import SdxlParallelism
 
 
 class ModelOptimisations:
@@ -140,7 +141,8 @@ class ModelOptimisations:
             act_block_w_div=1,
             act_block_h_override=128,
         )
-        self.conv_configs["ABH_128_ADB_WDB_BS"] = ttnn.Conv2dConfig(
+
+        self.conv_configs["ABH_128_ADB_WDB_BS_TP2"] = ttnn.Conv2dConfig(
             weights_dtype=self.conv_ws_dtype,
             shard_layout=ttnn.TensorMemoryLayout.HEIGHT_SHARDED,
             deallocate_activation=True,
@@ -153,6 +155,21 @@ class ModelOptimisations:
             act_block_w_div=1,
             act_block_h_override=32 * 2,
         )
+
+        self.conv_configs["ABH_128_ADB_WDB_BS"] = ttnn.Conv2dConfig(
+            weights_dtype=self.conv_ws_dtype,
+            shard_layout=ttnn.TensorMemoryLayout.BLOCK_SHARDED,
+            deallocate_activation=True,
+            reallocate_halo_output=False,
+            enable_act_double_buffer=True,
+            enable_weights_double_buffer=True,
+            enable_split_reader=False,
+            enable_subblock_padding=False,
+            reshard_if_not_optimal=True,
+            act_block_w_div=1,
+            act_block_h_override=128,
+        )
+
         self.conv_configs["ABH_128_NO_ADB_BS"] = ttnn.Conv2dConfig(
             weights_dtype=self.conv_ws_dtype,
             shard_layout=ttnn.TensorMemoryLayout.BLOCK_SHARDED,
@@ -836,7 +853,7 @@ class ModelOptimisations:
             return self.compute_configs["MATH_APPROX_MM_COMPUTE_CONFIG"]
         return self.compute_configs["DEFAULT_MM_COMPUTE_CONFIG"]
 
-    def get_conv_config(self, conv_path):
+    def get_conv_config(self, conv_path, parallelism_strategy=SdxlParallelism.NoParallelism):
         if conv_path is None:
             return None
 
@@ -846,7 +863,10 @@ class ModelOptimisations:
 
             # DOWN BLOCK 0
             elif "down_blocks.0.resnets" in conv_path:
-                return self.conv_configs["ABH_128_ADB_WDB_BS"]
+                if parallelism_strategy == SdxlParallelism.NoParallelism:
+                    return self.conv_configs["ABH_128_ADB_WDB_BS"]
+                else:
+                    return self.conv_configs["ABH_128_ADB_WDB_BS_TP2"]
             elif "down_blocks.0.downsamplers.0" == conv_path:
                 return self.conv_configs["ABH_256_ADB_WDB_NO_DEALLOC_BS"]
 
