@@ -82,7 +82,11 @@ FORCE_INLINE void read_window_with_top_left_index(uint32_t ind, uint32_t in_l1_r
     // otherwise we can reduce 8 tiles at a time.
     constexpr uint32_t MAX_TILES_PER_REDUCTION = (is_avg_pool && is_large_kernel) ? 4 : 8;
     constexpr uint32_t MAX_ELE_PER_REDUCTION = MAX_TILES_PER_REDUCTION * TILE_WIDTH * BYTES_PER_ELEM;
-    constexpr uint32_t in_write_inc =
+    static_assert(in_c % TILE_WIDTH == 0, "in_c must be a multiple of TILE_WIDTH");
+    constexpr uint32_t in_ntiles_c = in_c / TILE_WIDTH;
+    constexpr bool tilize_reconfig =
+        in_nblocks_c > 1 && in_ntiles_c % MAX_TILES_PER_REDUCTION != 0 && (window_h * window_w) <= 16;
+    constexpr uint32_t max_write_inc =
         wide_reduction ? MAX_ELE_PER_REDUCTION : in_nbytes_c;  // in_cb is MAX_ELE_PER_REDUCTION for wide reductions
 
     uint32_t in_l1_write_addr_base = get_write_ptr(in_cb_id);
@@ -127,7 +131,13 @@ FORCE_INLINE void read_window_with_top_left_index(uint32_t ind, uint32_t in_l1_r
                 const uint32_t read_offset =
                     in_l1_read_base_addr + (stick_offset * in_nbytes_c + c_i * MAX_ELE_PER_REDUCTION);
                 noc_async_read_one_packet(get_noc_addr(read_offset), in_l1_write_addr, read_bytes * window_w);
-                in_l1_write_addr += in_write_inc * window_w;
+                // if compute is using tilize_reconfig we will only untilize the needed number of tiles rather
+                // than the entire MAX_TILES_PER_REDUCTION, thus we use a different offset for the write address
+                if constexpr (tilize_reconfig) {
+                    in_l1_write_addr += read_bytes * window_w;
+                } else {
+                    in_l1_write_addr += max_write_inc * window_w;
+                }
                 processed_rows += window_w;
                 if constexpr (is_large_kernel) {
                     check_row_count();
@@ -139,7 +149,13 @@ FORCE_INLINE void read_window_with_top_left_index(uint32_t ind, uint32_t in_l1_r
                     const uint32_t read_offset =
                         in_l1_read_base_addr + (stick_offset * in_nbytes_c + c_i * MAX_ELE_PER_REDUCTION);
                     noc_async_read_one_packet(get_noc_addr(read_offset), in_l1_write_addr, read_bytes);
-                    in_l1_write_addr += in_write_inc;
+                    // if compute is using tilize_reconfig we will only untilize the needed number of tiles rather
+                    // than the entire MAX_TILES_PER_REDUCTION, thus we use a different offset for the write address
+                    if constexpr (tilize_reconfig) {
+                        in_l1_write_addr += read_bytes;
+                    } else {
+                        in_l1_write_addr += max_write_inc;
+                    }
                     processed_rows++;
                     if constexpr (is_large_kernel) {
                         check_row_count();
