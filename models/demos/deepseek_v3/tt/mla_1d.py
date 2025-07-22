@@ -409,7 +409,13 @@ class MLA1D(AbstractModule):
 
     @classmethod
     def decode_model_config(
-        cls, hf_config: PretrainedConfig, mesh_device: ttnn.Device, ccl: CCL1D
+        cls,
+        hf_config: PretrainedConfig,
+        mesh_device: ttnn.Device,
+        ccl: CCL1D,
+        *,
+        paged_attention_config=None,
+        page_table: ttnn.Tensor = None,
     ) -> ModelDecodeConfig:
         """Generate decode operator configuration for this MLP layer.
 
