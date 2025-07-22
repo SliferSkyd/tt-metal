@@ -17,31 +17,6 @@
 #include "sfpi.h"
 #include "adam_cb_config.hpp"
 
-// void WORK_PARTITION(uint32_t& start_id, uint32_t& num_unit) {
-//         const auto upcg1 = get_common_arg_val<uint32_t>(0);
-//         const auto upcg2 = get_common_arg_val<uint32_t>(0);
-//         const auto g1_cores = get_common_arg_val<uint32_t>(0);
-//         const auto g2_cores = get_common_arg_val<uint32_t>(0);
-//         const auto grid_y = get_common_arg_val<uint32_t>(0);
-
-//         uint32_t x = get_relative_logical_x();
-//         uint32_t y = get_relative_logical_y();
-//         uint32_t core_linear_id = x * grid_y + y;
-//         uint32_t total_cores = g1_cores + g2_cores;
-
-//         if (core_linear_id >= total_cores) return;
-
-//         if (core_linear_id < g1_cores) {
-//                 num_unit = upcg1;
-//                 start_id = core_linear_id * upcg1;
-//         } else {
-//                 num_unit = upcg2;
-//                 start_id = g1_cores * upcg1 + (core_linear_id - g1_cores) * upcg2;
-//         }
-
-//         return;
-// }
-
 union Scalar {
     float f;
     uint32_t u;
@@ -175,7 +150,6 @@ void MAIN {
 
     // Common Runtime Arguments
     uint32_t num_tiles = 0;
-    // WORK_PARTITION(tile_offset, num_tiles);
     const auto upcg1 = get_common_arg_val<uint32_t>(0);
     const auto upcg2 = get_common_arg_val<uint32_t>(1);
     const auto g1_cores = get_common_arg_val<uint32_t>(2);
