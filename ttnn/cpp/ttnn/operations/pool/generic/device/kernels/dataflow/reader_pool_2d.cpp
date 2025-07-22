@@ -276,7 +276,8 @@ void kernel_main() {
     constexpr uint32_t interm_reduction_chunks =
         remaining_elems ? window_size_hw / max_rows_for_reduction + 1 : window_size_hw / max_rows_for_reduction;
     // we only need to initialize the in_cb if we will not fill each reduction chunk with valid data
-    constexpr bool need_to_initialize_in_cb = remaining_elems && face_r_dim == 16 && num_faces_in_input_tile == 4 &&
+    constexpr bool need_to_initialize_in_cb = remaining_elems && face_r_dim == 16 &&
+                                              (num_faces_in_input_tile == 4 || is_partial_tile) &&
                                               interm_reduction_chunks <= multi_buffering_factor;
     constexpr uint32_t in_cb_ntiles = in_cb_sz / (TILE_WIDTH * TILE_HEIGHT);  // only use the non-multi buffering size
 
