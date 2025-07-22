@@ -18,6 +18,7 @@ from models.experimental.stable_diffusion_xl_base.vae.tt.tt_autoencoder_kl impor
 SDXL_L1_SMALL_SIZE = 47000
 SDXL_TRACE_REGION_SIZE = 33575936
 SDXL_CI_WEIGHTS_PATH = "/mnt/MLPerf/tt_dnn-models/hf_home"
+SDXL_DEFAULT_PROMPT = "An astronaut riding a green horse"
 
 
 # Copied from sdxl pipeline
