@@ -206,7 +206,7 @@ operation::ProgramWithCallbacks ring_joint_sdpa(
     log_debug(tt::LogOp, "statistics_tiles: {}", statistics_tiles);
 
     // Host code is responsible for determining matmul configuration
-    const uint32_t dst_size = fp32_dest_acc_en ? 4 : 8;
+    const uint32_t dst_size = tt::tt_metal::hal::get_dst_size(fp32_dest_acc_en);
     const uint32_t qk_in0_block_w = DHt;
     // max of Sk_chunk_t and dst_size
     const uint32_t qk_out_subblock_w = std::min(Sk_chunk_t, dst_size);

@@ -5,6 +5,7 @@
 #include "conv3d_device_operation.hpp"
 #include "conv3d_program_factory.hpp"
 #include <tt-metalium/math.hpp>
+#include <tt-metalium/hal.hpp>
 #include <tt-metalium/constants.hpp>
 #include "ttnn/operations/cb_utils.hpp"
 #include <algorithm>
@@ -220,7 +221,7 @@ tt::tt_metal::operation::ProgramWithCallbacks conv3d_factory(
     auto [math_fidelity, math_approx_mode, fp32_dest_acc_en, packer_l1_acc, dst_full_sync_en] =
         get_compute_kernel_config_args(device->arch(), compute_kernel_config);
 
-    const uint32_t dst_size = fp32_dest_acc_en ? 4 : 8;
+    const uint32_t dst_size = tt::tt_metal::hal::get_dst_size(fp32_dest_acc_en, dst_full_sync_en);
     const uint32_t in0_block_w = matmul_K_t;
 
     const uint32_t out_subblock_w = std::min(matmul_N_t, dst_size);

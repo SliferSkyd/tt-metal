@@ -98,4 +98,12 @@ float get_nan();
  */
 float get_inf();
 
+/**
+ * @brief Uses the hardware abstraction layer to get the size of dest registers in tiles.
+ *
+ * @param fp32_dest_acc_en Whether the destination accumulator is in 32-bit mode
+ * @return dest register sizes in tiles
+ */
+uint32_t get_dst_size(bool fp32_dest_acc_en, bool dst_full_sync_en = false);
+
 }  // namespace tt::tt_metal::hal

@@ -58,4 +58,8 @@ float get_nan() { return tt::tt_metal::MetalContext::instance().hal().get_nan();
 
 float get_inf() { return tt::tt_metal::MetalContext::instance().hal().get_inf(); }
 
+uint32_t get_dst_size(bool fp32_dest_acc_en, bool dst_full_sync_en) {
+    return tt::tt_metal::MetalContext::instance().hal().get_dst_size(fp32_dest_acc_en);
+}
+
 }  // namespace tt::tt_metal::hal

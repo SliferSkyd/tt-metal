@@ -145,6 +145,7 @@ private:
     std::vector<uint32_t> mem_read_alignments_;
     std::vector<uint32_t> mem_write_alignments_;
     std::vector<uint32_t> mem_alignments_with_pcie_;
+    std::array<uint32_t, 2> dst_sizes_;
     uint32_t num_nocs_;
     uint32_t noc_addr_node_id_bits_;
     uint32_t noc_node_id_ = 0;
@@ -297,6 +298,11 @@ public:
 
     const std::vector<uint32_t>& get_noc_x_id_translate_table() const { return noc_x_id_translate_table_; }
     const std::vector<uint32_t>& get_noc_y_id_translate_table() const { return noc_y_id_translate_table_; }
+
+    uint32_t get_dst_size(bool fp32_dest_acc_en, bool dst_full_sync_en = false) const {
+        uint32_t size = dst_sizes_[fp32_dest_acc_en];
+        return dst_full_sync_en ? size * 2 : size;
+    };
 };
 
 inline uint32_t Hal::get_programmable_core_type_count() const { return core_info_.size(); }
