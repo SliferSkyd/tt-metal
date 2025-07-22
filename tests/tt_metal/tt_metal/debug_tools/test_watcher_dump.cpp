@@ -316,7 +316,7 @@ TEST_F(DPrintFixture, WatcherDumpPrintHanging) {
     std::string watcher_dump_path = find_watcher_dump(std::string(BUILD_ROOT_DIR) + "/tools");
     std::string watcher_log_path = get_tt_metal_home() + "/generated/watcher/watcher.log";
 
-    setenv("TT_METAL_WATCHER_KEEP_ERRORS", "1", 1);
+    //setenv("TT_METAL_WATCHER_KEEP_ERRORS", "1", 1);
 
     if (this->slow_dispatch_) {
         GTEST_SKIP();
@@ -378,7 +378,9 @@ TEST_F(DPrintFixture, WatcherDumpPrintHanging) {
 
     std::filesystem::remove(watcher_log_path);
 
-
+    // Force MetalContext reinitialization to ensure clean state for next test
+    // This prevents the second test from inheriting corrupted state
+    MetalContext::instance().reinitialize();
 }
 
 TEST_F(WatcherFixture, TestWatcherAssertBrisc) {
@@ -405,5 +407,4 @@ TEST_F(WatcherFixture, TestWatcherAssertBrisc) {
         [](WatcherFixture *fixture, IDevice* device){CMAKE_UNIQUE_NAMESPACE::RunTest(fixture, device, DebugBrisc);},
         this->devices_[0]
     );
-
 }
