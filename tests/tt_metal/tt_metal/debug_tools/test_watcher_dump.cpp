@@ -13,6 +13,7 @@
 #include <stdexcept>
 #include <sys/wait.h>
 #include <filesystem>
+#include <iostream>
 #include "debug_tools_fixture.hpp"
 #include <fmt/base.h>
 #include <tt-metalium/host_api.hpp>
@@ -311,19 +312,29 @@ std::string find_watcher_dump(const std::string& tools_dir) {
 
 // Integration test replicating tests/scripts/run_tools_tests.sh
 TEST_F(DPrintFixture, WatcherDumpPrintHanging) {
+    std::cout << "SETUP COMPONENT" << std::endl;
+    std::cout.flush();
     // Compute paths
     std::string exe_dir = get_executable_dir();
     std::string watcher_dump_path = find_watcher_dump(std::string(BUILD_ROOT_DIR) + "/tools");
     std::string watcher_log_path = get_tt_metal_home() + "/generated/watcher/watcher.log";
 
-    //setenv("TT_METAL_WATCHER_KEEP_ERRORS", "1", 1);
+    setenv("TT_METAL_WATCHER_KEEP_ERRORS", "1", 1);
 
     if (this->slow_dispatch_) {
         GTEST_SKIP();
     }
+    std::cout << "RUNNING THE TEST COMPONENT" << std::endl;
     this->RunTestOnDevice([](DPrintFixture* fixture, IDevice* device) {
         CMAKE_UNIQUE_NAMESPACE::RunTest(fixture, device);},
         this->devices_[0]);
+
+    std::cout << "TEARDOWN COMPONENT" << std::endl;
+    std::cout.flush();
+    this->TearDown();
+
+    // Do proper teardown immediately after the test runs, before watcher_dump can corrupt devices
+    // This ensures clean state for the next test
 
     //Run watcher_dump tool as in the bash script: ./build/tools/watcher_dump -d=0 -w -c
     // Run watcher_dump in a completely separate process to avoid device conflicts
@@ -356,11 +367,9 @@ TEST_F(DPrintFixture, WatcherDumpPrintHanging) {
         FAIL() << "Fork failed";
     }
 
-    printf("we managed to get past the watcher_dump tool\n");
-
-    // Clear device maps to prevent teardown from trying to close corrupted devices
-    // watcher_dump may have corrupted the device state, so we skip normal teardown
     this->ClearDeviceMaps();
+
+    std::cout << "we managed to get past the watcher_dump tool" << std::endl;
 
     std::ifstream watcher_log(watcher_log_path);
     ASSERT_TRUE(watcher_log.is_open()) << "Failed to open watcher log: " << watcher_log_path;
@@ -377,10 +386,6 @@ TEST_F(DPrintFixture, WatcherDumpPrintHanging) {
     ASSERT_TRUE(found) << "Error: couldn't find expected string in watcher log after dump: " << expected_str;
 
     std::filesystem::remove(watcher_log_path);
-
-    // Force MetalContext reinitialization to ensure clean state for next test
-    // This prevents the second test from inheriting corrupted state
-    MetalContext::instance().reinitialize();
 }
 
 TEST_F(WatcherFixture, TestWatcherAssertBrisc) {
