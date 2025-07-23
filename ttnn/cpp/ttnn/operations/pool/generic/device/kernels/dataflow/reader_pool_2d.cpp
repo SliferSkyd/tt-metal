@@ -99,16 +99,13 @@ FORCE_INLINE void read_window_with_top_left_index(uint32_t ind, uint32_t in_l1_r
         uint32_t processed_rows = 0;
         uint32_t chunk = 0;
         cb_reserve_back(in_cb_id, 1);
-        auto process_in_cb = [&]() __attribute__((always_inline)) {
-            noc_async_read_barrier();
-            cb_push_back(in_cb_id, 1);
-            cb_reserve_back(in_cb_id, 1);
-            in_l1_write_addr = get_write_ptr(in_cb_id);
-        };
         for (uint32_t h = 0; h < window_h; ++h) {
             auto check_row_count = [&]() __attribute__((always_inline)) {
                 if ((processed_rows % max_rows_for_reduction) == 0 || processed_rows == total_elems_to_reduce) {
-                    process_in_cb();
+                    noc_async_read_barrier();
+                    cb_push_back(in_cb_id, 1);
+                    cb_reserve_back(in_cb_id, 1);
+                    in_l1_write_addr = get_write_ptr(in_cb_id);
                     // If next is last chunk, fill whole buffer with the init_value. note for max pool we do
                     // not need to fill the CB for the partial chunk since as long as we have N>1 chunks we
                     // are guaranteed that the junk data remaining from chunk N-1 will fill the entire CB and
@@ -126,7 +123,11 @@ FORCE_INLINE void read_window_with_top_left_index(uint32_t ind, uint32_t in_l1_r
                     chunk++;
                 }
             };
-            auto read_contiguous_row = [&]() __attribute__((always_inline)) {
+            bool use_contiguous_read =
+                !wide_reduction &&
+                (!is_large_kernel || window_w <= (max_rows_for_reduction - (processed_rows % max_rows_for_reduction)));
+
+            if (use_contiguous_read) {  // read entire row as one chunk
                 const uint32_t stick_offset = ind + h * in_w_padded;
                 const uint32_t read_offset =
                     in_l1_read_base_addr + (stick_offset * in_nbytes_c + c_i * MAX_ELE_PER_REDUCTION);
@@ -142,8 +143,7 @@ FORCE_INLINE void read_window_with_top_left_index(uint32_t ind, uint32_t in_l1_r
                 if constexpr (is_large_kernel) {
                     check_row_count();
                 }
-            };
-            auto read_elemental_row = [&]() __attribute__((always_inline)) {
+            } else {  // read rows stick by stick
                 for (uint32_t w = 0; w < window_w; ++w) {
                     const uint32_t stick_offset = ind + w + h * in_w_padded;
                     const uint32_t read_offset =
@@ -161,25 +161,11 @@ FORCE_INLINE void read_window_with_top_left_index(uint32_t ind, uint32_t in_l1_r
                         check_row_count();
                     }
                 }
-            };
-            if constexpr (wide_reduction) {
-                read_elemental_row();
-            } else {  // for non-wide reductions the rows can be read contiguously as long as we have space in the in_cb
-                      // for another whole row
-                if constexpr (is_large_kernel) {
-                    uint32_t mod_remaining_rows = max_rows_for_reduction - (processed_rows % max_rows_for_reduction);
-                    if (window_w <= mod_remaining_rows) {
-                        read_contiguous_row();
-                    } else {
-                        read_elemental_row();
-                    }
-                } else {
-                    read_contiguous_row();
-                }
             }
         }
         if constexpr (!is_large_kernel) {
-            process_in_cb();
+            noc_async_read_barrier();
+            cb_push_back(in_cb_id, 1);
         }
     }
 }
