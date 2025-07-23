@@ -34,7 +34,7 @@ ALWI bool fill_with_val(uint32_t begin_addr, uint32_t n, uint16_t val, bool unco
 }
 
 template <uint32_t cb_id, uint32_t clear_value_cb_id>
-FORCE_INLINE void clear_out_tiles() {
+ALWI void clear_out_tiles() {
     constexpr uint32_t tile_size = get_tile_size(cb_id);
     const uint32_t num_pages = get_local_cb_interface(cb_id).fifo_num_pages;
     const uint32_t num_tiles = get_local_cb_interface(cb_id).fifo_page_size / tile_size;
@@ -49,7 +49,7 @@ FORCE_INLINE void clear_out_tiles() {
 }
 
 template <uint32_t clear_value_cb_id, uint32_t num_tiles>
-FORCE_INLINE void clear_out_tiles(uint64_t write_addr, uint64_t clear_value_addr) {
+ALWI void clear_out_tiles(uint64_t write_addr, uint64_t clear_value_addr) {
     constexpr uint32_t tile_size = get_tile_size(clear_value_cb_id);
 
     for (uint32_t i = 0; i < num_tiles; ++i) {
@@ -76,7 +76,7 @@ template <
     uint32_t clear_value_cb_id,
     uint32_t in_cb_ntiles,
     bool is_large_kernel>
-FORCE_INLINE void read_window_with_top_left_index(uint32_t ind, uint32_t in_l1_read_base_addr) {
+ALWI void read_window_with_top_left_index(uint32_t ind, uint32_t in_l1_read_base_addr) {
     constexpr uint32_t BYTES_PER_ELEM = 2;
     // average pool with large kernels requires fp32 accumulation so we can only reduce 4 tiles at a time,
     // otherwise we can reduce 8 tiles at a time.
@@ -171,7 +171,7 @@ FORCE_INLINE void read_window_with_top_left_index(uint32_t ind, uint32_t in_l1_r
 }
 
 template <bool one_scalar_per_core, uint32_t in_scalar_cb_id, uint32_t reader_nindices, bool split_reader>
-FORCE_INLINE void fill_scalar(
+ALWI void fill_scalar(
     uint32_t& scalar_start,
     uint32_t& scalar_end,
     uint32_t& scalar_value,
