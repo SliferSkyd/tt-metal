@@ -412,4 +412,65 @@ TEST_F(WatcherFixture, TestWatcherAssertBrisc) {
         [](WatcherFixture *fixture, IDevice* device){CMAKE_UNIQUE_NAMESPACE::RunTest(fixture, device, DebugBrisc);},
         this->devices_[0]
     );
+
+    std::cout << "TEARDOWN COMPONENT" << std::endl;
+    std::cout.flush();
+    this->TearDown();
+
+    pid_t pid = fork();
+
+    if (pid == 0) {  // Child process
+        // Redirect stdout and stderr to tmp.log
+        int fd = open("tmp.log", O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        if (fd != -1) {
+            dup2(fd, STDOUT_FILENO);
+            dup2(fd, STDERR_FILENO);
+            close(fd);
+        }
+
+        // Prepare arguments for watcher_dump
+        const char* args[] = {
+            watcher_dump_path.c_str(),
+            "-d=0",
+            "-w",
+            nullptr
+        };
+
+        // Execute watcher_dump
+        execv(watcher_dump_path.c_str(), const_cast<char* const*>(args));
+
+        // If execv fails, write error message to tmp.log
+        std::cerr << "Above failure is expected." << std::endl;
+        exit(1);
+    } else if (pid > 0) {  // Parent process
+        int status;
+        waitpid(pid, &status, 0);
+
+        // Check if the process failed (which is expected)
+        if (WIFEXITED(status) && WEXITSTATUS(status) != 0) {
+            std::cout << "Watcher dump failed as expected (exit code: " << WEXITSTATUS(status) << ")" << std::endl;
+        }
+    } else {
+        std::cerr << "Failed to fork process" << std::endl;
+    }
+
+    // Verify the error we expect showed up in the program output.
+    std::ifstream tmp_log("tmp.log");
+    ASSERT_TRUE(tmp_log.is_open()) << "Failed to open tmp.log";
+    std::string line;
+    bool found = false;
+    const std::string expected_str = "brisc tripped an assert";
+    while (std::getline(tmp_log, line)) {
+        if (line.find(expected_str) != std::string::npos) {
+            found = true;
+            break;
+        }
+    }
+    tmp_log.close();
+    ASSERT_TRUE(found) << "Error: couldn't find expected string in command output: " << expected_str;
+
+    std::cout << "Watcher dump all data test - Pass" << std::endl;
+
+    std::filesystem::remove(watcher_log_path);
+    std::filesystem::remove("tmp.log");
 }
