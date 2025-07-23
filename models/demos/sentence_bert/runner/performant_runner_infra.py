@@ -9,7 +9,7 @@ from ttnn.model_preprocessing import preprocess_model_parameters
 
 import ttnn
 from models.demos.sentence_bert.reference.sentence_bert import BertModel, custom_extended_mask
-from models.demos.sentence_bert.ttnn.common import custom_preprocessor
+from models.demos.sentence_bert.ttnn.common import create_custom_mesh_preprocessor
 from models.demos.sentence_bert.ttnn.ttnn_sentence_bert_model import TtnnSentenceBertModel
 from models.utility_functions import is_wormhole_b0
 from tests.ttnn.utils_for_testing import assert_with_pcc
@@ -22,10 +22,10 @@ def load_reference_model(model_name, config):
     return reference_model
 
 
-def load_ttnn_model(device, torch_model, config):
+def load_ttnn_model(device, torch_model, config, weights_mesh_mapper=None):
     parameters = preprocess_model_parameters(
         initialize_model=lambda: torch_model,
-        custom_preprocessor=custom_preprocessor,
+        custom_preprocessor=create_custom_mesh_preprocessor(weights_mesh_mapper),
         device=device,
     )
     ttnn_model = TtnnSentenceBertModel(parameters=parameters, config=config)
@@ -56,15 +56,14 @@ class SentenceBERTPerformanceRunnerInfra:
         self.act_dtype = act_dtype
         self.weight_dtype = weight_dtype
         self.sequence_length = sequence_length
+        self.inputs_mesh_mapper = inputs_mesh_mapper
+        self.weights_mesh_mapper = weights_mesh_mapper
+        self.output_mesh_composer = output_mesh_composer
         config = transformers.BertConfig.from_pretrained(model_name)
         self.torch_model = load_reference_model(model_name, config)
 
         # Log device information for data parallel validation
         num_devices = self.device.get_num_devices()
-
-        # Set up mesh mappers if not provided
-        if inputs_mesh_mapper is None and weights_mesh_mapper is None and output_mesh_composer is None:
-            self.inputs_mesh_mapper, self.weights_mesh_mapper, self.output_mesh_composer = self.get_mesh_mappers(device)
 
         if input_ids is None:
             self.batch_size = self.batch_size * self.device.get_num_devices()
@@ -90,17 +89,7 @@ class SentenceBERTPerformanceRunnerInfra:
             position_ids=self.position_ids,
         )
 
-        self.ttnn_sentencebert_model = load_ttnn_model(self.device, self.torch_model, config)
-
-    def get_mesh_mappers(self, device):
-        num_devices = device.get_num_devices()
-        if num_devices != 1:
-            inputs_mesh_mapper = ttnn.ShardTensorToMesh(device, dim=0)
-            weights_mesh_mapper = None  # ttnn.ReplicateTensorToMesh(device) causes unnecessary replication/takes more time on the first pass
-            output_mesh_composer = ttnn.ConcatMeshToTensor(device, dim=0)
-            return inputs_mesh_mapper, weights_mesh_mapper, output_mesh_composer
-
-        return None, None, None
+        self.ttnn_sentencebert_model = load_ttnn_model(self.device, self.torch_model, config, self.weights_mesh_mapper)
 
     def setup_l1_sharded_input(
         self, input_ids=None, token_type_ids=None, position_ids=None, extended_mask=None, attention_mask=None
@@ -124,7 +113,9 @@ class SentenceBERTPerformanceRunnerInfra:
         )
         ttnn_input_ids = ttnn.from_torch(input_ids, dtype=ttnn.uint32, mesh_mapper=self.inputs_mesh_mapper)
         ttnn_token_type_ids = ttnn.from_torch(token_type_ids, dtype=ttnn.uint32, mesh_mapper=self.inputs_mesh_mapper)
-        ttnn_position_ids = ttnn.from_torch(position_ids, dtype=ttnn.uint32)
+        if self.device.get_num_devices() > 1:
+            position_ids = position_ids.repeat(self.device.get_num_devices(), 1)
+        ttnn_position_ids = ttnn.from_torch(position_ids, dtype=ttnn.uint32, mesh_mapper=self.inputs_mesh_mapper)
         ttnn_extended_mask = ttnn.from_torch(extended_mask, dtype=ttnn.bfloat16, mesh_mapper=self.inputs_mesh_mapper)
         ttnn_attention_mask = ttnn.from_torch(attention_mask, dtype=ttnn.bfloat16, mesh_mapper=self.inputs_mesh_mapper)
         return (

@@ -8,17 +8,18 @@ import transformers
 import pytest
 from ttnn.model_preprocessing import preprocess_model_parameters
 from tests.ttnn.utils_for_testing import assert_with_pcc
-from models.demos.sentence_bert.ttnn.common import custom_preprocessor, preprocess_inputs
+from models.demos.sentence_bert.ttnn.common import create_custom_mesh_preprocessor, preprocess_inputs, get_mesh_mappers
 from models.demos.sentence_bert.reference.sentence_bert import BertModel, custom_extended_mask
 from models.demos.sentence_bert.ttnn.ttnn_sentence_bert_model import TtnnSentenceBertModel
 
 
 @pytest.mark.parametrize(
     "inputs",
-    [["emrecan/bert-base-turkish-cased-mean-nli-stsb-tr", [8, 384], [8, 1, 1, 384]]],
+    [["emrecan/bert-base-turkish-cased-mean-nli-stsb-tr", [16, 384], [16, 1, 1, 384]]],
 )
 @pytest.mark.parametrize("device_params", [{"l1_small_size": 79104}], indirect=True)
-def test_ttnn_sentence_bert_model(device, inputs):
+def test_ttnn_sentence_bert_model(mesh_device, inputs):
+    device = mesh_device
     transformers_model = transformers.AutoModel.from_pretrained(inputs[0]).eval()
     config = transformers.BertConfig.from_pretrained(inputs[0])
     input_ids = torch.randint(low=0, high=config.vocab_size - 1, size=inputs[1], dtype=torch.int64)
@@ -35,9 +36,10 @@ def test_ttnn_sentence_bert_model(device, inputs):
         position_ids=position_ids,
         attention_mask=attention_mask,
     )
+    input_mapper, weights_mesh_mapper, output_composer = get_mesh_mappers(device)
     parameters = preprocess_model_parameters(
         initialize_model=lambda: reference_module,
-        custom_preprocessor=custom_preprocessor,
+        custom_preprocessor=create_custom_mesh_preprocessor(weights_mesh_mapper),
         device=device,
     )
     ttnn_module = TtnnSentenceBertModel(parameters=parameters, config=config)
@@ -47,7 +49,9 @@ def test_ttnn_sentence_bert_model(device, inputs):
         ttnn_position_ids,
         ttnn_extended_attention_mask,
         ttnn_attention_mask,
-    ) = preprocess_inputs(input_ids, token_type_ids, position_ids, extended_mask, attention_mask, device)
+    ) = preprocess_inputs(
+        input_ids, token_type_ids, position_ids.repeat(2, 1), extended_mask, attention_mask, device, input_mapper
+    )
     ttnn_out = ttnn_module(
         ttnn_input_ids,
         ttnn_extended_attention_mask,
@@ -56,5 +60,5 @@ def test_ttnn_sentence_bert_model(device, inputs):
         ttnn_position_ids,
         device=device,
     )
-    ttnn_out = ttnn.to_torch(ttnn_out[0])
+    ttnn_out = ttnn.to_torch(ttnn_out[0], mesh_composer=output_composer)
     assert_with_pcc(reference_out.post_processed_output, ttnn_out, 0.986)

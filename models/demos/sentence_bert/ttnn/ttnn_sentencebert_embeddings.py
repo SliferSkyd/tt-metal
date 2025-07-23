@@ -28,7 +28,6 @@ class TtnnSentenceBertEmbeddings:
             memory_config=ttnn.L1_MEMORY_CONFIG,
             padding_idx=self.config.pad_token_id,
         )
-
         if token_type_ids.is_sharded():
             token_type_ids_interleaved = ttnn.sharded_to_interleaved(token_type_ids, ttnn.L1_MEMORY_CONFIG)
             ttnn.deallocate(token_type_ids)
@@ -53,7 +52,6 @@ class TtnnSentenceBertEmbeddings:
             layout=ttnn.TILE_LAYOUT,
             memory_config=ttnn.L1_MEMORY_CONFIG,
         )
-
         embeddings = word_embeddings + token_type_embeddings + position_embeddings
         ttnn.deallocate(word_embeddings)
         ttnn.deallocate(token_type_embeddings)

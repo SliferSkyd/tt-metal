@@ -20,6 +20,9 @@ class SentenceBERTPerformantRunner:
         position_ids=None,
         act_dtype=ttnn.bfloat16,
         weight_dtype=ttnn.bfloat8_b,
+        inputs_mesh_mapper=None,
+        weights_mesh_mapper=None,
+        output_mesh_composer=None,
         model_name="emrecan/bert-base-turkish-cased-mean-nli-stsb-tr",
     ):
         self.device = device
@@ -28,6 +31,9 @@ class SentenceBERTPerformantRunner:
         self.attention_mask = attention_mask
         self.token_type_ids = token_type_ids
         self.position_ids = position_ids
+        self.inputs_mesh_mapper = inputs_mesh_mapper
+        self.weights_mesh_mapper = weights_mesh_mapper
+        self.output_mesh_composer = output_mesh_composer
         self.runner_infra = SentenceBERTPerformanceRunnerInfra(
             device=self.device,
             batch_size=device_batch_size,
@@ -37,6 +43,9 @@ class SentenceBERTPerformantRunner:
             attention_mask=self.attention_mask,
             token_type_ids=self.token_type_ids,
             position_ids=self.position_ids,
+            inputs_mesh_mapper=self.inputs_mesh_mapper,
+            weights_mesh_mapper=self.weights_mesh_mapper,
+            output_mesh_composer=self.output_mesh_composer,
         )
         (
             self.tt_inputs_host,

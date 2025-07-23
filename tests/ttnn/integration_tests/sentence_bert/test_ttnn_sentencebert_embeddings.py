@@ -8,7 +8,7 @@ import transformers
 import pytest
 from ttnn.model_preprocessing import preprocess_model_parameters
 from tests.ttnn.utils_for_testing import assert_with_pcc
-from models.demos.sentence_bert.ttnn.common import custom_preprocessor, preprocess_inputs
+from models.demos.sentence_bert.ttnn.common import create_custom_mesh_preprocessor, preprocess_inputs, get_mesh_mappers
 from models.demos.sentence_bert.reference.sentence_bert import BertEmbeddings
 from models.demos.sentence_bert.ttnn.ttnn_sentencebert_embeddings import TtnnSentenceBertEmbeddings
 
@@ -16,11 +16,12 @@ from models.demos.sentence_bert.ttnn.ttnn_sentencebert_embeddings import TtnnSen
 @pytest.mark.parametrize(
     "inputs",
     [
-        ["emrecan/bert-base-turkish-cased-mean-nli-stsb-tr", [8, 384]],
+        ["emrecan/bert-base-turkish-cased-mean-nli-stsb-tr", [16, 384]],
     ],
 )
 @pytest.mark.parametrize("device_params", [{"l1_small_size": 79104}], indirect=True)
-def test_ttnn_sentence_bert_Embeddings(device, inputs):
+def test_ttnn_sentence_bert_Embeddings(mesh_device, inputs):
+    device = mesh_device
     transformers_model = transformers.AutoModel.from_pretrained(inputs[0]).embeddings.eval()
     config = transformers.BertConfig.from_pretrained(inputs[0])
     input_ids = torch.randint(low=0, high=config.vocab_size - 1, size=inputs[1], dtype=torch.int64)
@@ -30,17 +31,22 @@ def test_ttnn_sentence_bert_Embeddings(device, inputs):
     reference_module = BertEmbeddings(config)
     reference_module.load_state_dict(transformers_model.state_dict())
     reference_out = reference_module(input_ids=input_ids, token_type_ids=token_type_ids, position_ids=position_ids)
+    input_mapper, weights_mesh_mapper, output_composer = get_mesh_mappers(device)
     parameters = preprocess_model_parameters(
         initialize_model=lambda: reference_module,
-        custom_preprocessor=custom_preprocessor,
+        custom_preprocessor=create_custom_mesh_preprocessor(weights_mesh_mapper),
         device=device,
     )
     ttnn_module = TtnnSentenceBertEmbeddings(parameters, config)
     ttnn_input_ids, ttnn_token_type_ids, ttnn_position_ids, _, _ = preprocess_inputs(
-        input_ids=input_ids, token_type_ids=token_type_ids, position_ids=position_ids, device=device
+        input_ids=input_ids,
+        token_type_ids=token_type_ids,
+        position_ids=position_ids,
+        device=device,
+        mesh_mapper=input_mapper,
     )
     ttnn_out = ttnn_module(
         input_ids=ttnn_input_ids, token_type_ids=ttnn_token_type_ids, position_ids=ttnn_position_ids, device=device
     )
-    ttnn_out = ttnn.to_torch(ttnn_out).squeeze(dim=1)
+    ttnn_out = ttnn.to_torch(ttnn_out, mesh_composer=output_composer).squeeze(dim=1)
     assert_with_pcc(reference_out, ttnn_out, 0.99)

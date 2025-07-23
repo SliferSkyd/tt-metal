@@ -73,7 +73,26 @@ softmax_config = ttnn.SoftmaxShardedMultiCoreProgramConfig(
 )
 
 
-def custom_preprocessor(torch_model, name):
+def create_custom_mesh_preprocessor(mesh_mapper=None):
+    def custom_mesh_preprocessor(model, name, ttnn_module_args, convert_to_ttnn):
+        return custom_preprocessor(model, name, mesh_mapper)
+
+    return custom_mesh_preprocessor
+
+
+def get_mesh_mappers(device):
+    if device.get_num_devices() > 1:
+        inputs_mesh_mapper = ttnn.ShardTensorToMesh(device, dim=0)
+        weights_mesh_mapper = None
+        output_mesh_composer = ttnn.ConcatMeshToTensor(device, dim=0)
+    else:
+        inputs_mesh_mapper = None
+        weights_mesh_mapper = None
+        output_mesh_composer = None
+    return inputs_mesh_mapper, weights_mesh_mapper, output_mesh_composer
+
+
+def custom_preprocessor(torch_model, name, mesh_mapper=None):
     parameters = {}
     if hasattr(torch_model, "query") and hasattr(torch_model, "key") and hasattr(torch_model, "value"):
         qw = torch_model.query.weight
@@ -98,10 +117,10 @@ def custom_preprocessor(torch_model, name):
 
         parameters = {"query_key_value": {}}
         parameters["query_key_value"]["weight"] = ttnn.from_torch(
-            qkv_weight_torch, dtype=ttnn.bfloat8_b, layout=ttnn.TILE_LAYOUT
+            qkv_weight_torch, dtype=ttnn.bfloat8_b, layout=ttnn.TILE_LAYOUT, mesh_mapper=mesh_mapper
         )
         parameters["query_key_value"]["bias"] = ttnn.from_torch(
-            qkv_bias_torch, dtype=ttnn.bfloat8_b, layout=ttnn.TILE_LAYOUT
+            qkv_bias_torch, dtype=ttnn.bfloat8_b, layout=ttnn.TILE_LAYOUT, mesh_mapper=mesh_mapper
         )
 
     return parameters
@@ -114,17 +133,24 @@ def preprocess_inputs(
     extended_attention_mask=None,
     attention_mask=None,
     device=None,
+    mesh_mapper=None,
 ):
     if input_ids is not None:
-        input_ids = ttnn.from_torch(input_ids, dtype=ttnn.uint32, device=device, memory_config=ttnn.L1_MEMORY_CONFIG)
+        input_ids = ttnn.from_torch(
+            input_ids, dtype=ttnn.uint32, device=device, memory_config=ttnn.L1_MEMORY_CONFIG, mesh_mapper=mesh_mapper
+        )
 
     if token_type_ids is not None:
         token_type_ids = ttnn.from_torch(
-            token_type_ids, dtype=ttnn.uint32, device=device, memory_config=ttnn.L1_MEMORY_CONFIG
+            token_type_ids,
+            dtype=ttnn.uint32,
+            device=device,
+            memory_config=ttnn.L1_MEMORY_CONFIG,
+            mesh_mapper=mesh_mapper,
         )
     if position_ids is not None:
         position_ids = ttnn.from_torch(
-            position_ids, dtype=ttnn.uint32, device=device, memory_config=ttnn.L1_MEMORY_CONFIG
+            position_ids, dtype=ttnn.uint32, device=device, memory_config=ttnn.L1_MEMORY_CONFIG, mesh_mapper=mesh_mapper
         )
 
     if extended_attention_mask is not None:
@@ -134,6 +160,7 @@ def preprocess_inputs(
             device=device,
             layout=ttnn.TILE_LAYOUT,
             memory_config=ttnn.L1_MEMORY_CONFIG,
+            mesh_mapper=mesh_mapper,
         )
     if attention_mask is not None:
         attention_mask = ttnn.from_torch(
@@ -142,6 +169,7 @@ def preprocess_inputs(
             device=device,
             layout=ttnn.TILE_LAYOUT,
             memory_config=ttnn.L1_MEMORY_CONFIG,
+            mesh_mapper=mesh_mapper,
         )
     return input_ids, token_type_ids, position_ids, extended_attention_mask, attention_mask
 

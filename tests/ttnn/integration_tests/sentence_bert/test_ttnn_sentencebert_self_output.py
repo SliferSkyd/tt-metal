@@ -8,7 +8,7 @@ import transformers
 import pytest
 from ttnn.model_preprocessing import preprocess_model_parameters
 from tests.ttnn.utils_for_testing import assert_with_pcc
-from models.demos.sentence_bert.ttnn.common import custom_preprocessor
+from models.demos.sentence_bert.ttnn.common import create_custom_mesh_preprocessor, get_mesh_mappers
 from models.demos.sentence_bert.reference.sentence_bert import BertSelfOutput
 from models.demos.sentence_bert.ttnn.ttnn_sentencebert_self_output import TtnnSentenceBertSelfOutput
 
@@ -28,17 +28,26 @@ def test_ttnn_sentence_bert_self_output(device, inputs):
     reference_module = BertSelfOutput(config).to(torch.bfloat16)
     reference_module.load_state_dict(transformers_model.state_dict())
     reference_out = reference_module(hidden_states, input_tensor)
+    input_mapper, weights_mesh_mapper, output_composer = get_mesh_mappers(device)
     parameters = preprocess_model_parameters(
         initialize_model=lambda: reference_module,
-        custom_preprocessor=custom_preprocessor,
+        custom_preprocessor=create_custom_mesh_preprocessor(),
         device=device,
     )
     ttnn_module = TtnnSentenceBertSelfOutput(parameters=parameters, config=config)
     ttnn_hidden_states = ttnn.from_torch(
-        hidden_states.unsqueeze(dim=1), dtype=ttnn.bfloat8_b, layout=ttnn.TILE_LAYOUT, device=device
+        hidden_states.unsqueeze(dim=1),
+        dtype=ttnn.bfloat8_b,
+        layout=ttnn.TILE_LAYOUT,
+        device=device,
+        mesh_mapper=input_mapper,
     )
     ttnn_input_tensor = ttnn.from_torch(
-        input_tensor.unsqueeze(dim=1), dtype=ttnn.bfloat8_b, layout=ttnn.TILE_LAYOUT, device=device
+        input_tensor.unsqueeze(dim=1),
+        dtype=ttnn.bfloat8_b,
+        layout=ttnn.TILE_LAYOUT,
+        device=device,
+        mesh_mapper=input_mapper,
     )
     sharded_hidden_states = ttnn.to_memory_config(
         ttnn_hidden_states,
@@ -59,5 +68,5 @@ def test_ttnn_sentence_bert_self_output(device, inputs):
         ),
     )
     ttnn_out = ttnn_module(sharded_hidden_states, sharded_input_tens)
-    ttnn_out = ttnn.to_torch(ttnn_out).squeeze(dim=1)
+    ttnn_out = ttnn.to_torch(ttnn_out, mesh_composer=output_composer).squeeze(dim=1)
     assert_with_pcc(reference_out, ttnn_out, 0.99)
