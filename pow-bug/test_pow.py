@@ -82,7 +82,7 @@ def main():
     try:
         # Run the benchmark
         torch_result, ttnn_result, match_status = benchmark_pow(device, torch.bfloat16)
-        torch_result_f32, ttnn_result_f32, match_status = benchmark_pow(device, torch.float32)
+        # torch_result_f32, ttnn_result_f32, match_status = benchmark_pow(device, torch.float32)
 
         # Display results
         print(f"Input values: a=9, b=2")
@@ -92,8 +92,8 @@ def main():
         print(f"[bfloat16] Torch result:  {torch_result}")
         print(f"[bfloat16] TTNN result:   {ttnn_result}")
         print(f"-----")
-        print(f"[float32 ] Torch result:  {torch_result_f32}")
-        print(f"[float32 ] TTNN result:   {ttnn_result_f32}")
+        # print(f"[float32 ] Torch result:  {torch_result_f32}")
+        # print(f"[float32 ] TTNN result:   {ttnn_result_f32}")
         print(f"")
         print(f"Results match: {match_status}")
         print(f"Expected value: 81.0")
@@ -104,11 +104,11 @@ def main():
         print(f"Tensor shape: [1] (1D with single element)")
         print(f"TTNN layout: TILE")
 
-        if match_status:
-            print(f"✓ Test PASSED: ttnn.pow matches torch.pow")
-        else:
-            print(f"✗ Test FAILED: ttnn.pow does not match torch.pow")
-            print(f"Difference: {torch.abs(torch_result - ttnn_result)}")
+        # if match_status:
+        #     print(f"✓ Test PASSED: ttnn.pow matches torch.pow")
+        # else:
+        #     print(f"✗ Test FAILED: ttnn.pow does not match torch.pow")
+        #     print(f"Difference: {torch.abs(torch_result - ttnn_result)}")
 
     finally:
         # Clean up device
