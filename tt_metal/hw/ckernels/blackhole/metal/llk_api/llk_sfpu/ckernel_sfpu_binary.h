@@ -66,10 +66,10 @@ sfpi_inline sfpi::vInt _float_to_int32_positive_(sfpi::vFloat in) {
 
 // sfpi_inline sfpi::vFloat _sfpu_binary_power_alt0_(sfpi::vFloat base, sfpi::vFloat pow) {
 
-//     // POW = 2.0, karma should be 2.f as well
-//     sfpi::vFloat karma = pow;
+//     // POW = 2.0, independent should be 2.f as well
+//     sfpi::vFloat independent = pow;
 //     v_if (pow < 2.f) {
-//         karma = 100.f;
+//         independent = 100.f;
 //     }
 //     v_endif;
 
@@ -86,7 +86,7 @@ sfpi_inline sfpi::vInt _float_to_int32_positive_(sfpi::vFloat in) {
 //     result = sfpi::int32_to_float(_float_to_int32_positive_alt_(result));
 //     result = sfpi::int32_to_float(_float_to_int32_positive_alt_(result));
 //     result = sfpi::int32_to_float(_float_to_int32_positive_alt_(result));
-//     return karma;
+//     return independent;
 
 //     // FAIL, returns 100.f
 // }
@@ -123,10 +123,10 @@ sfpi_inline sfpi::vInt _float_to_int32_positive_(sfpi::vFloat in) {
 
 // sfpi_inline sfpi::vFloat test_conditional_bug0(sfpi::vFloat base, sfpi::vFloat pow) {
 
-//     // POW = 2.0, karma should be 2.f as well
-//     sfpi::vFloat karma = pow;
+//     // POW = 2.0, independent should be 2.f as well
+//     sfpi::vFloat independent = pow;
 //     v_if (pow < 2.f) {
-//         karma = 100.f;
+//         independent = 100.f;
 //     }
 //     v_endif;
 
@@ -150,7 +150,7 @@ sfpi_inline sfpi::vInt _float_to_int32_positive_(sfpi::vFloat in) {
 //     result = conditional(result);
 //     result = conditional(result);
 
-//     return karma;
+//     return independent;
 
 //     // FAIL, returns 100.f
 // }
@@ -158,7 +158,7 @@ sfpi_inline sfpi::vInt _float_to_int32_positive_(sfpi::vFloat in) {
 sfpi_inline sfpi::vFloat process(sfpi::vFloat in) { return in + 3.1415; }
 
 sfpi_inline sfpi::vFloat test_conditional_bug0(sfpi::vFloat base, sfpi::vFloat pow) {
-    // POW = 2.0, karma should be 2.f as well
+    // POW = 2.0, independent should be 2.f as well
     sfpi::vFloat independent = pow;
     v_if(pow < 2.f) { independent = 100.f; }
     v_endif;
@@ -231,7 +231,7 @@ sfpi_inline sfpi::vFloat test_conditional_bug0(sfpi::vFloat base, sfpi::vFloat p
     return independent;
 }
 
-// POW = 2.0, karma should be 2.f as well
+// POW = 2.0, return value should be 2.f as well
 sfpi_inline sfpi::vFloat test_conditional_bug(sfpi::vFloat base, sfpi::vFloat pow) {
     __builtin_rvtt_sfpnop();
     __builtin_rvtt_sfpnop();
@@ -426,7 +426,7 @@ sfpi_inline sfpi::vFloat test_conditional_bug(sfpi::vFloat base, sfpi::vFloat po
 sfpi_inline sfpi::vFloat process_alt0(sfpi::vFloat in) { return 0.5f * (3.0f * (in * 0.333333f) + 5.f * (in * 0.2f)); }
 
 sfpi_inline sfpi::vFloat test_conditional_bug2(sfpi::vFloat base, sfpi::vFloat pow) {
-    // POW = 2.0, karma should be 2.f as well
+    // POW = 2.0, independent should be 2.f as well
     sfpi::vInt independent = reinterpret<sfpi::vInt>(pow);
     v_if(pow < 2.f) { independent = sfpi::vInt(0xDEADBEEF); }
     v_endif;
@@ -447,7 +447,7 @@ sfpi_inline sfpi::vFloat test_conditional_bug2(sfpi::vFloat base, sfpi::vFloat p
 }
 
 sfpi_inline sfpi::vFloat test_conditional_bug3(sfpi::vFloat base, sfpi::vFloat pow) {
-    // POW = 2.0, karma should be 2.f as well
+    // POW = 2.0, independent should be 2.f as well
     sfpi::vFloat independent = pow;
     v_if(pow < 2.f) { independent = 200.f; }
     v_endif;
@@ -555,20 +555,20 @@ sfpi_inline sfpi::vFloat test_conditional_bug3(sfpi::vFloat base, sfpi::vFloat p
 //     // // const sfpi::vFloat vConst1Ln2 = sfpi::vConstFloatPrgm0;        // 1.4426950408889634f;
 //     // sfpi::vFloat log2_result = expf + series_result * 1.442695f;  // exp correction: ln(1+x) + exp*ln(2)
 
-//     sfpi::vFloat karma = 2.f;
+//     sfpi::vFloat independent = 2.f;
 //     // pow = 2.f;
 //     v_if (pow < 2.f) {
-//         karma = 20.f;
+//         independent = 20.f;
 //     }
 //     v_endif;
 
-//     // return karma;
+//     // return independent;
 
 //     // pow = 2.f;
 //     // pow = sfpi::vConst1 + sfpi::vConst1;
 //     // return pow;
 //     sfpi::vFloat log2_result = 3.169925001442312; // OK
-//     sfpi::vFloat zff = karma * log2_result; // OK
+//     sfpi::vFloat zff = independent * log2_result; // OK
 
 //     // const sfpi::vFloat low_threshold = -127.0f;
 //     // v_if(zff < low_threshold)  // -126.99999237060546875
@@ -597,7 +597,7 @@ sfpi_inline sfpi::vFloat test_conditional_bug3(sfpi::vFloat base, sfpi::vFloat p
 //     sfpi::vFloat d3 = sfpi::int32_to_float(sfpi::vInt(0x560) + zif); // OK
 //     d2 = d1 * d2; // OK
 
-//     // return karma; // return 2.f
+//     // return independent; // return 2.f
 
 //     // zif = _float_to_int32_positive_(d2 * d3); // OK
 //     // return sfpi::int32_to_float(zif);
@@ -607,7 +607,7 @@ sfpi_inline sfpi::vFloat test_conditional_bug3(sfpi::vFloat base, sfpi::vFloat p
 //     // zif = _float_to_int32_positive_alt_(100.f); // OK
 //     // zif = _float_to_int32_positive_alt_(100.f); // OK
 
-//     return karma; // return 20.f;
+//     return independent; // return 20.f;
 
 //     // return sfpi::setexp(sfpi::vFloat(1.5f), 127U + zii);
 
