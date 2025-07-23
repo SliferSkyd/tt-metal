@@ -139,6 +139,23 @@ tt::tt_metal::operation::ProgramWithCallbacks ring_reduce_scatter_minimal_async_
     std::optional<experimental::ccl::ReduceScatterFusedOpSignaler>& fused_op_signaler,
     CoreCoord core_grid_offset = CoreCoord(0, 0));
 
+tt::tt_metal::operation::ProgramWithCallbacks ring_rm_reduce_scatter_minimal_async_helper(
+    tt::tt_metal::Program& program,
+    const Tensor& input_tensor,
+    Tensor& intermediate_tensor,
+    IDevice* sender_device,
+    std::optional<IDevice*> forward_device,
+    std::optional<IDevice*> backward_device,
+    Tensor& output_tensor,
+    uint32_t dim,
+    uint32_t num_links,
+    uint32_t ring_size,
+    uint32_t ring_index,
+    ccl::Topology topology,
+    const std::vector<GlobalSemaphore>& semaphore,
+    const std::optional<tt::tt_metal::SubDeviceId>& sub_device_id,
+    CoreCoord core_grid_offset = CoreCoord(0, 0));
+
 tt::tt_metal::operation::ProgramWithCallbacks line_reduce_scatter_minimal_async_helper(
     tt::tt_metal::Program& program,
     const Tensor& input_tensor,
