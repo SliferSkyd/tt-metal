@@ -14,6 +14,10 @@ import ttnn
 from loguru import logger
 import pytest
 
+from models.tt_transformers.tt.common import (
+    PagedAttentionConfig,
+)
+
 
 def nearest_n(x, n):
     return ((x + n - 1) // n) * n
@@ -46,6 +50,96 @@ def scaled_dot_product_attention_reference(Q, K, V, scale, is_causal=True):
     )
 
 
+def page_table_setup(batch_size: int, config: PagedAttentionConfig) -> torch.Tensor:
+    """
+    Setup the page-related tensors for the attention cache.
+    Args:
+        batch_size: The number of batches.
+        config: PagedAttentionConfig object containing configuration parameters.
+    Returns:
+        page_table: The page table tensor.
+    """
+    max_num_blocks = config.max_num_blocks
+    assert (
+        max_num_blocks % batch_size == 0
+    ), f"max_num_blocks {max_num_blocks} must be divisible by batch_size {batch_size}."
+
+    page_table = torch.randperm(max_num_blocks, dtype=torch.int32)
+    page_table = page_table.reshape(batch_size, max_num_blocks // batch_size)
+
+    return page_table
+
+
+def to_paged_cache(
+    cache: torch.Tensor,
+    mapping: torch.Tensor,
+    config: PagedAttentionConfig,
+) -> torch.Tensor:
+    """
+    Convert a cache tensor to a paged cache using the provided mapping.
+    Args:
+        cache: The original cache tensor.
+        mapping: The mapping tensor that defines how to convert the cache.
+        config: PagedAttentionConfig object containing configuration parameters.
+    Returns:
+        paged_cache: The converted paged cache tensor.
+    """
+    batch_size, nh, seq_len, dim = cache.shape
+
+    block_size, max_num_blocks = config.block_size, config.max_num_blocks
+    assert (
+        max_num_blocks % batch_size == 0
+    ), f"max_num_blocks {max_num_blocks} must be divisible by batch_size {batch_size}."
+    assert seq_len == block_size * (
+        max_num_blocks // batch_size
+    ), f"Sequence length {seq_len} must equal effective paged seq_len {block_size * (max_num_blocks // batch_size)}."
+
+    paged_cache = cache.reshape(batch_size, nh, -1, block_size, dim)  # (B, H, num_blocks // B, block_size, D)
+    paged_cache = paged_cache.transpose(1, 2)  # (B, num_blocks // B, H, block_size, D)
+    paged_cache = paged_cache.reshape(max_num_blocks, nh, block_size, dim)  # (num_blocks, H, block_size, D)
+
+    # Get the reverse mapping to reorder the paged cache, so that paged cache + mapping = original cache
+    # So, paged_cache = original_cache + inverse mapping
+    inverse_mapping = torch.argsort(mapping.view(-1))
+    paged_cache = paged_cache[inverse_mapping]
+
+    return paged_cache
+
+
+def from_paged_cache(
+    paged_cache: torch.Tensor,
+    mapping: torch.Tensor,
+    config: PagedAttentionConfig,
+) -> torch.Tensor:
+    """
+    Convert a paged cache back to the original cache format using the provided mapping.
+    Args:
+        paged_cache: The paged cache tensor.
+        mapping: The mapping tensor that defines how to convert the paged cache.
+        config: PagedAttentionConfig object containing configuration parameters.
+    Returns:
+        cache: The converted cache tensor.
+    """
+    max_num_blocks, nh, block_size, dim = paged_cache.shape  # (max_num_blocks, H, block_size, D)
+    assert (
+        block_size == config.block_size
+    ), f"block_size {block_size} must match the paged attention config block size {config.block_size}."
+    assert (
+        max_num_blocks == config.max_num_blocks
+    ), f"max_num_blocks {max_num_blocks} must match the paged attention config max_num_blocks {config.max_num_blocks}."
+
+    batch, num_blocks_per_batch = mapping.shape
+
+    # Use the mapping to get the original order, paged_cache + mapping = original cache
+    cache = paged_cache[mapping.view(-1)]
+
+    cache = cache.reshape(batch, num_blocks_per_batch, nh, block_size, dim)  # (B, num_blocks // B, H, block_size, D)
+    cache = cache.transpose(1, 2)  # (B, H, num_blocks // B, block_size, D)
+    cache = cache.reshape(batch, nh, -1, dim)  # (B, H, seq_len, D)
+
+    return cache
+
+
 def run_flash_mla_prefill_impl(
     device,
     batch,
@@ -56,6 +150,7 @@ def run_flash_mla_prefill_impl(
     d_rope,
     q_dtype,
     dtype,
+    use_paged_attention=None,
 ):
     # Log the test parameters
     logger.info(f"Running FlashMLA Prefill with parameters: ")
@@ -68,6 +163,18 @@ def run_flash_mla_prefill_impl(
     logger.info(f"Query Data Type: {q_dtype}")
     logger.info(f"Key-Value Data Type: {dtype}")
 
+    # Paged attention configuration
+    paged_attention_cfg = None
+    if use_paged_attention:
+        block_size = ttnn.TILE_SIZE
+        assert seq_len % block_size == 0, f"Sequence length must be a multiple of {block_size=} for paged attention."
+
+        max_num_blocks = seq_len // block_size * batch
+        paged_attention_cfg = PagedAttentionConfig(
+            block_size=block_size,
+            max_num_blocks=max_num_blocks,
+        )
+
     ######################
     ### Torch Setup
     ######################
@@ -77,6 +184,23 @@ def run_flash_mla_prefill_impl(
     ######################
     ### TT Setup
     #######################
+
+    # Page-related setup
+    tt_k_torch = k
+    page_table = None
+    if paged_attention_cfg:
+        page_table = page_table_setup(batch, paged_attention_cfg)
+        tt_k_torch = to_paged_cache(
+            k,
+            page_table,
+            paged_attention_cfg,
+        )
+        tt_k_torch_og = from_paged_cache(
+            tt_k_torch,
+            page_table,
+            paged_attention_cfg,
+        )
+        assert torch.all(tt_k_torch_og == k), "Paged cache conversion for K failed."
 
     padded_num_heads = nearest_pow_2(nearest_n(nh, n=32))
     q_chunk_size = padded_num_heads
@@ -110,7 +234,7 @@ def run_flash_mla_prefill_impl(
         memory_config=ttnn.DRAM_MEMORY_CONFIG,
     )
     tt_k = ttnn.from_torch(
-        k,  # (B, H, S, D)
+        tt_k_torch,  # (B, H, S, D)
         device=device,
         dtype=dtype,
         layout=ttnn.TILE_LAYOUT,
@@ -177,6 +301,13 @@ def run_flash_mla_prefill_impl(
         (ttnn.bfloat8_b, ttnn.bfloat4_b),
     ],
 )
+@pytest.mark.parametrize(
+    "use_paged_attention",
+    [
+        False,
+        # True,
+    ],
+)
 def test_flash_mla_prefill(
     device,
     batch,
@@ -187,9 +318,22 @@ def test_flash_mla_prefill(
     d_rope,
     q_dtype,
     dtype,
+    use_paged_attention,
     function_level_defaults,
     reset_seeds,
 ):
+    # Paged attention configuration
+    paged_attention_cfg = None
+    if use_paged_attention:
+        block_size = ttnn.TILE_SIZE
+        assert seq_len % block_size == 0, f"Sequence length must be a multiple of {block_size=} for paged attention."
+
+        max_num_blocks = seq_len // block_size * batch
+        paged_attention_cfg = PagedAttentionConfig(
+            block_size=block_size,
+            max_num_blocks=max_num_blocks,
+        )
+
     run_flash_mla_prefill_impl(
         device,
         batch,
@@ -200,6 +344,7 @@ def test_flash_mla_prefill(
         d_rope,
         q_dtype,
         dtype,
+        paged_attention_cfg=paged_attention_cfg,
     )
 
 
