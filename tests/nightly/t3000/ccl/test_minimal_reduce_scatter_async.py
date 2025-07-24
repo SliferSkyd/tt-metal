@@ -42,61 +42,17 @@ def run_reduce_scatter_impl(
 
     tile = (32, 32)
 
-    ##### Fabric setup #####
+    # ##### Fabric setup #####
     compute_grid_size = t3k_mesh_device.compute_with_storage_grid_size()
     ccl_sub_device_crs = ttnn.CoreRangeSet(
         {ttnn.CoreRange(ttnn.CoreCoord(0, 0), ttnn.CoreCoord(compute_grid_size.x - 1, compute_grid_size.y - 1))}
     )
-    worker_sub_device = ttnn.SubDevice(
-        [
-            ccl_sub_device_crs,
-        ]
-    )
-    worker_sub_device_id = ttnn.SubDeviceId(0)
-    sub_device_stall_group = [worker_sub_device_id]
-
-    sub_device_manager = t3k_mesh_device.create_sub_device_manager([worker_sub_device], 0)
-    t3k_mesh_device.load_sub_device_manager(sub_device_manager)
-    t3k_mesh_device.set_sub_device_stall_group(sub_device_stall_group)
 
     # create global semaphore handles
     ccl_semaphore_handles = [
         create_global_semaphores(t3k_mesh_device, rs_topology, ccl_sub_device_crs, 0, num_links)
         for _ in range(num_iters)
     ]
-
-    ### Create persistent output buffers
-    logger.info("Creating persistent buffers")
-    intermediate_shape = rs_input_shape[:]
-    if rs_topology == ttnn.Topology.Linear:
-        # Line RS requires double-sized input for forward/backward
-        intermediate_shape.insert(0, 2)
-    persistent_intermediate_buffers = [
-        ttnn.from_torch(
-            torch.zeros(intermediate_shape),
-            device=t3k_mesh_device,
-            layout=ttnn.TILE_LAYOUT,
-            dtype=rs_input_dtype,
-            memory_config=mem_config_rs,
-            mesh_mapper=ttnn.ReplicateTensorToMesh(t3k_mesh_device),
-        )
-        for _ in range(num_iters)
-    ]
-    rs_output_shape = rs_input_shape[:]
-    rs_output_shape[3] //= num_devices
-    persistent_output_buffers = [
-        ttnn.from_torch(
-            torch.zeros(rs_output_shape),
-            device=t3k_mesh_device,
-            layout=ttnn.TILE_LAYOUT,
-            dtype=rs_input_dtype,
-            memory_config=mem_config_input,
-            mesh_mapper=ttnn.ReplicateTensorToMesh(t3k_mesh_device),
-        )
-        for _ in range(num_iters)
-    ]
-
-    logger.info("Done creating persistent buffers")
 
     ##### All gather input setup #####
     logger.info(f"Reduce scatter shape: {rs_input_shape}")
@@ -144,13 +100,11 @@ def run_reduce_scatter_impl(
     def run_op(i):
         tt_reduce_scatter_output_tensor = ttnn.experimental.reduce_scatter_minimal_async(
             tt_input_tensor_mesh_list[i],
-            persistent_output_buffers=[persistent_intermediate_buffers[i], persistent_output_buffers[i]],
             dim=dim,
             multi_device_global_semaphore=ccl_semaphore_handles[i],
             num_links=num_links,
             memory_config=mem_config_input,
             topology=rs_topology,
-            subdevice_id=worker_sub_device_id,
             cluster_axis=cluster_axis,
             chunks_per_sync=chunks_per_sync,
             num_workers_per_link=num_workers_per_link,
@@ -178,14 +132,14 @@ def run_reduce_scatter_impl(
         logger.info(f"Done executing trace")
 
         # Synchronize the devices
-        ttnn.synchronize_device(t3k_mesh_device, sub_device_ids=sub_device_stall_group)
+        ttnn.synchronize_device(t3k_mesh_device)
     else:
         for i in range(num_iters):
             tt_reduce_scatter_output_tensor = run_op(i)
             tt_reduce_scatter_output_list.append(tt_reduce_scatter_output_tensor)
 
             logger.info(f"Waiting for op")
-            ttnn.synchronize_device(t3k_mesh_device, sub_device_ids=sub_device_stall_group)
+            ttnn.synchronize_device(t3k_mesh_device)
             logger.info(f"Done op")
 
             logger.info(f"Done iteration {i}")
@@ -206,9 +160,6 @@ def run_reduce_scatter_impl(
 
         logger.info(f"{output}, iteration {i}")
         assert eq, f"{i} FAILED ag: {output}"
-
-    t3k_mesh_device.reset_sub_device_stall_group()
-    t3k_mesh_device.clear_loaded_sub_device_manager()
 
 
 @skip_for_blackhole("Requires wormhole_b0 to run")

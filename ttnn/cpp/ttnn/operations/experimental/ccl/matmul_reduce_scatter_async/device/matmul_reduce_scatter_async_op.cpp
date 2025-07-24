@@ -132,6 +132,29 @@ tt::tt_metal::operation::ProgramWithCallbacks MatmulReduceScatterAsync::create_p
         }
     }
 
+    // Create a mutable copy of num_links for modification
+    std::optional<uint32_t> num_links_to_use = this->reduce_scatter_minimal_async_struct.num_links;
+
+    if (this->reduce_scatter_minimal_async_struct.cluster_axis.has_value()) {
+        auto row_or_col =
+            this->reduce_scatter_minimal_async_struct.cluster_axis.value() == 0 ? mesh_coord[1] : mesh_coord[0];
+        auto num_links_available = tt::tt_fabric::experimental::get_number_of_available_routing_planes(
+            *mesh_device, this->reduce_scatter_minimal_async_struct.cluster_axis.value(), row_or_col);
+        if (!num_links_to_use.has_value()) {
+            num_links_to_use = static_cast<uint32_t>(num_links_available);
+        } else {
+            TT_FATAL(
+                num_links_available >= num_links_to_use.value(),
+                "Error, The number of links available is less than the number of links requested");
+        }
+    } else {
+        if (!num_links_to_use.has_value()) {
+            TT_FATAL(
+                false,
+                "Reduce scatter with undefined number of links and non-cluster axis API is currently not supported");
+        }
+    }
+
     // Return the MatmulReduceScatterAsync program with callbacks
     return matmul_reduce_scatter_async_multi_core_with_workers(
         input_tensors[0],   // input_tensor
@@ -145,7 +168,7 @@ tt::tt_metal::operation::ProgramWithCallbacks MatmulReduceScatterAsync::create_p
         forward_device,
         backward_device,
         this->reduce_scatter_minimal_async_struct.dim,
-        this->reduce_scatter_minimal_async_struct.num_links,
+        num_links_to_use.value(),
         this->reduce_scatter_minimal_async_struct.ring_size,
         device_index,
         this->reduce_scatter_minimal_async_struct.topology,
@@ -261,8 +284,9 @@ std::vector<ttnn::Tensor> matmul_reduce_scatter_async(
     ttnn::ReduceScatterMinimalAsync reduce_scatter_minimal_async_struct = ttnn::ReduceScatterMinimalAsync(
         devices,
         dim,
-        num_links,
+        std::make_optional(num_links),
         devices.size(),
+        memory_config_rs.value_or(input_tensor.memory_config()),
         memory_config_rs.value_or(input_tensor.memory_config()),
         topology,
         multi_device_global_semaphore,

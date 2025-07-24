@@ -6,6 +6,7 @@
 #include "ttnn/operations/functions.hpp"
 #include "ttnn/operations/math.hpp"
 #include "ttnn/global_semaphore.hpp"
+#include <tt-metalium/fabric.hpp>
 
 #include "ttnn/tensor/tensor_utils.hpp"
 
@@ -22,7 +23,10 @@ void ReduceScatterMinimalAsync::validate_with_output_tensors(
 
     TT_FATAL(input_tensor.storage_type() == StorageType::DEVICE, "Operands to all_gather need to be on device!");
     TT_FATAL(input_tensor.buffer() != nullptr, "Operands to all_gather need to be allocated in buffers on device!");
-    TT_FATAL(this->num_links > 0, "Error, num_links should be more than 0 but has {}", this->num_links);
+    TT_FATAL(
+        !this->num_links.has_value() || this->num_links.value() > 0,
+        "Error, num_links should be more than 0 but has {}",
+        this->num_links);
 
     const auto& input_shape = input_tensor.get_padded_shape();
     TT_FATAL(
@@ -108,15 +112,25 @@ void ReduceScatterMinimalAsync::validate_with_output_tensors(
 
 std::vector<ttnn::TensorSpec> ReduceScatterMinimalAsync::compute_output_specs(
     const std::vector<Tensor>& input_tensors) const {
-    // TODO: FIXME!
-    const auto& input_tensor = input_tensors[0];
-    const auto& inter_shape = input_tensor.get_padded_shape();
-    auto output_shape = inter_shape;
+    const auto& input_tensor = input_tensors.at(0);
+    auto output_shape = input_tensor.logical_shape();
     output_shape[this->dim] /= this->ring_size;
+
+    const auto& input_shape = input_tensor.logical_shape();
+    // Create new shape vector
+    std::vector<uint32_t> intermediate_shape_vec;
+    if (this->topology == ttnn::ccl::Topology::Linear) {
+        // Linear RS requires an expanded intermediate tensor of shape [2, *input_shape]
+        intermediate_shape_vec.push_back(2);
+    }
+    intermediate_shape_vec.insert(intermediate_shape_vec.end(), input_shape.cbegin(), input_shape.cend());
+    ttnn::Shape intermediate_shape(intermediate_shape_vec);
+
     return {
         TensorSpec(
-            inter_shape,
-            TensorLayout(input_tensor.get_dtype(), input_tensor.get_tensor_spec().page_config(), output_mem_config)),
+            intermediate_shape,
+            TensorLayout(
+                input_tensor.get_dtype(), input_tensor.get_tensor_spec().page_config(), intermediate_mem_config)),
         TensorSpec(
             output_shape,
             TensorLayout(input_tensor.get_dtype(), input_tensor.get_tensor_spec().page_config(), output_mem_config)),
@@ -155,6 +169,33 @@ tt::tt_metal::operation::ProgramWithCallbacks ReduceScatterMinimalAsync::create_
     }
     uint32_t target_ring_size = devices_to_use.size();
 
+    // Create a mutable copy of num_links for modification
+    std::optional<uint32_t> num_links_to_use = this->num_links;
+
+    if (this->cluster_axis.has_value()) {
+        auto row_or_col = this->cluster_axis.value() == 0 ? coord[1] : coord[0];
+        auto num_links_available = tt::tt_fabric::experimental::get_number_of_available_routing_planes(
+            *mesh_device, this->cluster_axis.value(), row_or_col);
+        if (!num_links_to_use.has_value()) {
+            num_links_to_use = static_cast<uint32_t>(num_links_available);
+        } else {
+            TT_FATAL(
+                num_links_available >= num_links_to_use.value(),
+                "Error, The number of links available is less than the number of links requested");
+
+            if (num_links_available > num_links_to_use.value()) {
+                log_info(
+                    tt::LogOp, "The user has specified a number of links less than the number of links available.");
+            }
+        }
+    } else {
+        if (!num_links_to_use.has_value()) {
+            TT_FATAL(
+                false,
+                "Reduce scatter with undefined number of links and non-cluster axis API is currently not supported");
+        }
+    }
+
     std::optional<IDevice*> forward_device = std::nullopt;
     std::optional<IDevice*> backward_device = std::nullopt;
     uint32_t device_index = 0;  // Initialize device index
@@ -182,7 +223,7 @@ tt::tt_metal::operation::ProgramWithCallbacks ReduceScatterMinimalAsync::create_
         backward_device,
         output_tensors[1],
         this->dim,
-        this->num_links,
+        num_links_to_use.value(),
         target_ring_size,
         device_index,
         this->topology,
@@ -200,6 +241,7 @@ tt::tt_metal::operation::Hash ReduceScatterMinimalAsync::compute_program_hash(
         this->num_links,
         this->ring_size,
         this->output_mem_config,
+        this->intermediate_mem_config,
         this->topology,
         this->sub_device_id,
         this->cluster_axis,
@@ -219,8 +261,9 @@ Tensor reduce_scatter_minimal_async_impl(
     const std::optional<std::vector<ttnn::Tensor>>& persistent_output_buffers,
     const uint32_t dim,
     const std::vector<GlobalSemaphore>& multi_device_global_semaphore,
-    const uint32_t num_links,
+    std::optional<uint32_t> num_links,
     const std::optional<MemoryConfig>& memory_config,
+    const std::optional<MemoryConfig>& intermediate_memory_config,
     const ttnn::ccl::Topology topology,
     std::optional<tt::tt_metal::SubDeviceId> sub_device_id,
     const std::vector<IDevice*>& devices,
@@ -272,6 +315,7 @@ Tensor reduce_scatter_minimal_async_impl(
                    num_links,
                    num_devices,
                    memory_config.value_or(input_tensor.memory_config()),
+                   intermediate_memory_config.value_or(memory_config.value_or(input_tensor.memory_config())),
                    ccl_topology,
                    multi_device_global_semaphore,
                    sub_device_id,
@@ -291,8 +335,9 @@ Tensor reduce_scatter_minimal_async(
     const std::optional<std::vector<ttnn::Tensor>>& persistent_output_buffers,
     const uint32_t dim,
     const std::vector<GlobalSemaphore>& multi_device_global_semaphore,
-    const uint32_t num_links,
+    std::optional<uint32_t> num_links,
     const std::optional<MemoryConfig>& memory_config,
+    const std::optional<MemoryConfig>& intermediate_memory_config,
     const ttnn::ccl::Topology topology,
     std::optional<tt::tt_metal::SubDeviceId> sub_device_id,
     std::optional<uint32_t> cluster_axis,
@@ -307,6 +352,7 @@ Tensor reduce_scatter_minimal_async(
         multi_device_global_semaphore,
         num_links,
         memory_config,
+        intermediate_memory_config,
         topology,
         sub_device_id,
         devices,

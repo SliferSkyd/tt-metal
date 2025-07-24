@@ -42,7 +42,7 @@ tt::tt_metal::operation::ProgramWithCallbacks matmul_reduce_scatter_async_multi_
     std::optional<IDevice*> forward_device,
     std::optional<IDevice*> backward_device,
     const uint32_t dim,
-    const uint32_t num_links,
+    uint32_t num_links,
     const uint32_t ring_size,
     const uint32_t ring_index,
     ttnn::ccl::Topology topology,
