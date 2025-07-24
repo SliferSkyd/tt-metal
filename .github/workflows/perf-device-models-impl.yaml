@@ -59,6 +59,10 @@ jobs:
         with:
           build-artifact-name: ${{ inputs.build-artifact-name }}
           wheel-artifact-name: ${{ inputs.wheel-artifact-name }}
+      - name: List .cache directory
+        run: |
+          echo "HOME is $HOME"
+          ls -al $HOME/.cache || echo ".cache does not exist"
       - name: non-civ2 tests
         uses: tenstorrent/tt-metal/.github/actions/device-perf-test@main
         with:
@@ -76,7 +80,6 @@ jobs:
         with:
           model_name: "yolov11"
           commands: |
-            cd ..
             cd ..
             ls -lrt
             # WH_ARCH_YAML=$MAGIC_ENV pytest models/demos/yolov11/tests -m models_device_performance_bare_metal
