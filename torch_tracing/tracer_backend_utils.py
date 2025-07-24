@@ -41,6 +41,18 @@ class ConvAttrs(AttrsBase):
 
 
 @dataclass
+class PoolAttrs(AttrsBase):
+    input_batch: int
+    input_height: int
+    input_width: int
+    input_depth: int
+    kernel: List[int]
+    stride: List[int]
+    padding: List[int]
+    dilation: List[int]
+
+
+@dataclass
 class OperationMetadata:
     """Metadata for operations, such as input/output shapes and dtypes."""
 
@@ -83,7 +95,7 @@ class Operation:
             serialized_kwargs = ", " + serialized_kwargs
         return f"{to_valid_variable_name(self.unique_name)} = {self.function_call_name}({serialized_args}{serialized_kwargs}){self.postfix}"
 
-    def to_operation(self, New_type) -> 'Operation':
+    def to_operation(self, New_type) -> "Operation":
         """Convert this operation to a generic Operation type."""
         return New_type(
             unique_name=self.unique_name,
@@ -110,13 +122,14 @@ class Operation:
             return args_shapes
         except:
             return None
-    
+
     @property
     def output_shapes(self) -> List[Any]:
         try:
             return self.meta_data.meta["o_shapes"]
         except:
-            return None 
+            return None
+
 
 @dataclass
 class WrappedOperation(Operation):
@@ -178,7 +191,8 @@ class AtenAddTensor(WrappedOperation):
         if output_shapes:
             num_elements = output_shapes[0].numel()
             return num_elements * 2  # Assuming two tensors are added
-        return super().ops 
+        return super().ops
+
 
 @dataclass
 class AtenAddm(WrappedOperation):
@@ -187,7 +201,42 @@ class AtenAddm(WrappedOperation):
         shapes = self.input_shapes
         if shapes and len(shapes) > 2 and 1 in shapes and 2 in shapes:
             return 2 * shapes[1][0] * shapes[2].numel()
-        return super().ops 
+        return super().ops
+
+
+@dataclass
+class AtenMaxPool2dWithIndices(WrappedOperation):
+    attrs: Optional[PoolAttrs] = None
+
+    def __post_init__(self):
+        if self.attrs is None:
+            dilation = self.args[4] if len(self.args) > 4 else [1, 1]
+            padding = self.args[3] if len(self.args) > 3 else [0, 0]
+            self.attrs = PoolAttrs(
+                input_batch=self.meta_data.meta["i_shapes"][0][0],
+                input_height=self.meta_data.meta["i_shapes"][0][2],
+                input_width=self.meta_data.meta["i_shapes"][0][3],
+                input_depth=self.meta_data.meta["i_shapes"][0][1],
+                kernel=self.args[1],
+                stride=self.args[2],
+                padding=padding,
+                dilation=dilation,
+            )
+
+    @property
+    def ops(self) -> int:
+        eff_kernel_height = self.attrs.dilation[0] * (self.attrs.kernel[0] - 1) + 1
+        eff_kernel_width = self.attrs.dilation[1] * (self.attrs.kernel[1] - 1) + 1
+        H_out = (self.attrs.input_height + 2 * self.attrs.padding[0] - eff_kernel_height) // self.attrs.stride[0] + 1
+        W_out = (self.attrs.input_width + 2 * self.attrs.padding[1] - eff_kernel_width) // self.attrs.stride[1] + 1
+        return (
+            self.attrs.input_batch
+            * H_out
+            * W_out
+            * self.attrs.input_depth
+            * self.attrs.kernel[0]
+            * self.attrs.kernel[1]
+        )
 
 
 @dataclass

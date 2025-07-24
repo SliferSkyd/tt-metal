@@ -18,6 +18,7 @@ from tracer_backend_utils import (
     AtenConvolution,
     AtenAddTensor,
     AtenAddm,
+    AtenMaxPool2dWithIndices,
     Operation,
     OperationMetadata,
     PlaceholderTensor,
@@ -374,7 +375,7 @@ class OperationGraph:
                     args=new_args,
                     kwargs=kwargs,
                     meta_data=OperationMetadata(meta=meta, res=self.parse_args([res], node_data["name"])[0]),
-                    graph_output_indices=graph_output_indices
+                    graph_output_indices=graph_output_indices,
                 )
             else:
                 args = self.parse_args(node_data.get("args", []), node_data["name"])
@@ -384,7 +385,7 @@ class OperationGraph:
                     args=args,
                     kwargs=kwargs,
                     meta_data=OperationMetadata(meta=meta, res=self.parse_args([res], node_data["name"])[0]),
-                    graph_output_indices=graph_output_indices
+                    graph_output_indices=graph_output_indices,
                 )
             self.operations[node_id] = operation
             self._handle_input_operations(node_data)
@@ -465,8 +466,10 @@ class WrappedOperationGraph(OperationGraph):
                 self.operations[node_id] = operation.to_operation(AtenAddTensor)
             elif operation.function_call_name.startswith("torch.ops.aten.addmm"):
                 self.operations[node_id] = operation.to_operation(AtenAddm)
+            elif operation.function_call_name == "torch.ops.aten.max_pool2d_with_indices":
+                self.operations[node_id] = operation.to_operation(AtenMaxPool2dWithIndices)
             elif len(operation.function_call_name):
-                    unsupported_wrapped_ops.add(operation.function_call_name)
+                unsupported_wrapped_ops.add(operation.function_call_name)
         if self.verbose and unsupported_wrapped_ops:
             print(f"Unsupported wrapped operations: {', '.join(unsupported_wrapped_ops)}")
 

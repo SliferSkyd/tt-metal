@@ -4,9 +4,11 @@ from generate_pytorch_unittest_graph import (
     PytorchLayerUnitTestGraph,
     ConvolutionUnittest,
     AddmUnittest,
+    Maxpool2dUnittest,
     AddmCombiner,
     PytorchLayerUnitTestGraphConfig,
     ConvolutionCombiner,
+    Maxpool2dCombiner,
 )
 from generate_pytorch_graph import PytorchGraph
 from generate_pytorch_excel_graph import PytorchExcelGraph
@@ -166,8 +168,12 @@ def main(args_dict):
     graph = PytorchLayerUnitTestGraph(
         PytorchLayerUnitTestGraphConfig(
             operation_graph,
-            [ConvolutionUnittest, AddmUnittest],
-            {AddmUnittest: AddmCombiner, ConvolutionUnittest: ConvolutionCombiner},
+            [ConvolutionUnittest, AddmUnittest, Maxpool2dUnittest],
+            {
+                AddmUnittest: AddmCombiner,
+                ConvolutionUnittest: ConvolutionCombiner,
+                Maxpool2dUnittest: Maxpool2dCombiner,
+            },
         )
     )
     graph.dump_to_python_file("test.py", True)

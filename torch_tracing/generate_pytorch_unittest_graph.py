@@ -1,6 +1,6 @@
 import networkx as nx
 from tracer_backend import OperationGraph, Operation
-from tracer_backend_utils import ConvAttrs, AtenConvolution, AtenAddm
+from tracer_backend_utils import ConvAttrs, PoolAttrs, AtenConvolution, AtenAddm, AtenMaxPool2dWithIndices
 from typing import List, Optional, Type, Dict, Any
 from dataclasses import dataclass
 from pytorch_graph_utils import format_file_with_black
@@ -63,6 +63,24 @@ class AddmUnittest(UnitTestOperation):
     def generate_code(self, indent="") -> str:
         """Generate the code for this convolution unit test operation."""
         group_unit_test = AddmGroupUnittest([self.input_shapes])
+        return group_unit_test.generate_code()
+
+
+class Maxpool2dUnittest(UnitTestOperation):
+    def __init__(self, pool_attrs: PoolAttrs):
+        self.attrs = pool_attrs
+        HEADER_IMPORTS.add("from tests.sweep_framework.sweep_utils.max_pool2d_common import run_max_pool2d")
+
+    @staticmethod
+    def parse_from_operation(operation: Operation) -> Optional["Maxpool2dUnittest"]:
+        if operation.function_call_name == "torch.ops.aten.max_pool2d_with_indices":
+            pool = operation.to_operation(AtenMaxPool2dWithIndices)
+            return Maxpool2dUnittest(pool.attrs)
+        return None
+
+    def generate_code(self, indent="") -> str:
+        """Generate the code for this convolution unit test operation."""
+        group_unit_test = Maxpool2dGroupUnittest([self.attrs])
         return group_unit_test.generate_code()
 
 
@@ -140,6 +158,64 @@ def test_conv(
         fast_compare=True,
         dilation_h=dilation[0],
         dilation_w=dilation[1],
+    )
+        """
+
+
+class Maxpool2dGroupUnittest(UnitTestOperation):
+    def __init__(self, attrs_list: List[PoolAttrs]):
+        self.attrs = attrs_list
+        HEADER_IMPORTS.add("from tests.sweep_framework.sweep_utils.max_pool2d_common import run_max_pool2d")
+
+    def generate_code(self) -> str:
+        """Generate the code for this maxpool2d unit test operation."""
+        return f"""
+
+@pytest.mark.parametrize(
+    "dtype",
+    [[ttnn.bfloat8_b], [ttnn.bfloat16]],
+)
+@pytest.mark.parametrize(
+    "input_batch, input_depth, input_height, input_width, kernel, stride, padding, dilation",
+    (
+{''.join(f'        ({attr.input_batch}, {attr.input_depth}, {attr.input_height}, {attr.input_width}, {attr.kernel}, {attr.stride}, {attr.padding}, {attr.dilation}),' for attr in self.attrs)}
+    )
+)
+def test_maxpool2d(
+    device,
+    input_batch,
+    input_depth,
+    input_height,
+    input_width,
+    dtype,
+    kernel,
+    stride,
+    padding,
+    dilation,
+):
+    if device.core_grid.y == 7:
+        pytest.skip("Tests have been configured for N150.")
+
+    [kernel_h, kernel_w] = kernel
+    [stride_h, stride_w] = stride
+    [pad_h, pad_w] = padding
+    [dilation_h, dilation_w] = dilation
+
+    return run_max_pool2d(
+        input_batch,
+        input_depth,
+        input_height,
+        input_width,
+        kernel_h,
+        kernel_w,
+        stride_h,
+        stride_w,
+        pad_h,
+        pad_w,
+        dilation_h,
+        dilation_w,
+        dtype,
+        device,
     )
         """
 
@@ -233,6 +309,19 @@ class AddmCombiner(UnitTestOperationCombiner):
         # Assuming all operations are ConvolutionUnittest
         combined_shapes = [addm.input_shapes for addm in operations if isinstance(addm, AddmUnittest)]
         return AddmGroupUnittest(combined_shapes)
+
+
+class Maxpool2dCombiner(UnitTestOperationCombiner):
+
+    @staticmethod
+    def combine(operations: List[UnitTestOperation]) -> UnitTestOperation:
+        """Combine multiple maxpool2d operations into a single one."""
+        if not operations:
+            raise ValueError("No operations to combine.")
+
+        # Assuming all operations are ConvolutionUnittest
+        combined_attrs = [pool.attrs for pool in operations if isinstance(pool, Maxpool2dUnittest)]
+        return Maxpool2dGroupUnittest(combined_attrs)
 
 
 class UnitTestCombiner:
