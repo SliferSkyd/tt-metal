@@ -347,7 +347,7 @@ def prepare_generator_args(
             {"temperature": 0, "top_p": 0.08},  # sampling_params (argmax)
             False,  # stop_at_eos
             True,  # ci_only
-            1,  # data_parallel
+            4,  # data_parallel
             False,  # token_accuracy
             False,  # stress_test
         ),
@@ -538,7 +538,7 @@ def test_demo_text(
     token_accuracy,
     stress_test,
 ):
-    mesh_device.reshape(ttnn.MeshShape(1, 8))
+    # mesh_device.reshape(ttnn.MeshShape(1, 8))
     """
     Simple demo with limited dependence on reference code.
     """
