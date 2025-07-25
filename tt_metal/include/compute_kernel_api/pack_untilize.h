@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include "compute_kernel_api/common.h"
 #ifdef TRISC_MATH
 #include "llk_math_unary_datacopy_api.h"
@@ -196,9 +197,10 @@ ALWI void pack_untilize_dest(
     uint32_t block_rt_dim = 1,
     uint32_t block_c_index = 0 /* used when full_ct_dim > block_ct_dim*/,
     uint32_t face_r_dim = 16,
-    uint32_t num_faces = 4) {
+    uint32_t num_faces = 4,
+    uint32_t dst_idx = 0) {
     PACK((llk_pack_untilize<block_ct_dim, full_ct_dim, diagonal, narrow_row, row_num_datums>(
-        block_rt_dim, ocb, face_r_dim, num_faces, block_c_index)));
+        block_rt_dim, ocb, face_r_dim, num_faces, block_c_index, dst_idx)));
 }
 
 // clang-format off
