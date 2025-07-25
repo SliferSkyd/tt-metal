@@ -523,63 +523,62 @@ tt::tt_metal::operation::ProgramWithCallbacks ring_rm_reduce_scatter_minimal_asy
     CoreRangeSet sender_forward_core_range_set = CoreRangeSet(sender_forward_core_ranges);
     CoreRangeSet sender_backward_core_range_set = CoreRangeSet(sender_backward_core_ranges);
 
-    // TODO: (GR) Can't send entire row in a single packet
-    // L1 Scratch CB Creation
-    uint32_t max_target_noc_addresses_per_packet = 2;
-    const size_t packet_size_bytes = tt::tt_fabric::get_tt_fabric_channel_buffer_size_bytes();
-    uint32_t l1_scratch_cb_page_size_bytes = op_config.get_page_size();
-    uint32_t num_pages_per_packet = packet_size_bytes / l1_scratch_cb_page_size_bytes;
-    uint32_t num_tiles_to_write_per_packet = std::min(max_target_noc_addresses_per_packet, num_pages_per_packet);
-    uint32_t tile_granularity = num_tiles_to_write_per_packet < 4 ? 4 * num_tiles_to_write_per_packet : 8;
-    uint32_t cb_num_pages = 3 * tile_granularity;  // triple buffering
+    const auto& tile_shape = input_tensor.tensor_spec().tile().get_tile_shape();
+    uint32_t tile_height = tile_shape[0];
+    uint32_t tile_width = tile_shape[1];
+    uint32_t tile_volume_elements = tile_height * tile_width;
+
+    uint32_t input_tensor_width_elements = input_tensor.logical_shape()[-1];
+    TT_FATAL(
+        input_tensor_width_elements % ring_size == 0,
+        "Input tensor width ({}) must be divisible by number of devices ({})",
+        input_tensor.padded_shape()[-1],
+        ring_size);
+    uint32_t slice_width_elements = input_tensor_width_elements / ring_size;
+
+    uint32_t tiles_per_slice_row = tt::round_up(slice_width_elements, tile_volume_elements);
+    uint32_t cb_page_size = tile_volume_elements * input_tensor.element_size();
+    uint32_t cb_num_pages = 3 * tiles_per_slice_row;  // Triple buffering
+
     tt::DataFormat df = tt::tt_metal::datatype_to_dataformat_converter(input_tensor.dtype());
 
-    // TODO: (GR) Can't send entire row in a single packet
     uint32_t input_cb_index = tt::CB::c_in0;
     tt::tt_metal::CircularBufferConfig cb_input_config =
-        tt::tt_metal::CircularBufferConfig(cb_num_pages * l1_scratch_cb_page_size_bytes, {{input_cb_index, df}})
-            .set_page_size(input_cb_index, l1_scratch_cb_page_size_bytes);
+        tt::tt_metal::CircularBufferConfig(cb_num_pages * cb_page_size, {{input_cb_index, df}})
+            .set_page_size(input_cb_index, cb_page_size);
     tt::tt_metal::CBHandle cb_input_workers = CreateCircularBuffer(program, sender_worker_core_range, cb_input_config);
     uint32_t intermediate_cb_index = tt::CB::c_in1;
     tt::tt_metal::CircularBufferConfig cb_intermediate_config =
-        tt::tt_metal::CircularBufferConfig(cb_num_pages * l1_scratch_cb_page_size_bytes, {{intermediate_cb_index, df}})
-            .set_page_size(intermediate_cb_index, l1_scratch_cb_page_size_bytes);
+        tt::tt_metal::CircularBufferConfig(cb_num_pages * cb_page_size, {{intermediate_cb_index, df}})
+            .set_page_size(intermediate_cb_index, cb_page_size);
     tt::tt_metal::CBHandle cb_intermediate_workers =
         CreateCircularBuffer(program, sender_worker_core_range, cb_intermediate_config);
     uint32_t reader_output_cb_index = tt::CB::c_in2;
     tt::tt_metal::CircularBufferConfig cb_reader_output_config =
-        tt::tt_metal::CircularBufferConfig(cb_num_pages * l1_scratch_cb_page_size_bytes, {{reader_output_cb_index, df}})
-            .set_page_size(reader_output_cb_index, l1_scratch_cb_page_size_bytes);
+        tt::tt_metal::CircularBufferConfig(cb_num_pages * cb_page_size, {{reader_output_cb_index, df}})
+            .set_page_size(reader_output_cb_index, cb_page_size);
     tt::tt_metal::CBHandle cb_reader_output_workers =
         CreateCircularBuffer(program, sender_worker_core_range, cb_reader_output_config);
     uint32_t compute_output_cb_index = tt::CB::c_in3;
     tt::tt_metal::CircularBufferConfig cb_compute_output_config =
-        tt::tt_metal::CircularBufferConfig(
-            cb_num_pages * l1_scratch_cb_page_size_bytes, {{compute_output_cb_index, df}})
-            .set_page_size(compute_output_cb_index, l1_scratch_cb_page_size_bytes);
+        tt::tt_metal::CircularBufferConfig(cb_num_pages * cb_page_size, {{compute_output_cb_index, df}})
+            .set_page_size(compute_output_cb_index, cb_page_size);
     tt::tt_metal::CBHandle cb_compute_output_workers =
         CreateCircularBuffer(program, sender_worker_core_range, cb_compute_output_config);
 
-    // TODO: (GR) How many semaphores are we working with
+    const size_t packet_size_bytes = tt::tt_fabric::get_tt_fabric_channel_buffer_size_bytes();
+    const size_t packet_header_size_bytes = tt::tt_fabric::get_tt_fabric_packet_header_size_bytes();
+
     // Set aside a buffer we can use for storing packet headers in (particularly for atomic incs)
-    const auto reserved_packet_header_CB_index = tt::CB::c_in4;
     static constexpr auto num_packet_headers_storable = 4;
-    auto packet_header_size_bytes = tt::tt_fabric::get_tt_fabric_packet_header_size_bytes();
+    uint32_t reserved_packet_header_CB_index = tt::CB::c_in4;
     tt::tt_metal::CircularBufferConfig cb_reserved_packet_header_config =
         tt::tt_metal::CircularBufferConfig(
             num_packet_headers_storable * packet_header_size_bytes * 2,
             {{reserved_packet_header_CB_index, tt::DataFormat::RawUInt32}})
             .set_page_size(reserved_packet_header_CB_index, packet_header_size_bytes);
-    auto reserved_packet_header_CB_handle =
+    tt::tt_metal::CBHandle reserved_packet_header_CB_handle =
         CreateCircularBuffer(program, sender_worker_core_range, cb_reserved_packet_header_config);
-
-    uint32_t input_tensor_width_elements = input_tensor.logical_shape()[-1];
-    TT_FATAL(
-        input_tensor_width_elements % num_devices == 0,
-        "Input tensor width ({}) must be divisible by number of devices ({})",
-        input_tensor.padded_shape()[-1],
-        num_devices);
-    uint32_t slice_width_elements = input_tensor_width_elements / num_devices;
 
     // KERNEL CREATION
     // Reader
@@ -621,6 +620,7 @@ tt::tt_metal::operation::ProgramWithCallbacks ring_rm_reduce_scatter_minimal_asy
             input_tensor_num_pages,                                  // input_tensor_num_pages
             op_config.get_page_size(),                               // input_tensor_page_size
             slice_width_elements * input_tensor.element_size(),      // slice_width_row_size
+            packet_size_bytes,                                       // packet_size_bytes
             ring_size,                                               // ring_size
             core_idx % num_senders_per_link,                         // direction
         };
@@ -635,7 +635,12 @@ tt::tt_metal::operation::ProgramWithCallbacks ring_rm_reduce_scatter_minimal_asy
         // Reduce kernel
         auto sender_reduce_kernel_config = tt::tt_metal::ComputeConfig{};
         sender_reduce_kernel_config.compile_args = {
-            input_cb_index, intermediate_cb_index, compute_output_cb_index, ring_size, core_idx % num_senders_per_link};
+            input_cb_index,
+            intermediate_cb_index,
+            compute_output_cb_index,
+            ring_size,
+            tiles_per_slice_row,
+            core_idx % num_senders_per_link};
 
         auto sender_reduce_kernel_id = tt::tt_metal::CreateKernel(
             program,
@@ -660,12 +665,13 @@ tt::tt_metal::operation::ProgramWithCallbacks ring_rm_reduce_scatter_minimal_asy
             };
             tt::tt_metal::SetRuntimeArgs(program, reader_kernel_ids[core_idx], {core}, reader_rt_args);
 
-            std::vector<uint32_t> writer_rt_args =
-            { intermediate_tensor.buffer()->address(),  // intermediate_tensor_address
-              output_tensor.buffer()->address(),        // output_tensor_address
-              drain_sync_core.x,                        // out_ready_sem_noc0_x
-              drain_sync_core.y,                        // out_ready_sem_noc0_y
-              semaphore.at(core_idx).address() }        // out_ready_fwd_semaphore
+            std::vector<uint32_t> writer_rt_args = {
+                intermediate_tensor.buffer()->address(),  // intermediate_tensor_address
+                output_tensor.buffer()->address(),        // output_tensor_address
+                drain_sync_core.x,                        // out_ready_sem_noc0_x
+                drain_sync_core.y,                        // out_ready_sem_noc0_y
+                semaphore.at(core_idx).address()          // out_ready_fwd_semaphore
+            };
             if (core_idx % num_senders_per_link) {      // forward
                 writer_rt_args.push_back(forward_device.has_value());
                 if (forward_device.has_value()) {

@@ -30,8 +30,9 @@ constexpr uint32_t cb_reader_output_id = get_compile_time_arg_val(5);
 constexpr uint32_t input_tensor_num_pages = get_compile_time_arg_val(6);
 constexpr uint32_t input_tensor_page_size = get_compile_time_arg_val(7);
 constexpr uint32_t slice_width_row_size = get_compile_time_arg_val(8);
-constexpr uint32_t ring_size = get_compile_time_arg_val(9);
-constexpr bool direction = get_compile_time_arg_val(10);
+constexpr uint32_t packet_size_bytes = get_compile_time_arg_val(9);
+constexpr uint32_t ring_size = get_compile_time_arg_val(10);
+constexpr bool direction = get_compile_time_arg_val(11);
 
 void kernel_main() {
     ///////////////////////////////////////////////////
@@ -112,9 +113,7 @@ void kernel_main() {
                 uint64_t remote_noc0_dest_noc_addr =
                     get_noc_addr(page_id, intermediate_addrgen, single_slice_row_offset_size, 0 /*noc_id*/);
 
-                uint32_t packet_size_in_bytes = /* TODO: (GR) */
-
-                    uint32_t packets_to_send = div_up(slice_width_row_size, /* TODO: (GR) packet_size_in_bytes */);
+                uint32_t packets_to_send = div_up(slice_width_row_size, packet_size_bytes);
                 while (packets_to_send > 0) {
                     if (packets_to_send == 1) {
                         // Standard fabric write
@@ -123,22 +122,22 @@ void kernel_main() {
                             pkt_hdr,
                             fabric_direction_connection,
                             l1_read_addr,
-                            packet_size_in_bytes, );
+                            packet_size_bytes);
 
-                        remote_noc0_dest_noc_addr += packet_size_in_bytes;
+                        remote_noc0_dest_noc_addr += packet_size_bytes;
                         packets_to_send--;
                     } else {
                         // Scatter fabric write
                         scatter_write_and_advance_local_read_address_for_fabric(
                             remote_noc0_dest_noc_addr,
-                            remote_noc0_dest_noc_addr + packet_size_in_bytes,
+                            remote_noc0_dest_noc_addr + packet_size_bytes,
                             pkt_hdr,
                             fabric_direction_connection,
                             l1_read_addr,
-                            packet_size_in_bytes,
-                            packet_size_in_bytes, );
+                            packet_size_bytes,
+                            packet_size_bytes);
 
-                        remote_noc0_dest_noc_addr += 2 * packet_size_in_bytes;
+                        remote_noc0_dest_noc_addr += 2 * packet_size_bytes;
                         packets_to_send -= 2;
                     }
                 }
