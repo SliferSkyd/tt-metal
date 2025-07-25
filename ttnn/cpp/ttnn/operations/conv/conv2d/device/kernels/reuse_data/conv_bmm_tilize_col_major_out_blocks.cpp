@@ -58,63 +58,44 @@ inline void tilize_in(
     // uint32_t start_cb_addr_2,
     uint32_t out_diff,
     uint32_t element_diff,
-    uint32_t image_width_in_tiles) {
-    uint32_t cb_tiles = in_block_w * in_subblock_h * (in1_num_subblocks);
-    cb_reserve_back(out_cb_id, cb_tiles);
-
-    uint32_t pointer1 = 0, initial_pointer = 0;
+    uint32_t image_width_in_tiles,
+    uint32_t reuse_loops_start_1) {
     uint32_t counter = 0;
-
-    PACK((pointer1 = get_local_cb_interface(out_cb_id).fifo_wr_ptr));
-    PACK((initial_pointer = pointer1));
-    // uint32_t pointer2 = pointer1 + out_diff;
-
-    // uint32_t num_subblocks = in1_num_subblocks > in2_num_subblocks ? in1_num_subblocks : in2_num_subblocks;
-
+    tilize_init(in1_cb_id, in_block_w, out_cb_id);
     for (uint32_t in_subblock = 0; in_subblock < in1_num_subblocks; ++in_subblock) {
         for (uint32_t h = 0; h < in_subblock_h; ++h) {
             // TODO(sjovic): move out these divisions somehow
-            if (counter >= image_width_in_tiles && counter % image_width_in_tiles == 0) {
-                uint32_t multiplier = counter / image_width_in_tiles;
+            int32_t patched_counter = (int32_t)counter - (int32_t)reuse_loops_start_1;
+            if (patched_counter >= (int32_t)image_width_in_tiles &&
+                patched_counter % (int32_t)image_width_in_tiles == 0) {
+                uint32_t multiplier = (uint32_t)patched_counter / image_width_in_tiles;
                 uint32_t new_read_ptr = 0;
                 UNPACK((new_read_ptr = start_cb_addr_1 + multiplier * diff));
                 UNPACK((update_local_cb_rd_ptr(in1_cb_id, new_read_ptr)));
-
-                // UNPACK((new_read_ptr = start_cb_addr_2 + multiplier * diff));
-                // UNPACK((update_local_cb_rd_ptr(in2_cb_id, new_read_ptr)));
+                UNPACK((DPRINT << "1a new_read_ptr: " << new_read_ptr << ENDL()));
+            } else if (counter == reuse_loops_start_1) {
+                UNPACK((update_local_cb_rd_ptr(in1_cb_id, start_cb_addr_1)));
+                UNPACK((DPRINT << "1b new_read_ptr: " << start_cb_addr_1 << ENDL()));
+            } else {
+                DPRINT << "no change" << ENDL();
             }
+
             counter++;
 
-            // out cb pointer magic NCRISC
-            PACK((update_local_cb_wr_ptr(out_cb_id, pointer1)));
-            PACK((update_local_cb_tile_wr_ptr(out_cb_id, 0)));
-            PACK((pointer1 += element_diff));
+            cb_wait_front(in1_cb_id, in_block_w);
+            cb_reserve_back(out_cb_id, in_block_w);
 
-            if (in_subblock < in1_num_subblocks) {
-                tilize_init(in1_cb_id, in_block_w, out_cb_id);
-                cb_wait_front(in1_cb_id, in_block_w);
-                tilize_block(in1_cb_id, in_block_w, out_cb_id);
-                cb_pop_front(in1_cb_id, in_block_w);
-                tilize_uninit(in1_cb_id, out_cb_id);
+            for (uint32_t in_block_w_i = 0; in_block_w_i < in_block_w; ++in_block_w_i) {
+                UNPACK((tt::compute::common::print_full_tile(in1_cb_id, in_block_w_i, false)));
             }
 
-            // out cb pointer magic BRISC
-            // PACK((update_local_cb_wr_ptr(out_cb_id, pointer2)));
-            // PACK((update_local_cb_tile_wr_ptr(out_cb_id, 0)));
-            // PACK((pointer2 += element_diff));
-
-            // if (in_subblock < in2_num_subblocks) {
-            //     tilize_init(in2_cb_id, in_block_w, out_cb_id);
-            //     cb_wait_front(in2_cb_id, in_block_w);
-            //     tilize_block(in2_cb_id, in_block_w, out_cb_id);
-            //     cb_pop_front(in2_cb_id, in_block_w);
-            //     tilize_uninit(in2_cb_id, out_cb_id);
-            // }
+            tilize_block(in1_cb_id, in_block_w, out_cb_id);
+            cb_push_back(out_cb_id, in_block_w);
+            cb_pop_front(in1_cb_id, in_block_w);
         }
     }
 
-    PACK((update_local_cb_wr_ptr(out_cb_id, initial_pointer)));  // reset write pointer to the beginning
-    cb_push_back(out_cb_id, cb_tiles);
+    tilize_uninit(in1_cb_id, out_cb_id);
 
 }  // tilize_in()
 
@@ -181,6 +162,7 @@ void MAIN {
     constexpr bool partials_cb_uses_output = get_compile_time_arg_val(26);
     uint32_t diff = get_compile_time_arg_val(27);
     uint32_t image_width_in_tiles = get_compile_time_arg_val(28);
+    const uint32_t reuse_loops_start_1 = get_arg_val<uint32_t>(0);
 
 #ifdef WIDTH_SHARDED
     constexpr uint32_t in0_nblocks_w_tilize = get_compile_time_arg_val(27);
@@ -215,6 +197,7 @@ void MAIN {
     SFPU_OP_INIT_ACTIVATION
 #endif
     uint32_t start_cb_addr_1 = get_local_cb_interface(in0_cb_id).fifo_rd_ptr;
+    // UNPACK(( DPRINT << "start_cb_addr_1: " << start_cb_addr_1 << ENDL() ));
     // TODO(sjovic): generalize for data formats
     uint32_t out_diff = (1088 * in0_block_w * in0_num_subblocks_read * in0_subblock_h) / 16;
     uint32_t element_diff = (1088 * in0_block_w) / 16;
@@ -274,7 +257,6 @@ void MAIN {
 
                     reconfig_data_format_srca(in1_cb_id, in0_cb_id);
                     UNPACK((update_local_cb_rd_ptr(in0_cb_id, start_cb_addr_1)));
-                    // UNPACK((update_local_cb_rd_ptr(in0_cb_second_reader_id, start_cb_addr_2)));
                     // TODO(sjovic): generalize for single reader
                     tilize_in(
                         in0_cb_id,
@@ -289,7 +271,8 @@ void MAIN {
                         // start_cb_addr_2,
                         out_diff,
                         element_diff,
-                        image_width_in_tiles);
+                        image_width_in_tiles,
+                        reuse_loops_start_1);
 
                     mm_block_init_short_with_dt(
                         mm_in0_cb_id,

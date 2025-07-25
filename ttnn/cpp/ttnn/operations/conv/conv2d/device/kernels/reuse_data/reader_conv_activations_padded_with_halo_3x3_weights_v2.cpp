@@ -32,14 +32,17 @@ void kernel_main() {
     constexpr uint32_t cb_id_sharded_act = get_compile_time_arg_val(22);
     constexpr uint32_t cb_reader_indices = get_compile_time_arg_val(23);
 
-    constexpr uint32_t reuse_loops = get_compile_time_arg_val(27);
-    constexpr uint32_t act_cb_tiles = get_compile_time_arg_val(28);
-    constexpr uint32_t w_tiles = get_compile_time_arg_val(29);
+    constexpr uint32_t act_cb_tiles = get_compile_time_arg_val(27);
+    constexpr uint32_t w_tiles = get_compile_time_arg_val(28);
 
     uint32_t i = 0;
-    uint32_t noop = get_arg_val<uint32_t>(i);
-    i += 1;
+    uint32_t noop = get_arg_val<uint32_t>(0);
+    uint32_t reuse_loops = get_arg_val<uint32_t>(1);
+    uint32_t reuse_loops_start = get_arg_val<uint32_t>(2);
+    i += 3;
 
+    // DPRINT << "reuse_loops: " << reuse_loops << ", reuse_loops_start: " << reuse_loops_start << ENDL();
+    // DPRINT << act_cb_tiles << " act_cb_tiles, w_tiles: " << w_tiles << ENDL();
     if (noop) {
         return;
     }
@@ -82,8 +85,8 @@ void kernel_main() {
         uint32_t l1_write_addr_act;
         for (uint32_t loop = 0; loop < reuse_loops; loop++) {
             cb_reserve_back(cb_id_act, act_cb_tiles);
-            if (loop == 0) {
-                if (bh == 0) {
+            if (loop <= reuse_loops_start) {
+                if (bh == 0 && loop == 0) {
                     cb_start_addr = get_write_ptr(cb_id_act);
                 }
                 l1_write_addr_act = cb_start_addr;
@@ -91,7 +94,7 @@ void kernel_main() {
                 l1_write_addr_act = cb_start_addr + loop * weight_size_w * conv_act_c_read_bytes;
             }
 
-            read_sticks<
+            uint32_t pushed_tiles = read_sticks<
                 dilation_w,
                 coalesced_read_bytes,
                 conv_act_c_read_bytes,
@@ -106,9 +109,14 @@ void kernel_main() {
                 act_l1_read_addr,
                 l1_write_addr_act,
                 reader_idx,
-                loop == 0,
+                loop <= reuse_loops_start,
                 loop == 0,
                 cb_id_act);
+
+            if (pushed_tiles == 0) {
+                cb_push_back(cb_id_act, act_cb_tiles);
+                DPRINT << "pushed back remaining tiles " << act_cb_tiles << ENDL();
+            }
 
             noc_async_read_barrier();
         }

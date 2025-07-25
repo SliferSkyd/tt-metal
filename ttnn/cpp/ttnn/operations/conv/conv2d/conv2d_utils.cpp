@@ -1010,6 +1010,9 @@ conv_op_l1_usage conv2d::calculate_L1_usage(
     ReuseDataOptConfig reuse_config;
     if (conv_config.enable_activation_data_reuse) {
         uint32_t image_width_tiles = image_width / tt::constants::TILE_HEIGHT;
+        if (image_width_tiles == 0) {
+            image_width_tiles = 1;  // Avoid division by zero
+        }
         uint32_t opt_act_cb_num_tiles = image_width_tiles * block_config.act_block_w_ntiles;
         uint32_t opt_reuse_loops = std::ceil(static_cast<float>(block_config.act_block_h_ntiles) / image_width_tiles);
 

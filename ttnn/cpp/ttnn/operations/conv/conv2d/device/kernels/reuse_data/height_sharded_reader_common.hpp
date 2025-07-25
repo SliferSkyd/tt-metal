@@ -37,7 +37,7 @@ template <
     uint32_t weight_size_w,
     uint32_t window_outer,
     uint32_t w_tiles>
-FORCE_INLINE void read_sticks(
+FORCE_INLINE uint32_t read_sticks(
     volatile tt_l1_ptr uint32_t* packed_reader_indices_ptr,
     uint32_t reader_offset,
     uint32_t& l1_write_addr_act,
@@ -51,11 +51,12 @@ FORCE_INLINE void read_sticks(
     if (first_in_block_h) {
         reader_idx++;
     }
+    uint32_t pushed_tiles = 0;
 
     uint16_t start_ind = packed_reader_indices_ptr[reader_idx] & 0xffff;
     uint16_t end_ind = packed_reader_indices_ptr[reader_idx] >> 16;
 
-    // DPRINT << "start_ind: " << start_ind << ", end_ind: " << end_ind << ENDL();
+    DPRINT << "start_ind: " << start_ind << ", end_ind: " << end_ind << ENDL();
 
     if constexpr (dilation_w == 1) {
         uint32_t counter = 0;
@@ -66,6 +67,7 @@ FORCE_INLINE void read_sticks(
             act_l1_offset += outer * stride_h_bytes;
 
             for (uint32_t i = outer; i < window_outer; i++) {
+                DPRINT << "l1 write addr act: " << l1_write_addr_act << ENDL();
                 noc_async_read_one_packet_with_state<true>(act_l1_offset, l1_write_addr_act);
                 l1_write_addr_act += coalesced_read_bytes;
                 act_l1_offset += stride_h_bytes;
@@ -77,13 +79,9 @@ FORCE_INLINE void read_sticks(
             // TODO(sjovic): use constant for 32
             if (counter % 32 == 0) {
                 cb_push_back(out_cb_id, w_tiles);
+                pushed_tiles += w_tiles;
             }
         }
-
-        // TODO(sjovic): use constant for 32
-        // if (counter % 32 != 0) {
-        //     cb_push_back(out_cb_id, w_tiles);
-        // }
     } else {
         for (uint16_t ind = start_ind; ind <= end_ind; ind += stride_w) {
             uint32_t act_l1_offset = reader_offset + (ind * conv_act_c_read_bytes);
@@ -97,4 +95,6 @@ FORCE_INLINE void read_sticks(
     }
     // }
     reader_idx++;
+
+    return pushed_tiles;
 }

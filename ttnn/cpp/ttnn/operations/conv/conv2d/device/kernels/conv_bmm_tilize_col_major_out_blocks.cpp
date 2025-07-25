@@ -27,6 +27,9 @@ inline void tilize_in(
         for (uint32_t h = 0; h < in_subblock_h; ++h) {
             cb_wait_front(in_cb_id, in_block_w);
             cb_reserve_back(out_cb_id, in_block_w);
+            for (uint32_t in_block_w_i = 0; in_block_w_i < in_block_w; ++in_block_w_i) {
+                UNPACK((tt::compute::common::print_full_tile(in1_cb_id, in_block_w_i, false)));
+            }
             tilize_block(in_cb_id, in_block_w, out_cb_id);
             cb_push_back(out_cb_id, in_block_w);
             cb_pop_front(in_cb_id, in_block_w);

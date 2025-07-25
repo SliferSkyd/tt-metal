@@ -612,6 +612,9 @@ tt::tt_metal::operation::ProgramWithCallbacks multi_core_optimized_conv_sharded_
     if (enable_activation_data_reuse) {
         uint32_t image_width = sliding_window_config.get_output_shape()[2];
         uint32_t image_width_tiles = image_width / tt::constants::TILE_HEIGHT;
+        if (image_width_tiles == 0) {
+            image_width_tiles = 1;  // Avoid division by zero
+        }
         uint32_t opt_act_cb_num_tiles = image_width_tiles * act_block_w_ntiles / conv_act_c_blocks;
         uint32_t opt_reuse_loops = std::ceil(static_cast<float>(act_block_h_split) / image_width_tiles);
         uint32_t opt_reuse_diff = (filter_w * conv_act_c_read_bytes) / 16;
@@ -781,7 +784,6 @@ tt::tt_metal::operation::ProgramWithCallbacks multi_core_optimized_conv_sharded_
         get_cb_info_by_name(cb_info, Conv2dCb::L1_ARRAY).index};
 
     if (enable_activation_data_reuse) {
-        reader_compile_time_args.push_back(reuse_data_opt_config.reuse_loops);
         reader_compile_time_args.push_back(reuse_data_opt_config.act_cb_num_tiles);
         reader_compile_time_args.push_back(act_block_w_ntiles);
     }
@@ -959,7 +961,27 @@ tt::tt_metal::operation::ProgramWithCallbacks multi_core_optimized_conv_sharded_
             .compile_args = compute_kernel_args,
             .defines = compute_defines});
 
+    uint32_t reuse_loops;
+    uint32_t reuse_loops_start;
+    uint32_t rows_so_far = 0, compute_start = 0;
+
     for (uint32_t core_i = 0; core_i < total_active_num_cores; core_i++) {
+        if (rows_so_far % reuse_data_opt_config.image_width_tiles == 0) {
+            reuse_loops = std::ceil(static_cast<float>(act_block_h_split) / reuse_data_opt_config.image_width_tiles);
+            reuse_loops_start = 0;
+            compute_start = 0;
+        } else {
+            compute_start =
+                reuse_data_opt_config.image_width_tiles - rows_so_far % reuse_data_opt_config.image_width_tiles;
+            uint32_t new_act_block_h = (act_block_h_split - compute_start);
+            reuse_loops = 1 + std::ceil(static_cast<float>(new_act_block_h) / reuse_data_opt_config.image_width_tiles);
+            reuse_loops_start = 1;
+        }
+
+        rows_so_far += act_block_h_split;
+        std::cout << "core_i: " << core_i << ", reuse_loops: " << reuse_loops
+                  << ", reuse_loops_start: " << reuse_loops_start << std::endl;
+
         uint32_t core_x_i = core_i % num_cores_x;
         uint32_t core_y_i = core_i / num_cores_x;
         CoreRange core(CoreCoord(core_x_i, core_y_i), CoreCoord(core_x_i, core_y_i));
@@ -1035,8 +1057,13 @@ tt::tt_metal::operation::ProgramWithCallbacks multi_core_optimized_conv_sharded_
             }
         } else {
             reader_rt_args = {(uint32_t)noop_core};
+            reader_rt_args.push_back(reuse_loops);
+            reader_rt_args.push_back(reuse_loops_start);
         }
         SetRuntimeArgs(program, reader_id, core, reader_rt_args);
+
+        std::vector<uint32_t> compute_rt_args = {compute_start};
+        SetRuntimeArgs(program, compute_id, core, compute_rt_args);
 
         std::vector<uint32_t> sender_rt_args = {
             weight_dram_addr,
