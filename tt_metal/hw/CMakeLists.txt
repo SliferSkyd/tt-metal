@@ -134,8 +134,10 @@ endforeach()
 
 if(TT_USE_SYSTEM_SFPI)
     set(GPP_CMD "/opt/tenstorrent/sfpi/compiler/bin/riscv32-tt-elf-g++")
+    set(GPP_LD "/opt/tenstorrent/sfpi/compiler/bin/riscv32-tt-elf-ld")
 else()
     set(GPP_CMD "${PROJECT_SOURCE_DIR}/runtime/sfpi/compiler/bin/riscv32-tt-elf-g++")
+    set(GPP_LD "${PROJECT_SOURCE_DIR}/runtime/sfpi/compiler/bin/riscv32-tt-elf-ld")
 endif()
 
 if(NOT EXISTS "${GPP_CMD}")
@@ -143,6 +145,7 @@ if(NOT EXISTS "${GPP_CMD}")
 endif()
 
 message(STATUS "Using SFPI compiler: ${GPP_CMD}")
+message(STATUS "Using SFPI ld: ${GPP_LD}")
 
 set(GPP_DEFINES -DTENSIX_FIRMWARE)
 
@@ -239,8 +242,11 @@ foreach(ARCH IN LISTS ARCHS)
             COMMAND
                 ${CMAKE_COMMAND} -E make_directory ${HW_OBJ_DIR}
             COMMAND
-                ${GPP_CMD} ${GPP_FLAGS} ${GPP_DEFINES} ${GPP_INCLUDES} -c -o ${HW_OBJ_DIR}/${HWOBJ}
-                ${PROJECT_SOURCE_DIR}/${HWSRC}
+                ${GPP_CMD} ${GPP_FLAGS} ${GPP_DEFINES} ${GPP_INCLUDES} -c -o
+                ${CMAKE_CURRENT_BINARY_DIR}/${ARCH}_${HWOBJ}.no-build-id ${PROJECT_SOURCE_DIR}/${HWSRC}
+            COMMAND
+                ${GPP_LD} -r --build-id -o ${HW_OUTPUT_FILE}
+                ${CMAKE_CURRENT_BINARY_DIR}/${ARCH}_${HWOBJ}.no-build-id
             DEPENDS
                 ${PROJECT_SOURCE_DIR}/${HWSRC}
                 # If the compiler changes, rebuild
@@ -251,6 +257,8 @@ foreach(ARCH IN LISTS ARCHS)
         list(APPEND OBJ_FILES ${HW_OUTPUT_FILE})
     endforeach()
 endforeach()
+
+# install(FILES ${OBJ_FILES} DESTINATION ${CMAKE_INSTALL_LIBEXECDIR}/tt-metalium/runtime/hw COMPONENT metalium-runtime)
 
 # custom target that depends on all the output files
 add_custom_target(
@@ -370,6 +378,10 @@ target_sources(
             toolchain/erisc-b0-app-sections.ld
             toolchain/erisc-b0-memory.ld
             toolchain/erisc-b0-kernel.ld
+        FILE_SET toolchain
+        TYPE HEADERS
+        BASE_DIRS ${PROJECT_SOURCE_DIR}
+        FILES ${LD_FILES} ${OBJ_FILES}
 )
 
 target_link_libraries(hw INTERFACE TT::Metalium::HostDevCommon)
@@ -383,5 +395,9 @@ install(
     jit_api
         DESTINATION
             ${CMAKE_INSTALL_LIBEXECDIR}/tt-metalium/tt_metal/hw # FIXME: fix the include paths for jit_build
+        COMPONENT metalium-runtime
+    FILE_SET
+    toolchain
+        DESTINATION ${CMAKE_INSTALL_LIBEXECDIR}/tt-metalium
         COMPONENT metalium-runtime
 )

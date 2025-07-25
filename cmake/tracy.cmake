@@ -3,6 +3,7 @@ set(TRACY_HOME ${PROJECT_SOURCE_DIR}/tt_metal/third_party/tracy)
 
 option(ENABLE_TRACY_TIMER_FALLBACK "Enable Tracy timer fallback" OFF)
 
+message(STATUS "ENABLE_TRACY: ${ENABLE_TRACY}")
 if(NOT ENABLE_TRACY)
     # Stub Tracy::TracyClient to provide the headers which themselves provide stubs
     add_library(TracyClient INTERFACE)
