@@ -343,36 +343,40 @@ void MAIN {
                 if (k_chunk == k_chunk_start) {
                     cb_out_mm = cb_out_im;
                 } else {
-                    reconfig_data_format(cb_prev_max, cb_cur_max);  // DEBUG
-                    pack_reconfig_data_format(cb_exp_max_diff);
+                    // reconfig_data_format(cb_prev_max, cb_cur_max);  // DEBUG
+                    // pack_reconfig_data_format(cb_exp_max_diff);
                     /* cb_exp_max_diff = torch.exp(cb_prev_max - cb_cur_max) */
-                    sub_exp_block<scale_fp32, vector_mode>(cb_prev_max, cb_cur_max, cb_exp_max_diff, Sq_chunk_t);
-                    cb_pop_front(cb_prev_max, Sq_chunk_t);
+                    // sub_exp_block<scale_fp32, vector_mode>(cb_prev_max, cb_cur_max, cb_exp_max_diff, Sq_chunk_t);
+                    // cb_pop_front(cb_prev_max, Sq_chunk_t);
 
                     /* cb_prev_sum *= cb_exp_max_diff */
-                    mul_block_inplace(cb_prev_sum, cb_exp_max_diff, Sq_chunk_t);
+                    // mul_block_inplace(cb_prev_sum, cb_exp_max_diff, Sq_chunk_t);
 
                     /* cb_out_accumulate_im *= cb_exp_max_diff */
-                    reconfig_data_format(cb_out_accumulate_im, cb_exp_max_diff);  // DEBUG
-                    pack_reconfig_data_format(cb_out_accumulate_im);
-                    mul_block_bcast_cols(cb_out_accumulate_im, cb_exp_max_diff, cb_out_accumulate_im, Sq_chunk_t, vDHt);
+                    // reconfig_data_format(cb_out_accumulate_im, cb_exp_max_diff);  // DEBUG
+                    // pack_reconfig_data_format(cb_out_accumulate_im);
+                    // mul_block_bcast_cols(cb_out_accumulate_im, cb_exp_max_diff, cb_out_accumulate_im, Sq_chunk_t,
+                    // vDHt);
 
                     /* cb_cur_sum += cb_prev_sum */
-                    reconfig_data_format(cb_cur_sum, cb_prev_sum);  // DEBUG
-                    pack_reconfig_data_format(cb_cur_sum);
-                    add_block_inplace<true>(cb_cur_sum, cb_prev_sum, Sq_chunk_t);
+                    // reconfig_data_format(cb_cur_sum, cb_prev_sum);  // DEBUG
+                    // pack_reconfig_data_format(cb_cur_sum);
+                    // add_block_inplace<true>(cb_cur_sum, cb_prev_sum, Sq_chunk_t);
 
                     /* cb_out_accumulate_im += cb_out_im */
-                    reconfig_data_format(cb_out_accumulate_im, cb_out_im);  // DEBUG
-                    pack_reconfig_data_format(cb_out_accumulate_im);
-                    add_block_inplace<true>(cb_out_accumulate_im, cb_out_im, out_chunk_tiles);
+                    // reconfig_data_format(cb_out_accumulate_im, cb_out_im);  // DEBUG
+                    // pack_reconfig_data_format(cb_out_accumulate_im);
+                    // add_block_inplace<true>(cb_out_accumulate_im, cb_out_im, out_chunk_tiles);
                 }
 
                 if (k_chunk < k_chunk_end - 1 || do_reduce) {
-                    reconfig_data_format(cb_cur_max, cb_cur_max);  // DEBUG
-                    pack_reconfig_data_format(cb_prev_max);
+                    // reconfig_data_format(cb_cur_max, cb_cur_max);  // DEBUG
+                    // pack_reconfig_data_format(cb_prev_max);
                     std::swap(cb_cur_sum, cb_prev_sum);
-                    move_block<true>(cb_cur_max, cb_prev_max, Sq_chunk_t);
+                    // move_block<true>(cb_cur_max, cb_prev_max, Sq_chunk_t);
+                    // pack_reconfig_data_format(cb_prev_max);
+                    reconfig_data_format(cb_cur_max, cb_prev_max);  // DEBUG
+                    std::swap(cb_cur_max, cb_prev_max);
                 } else {
                     // Write o, m, l into cb_out
                     move_block<true>(cb_out_accumulate_im, cb_out_o, out_chunk_tiles);
@@ -391,6 +395,7 @@ void MAIN {
                 // This indicates that there are computes done by other workers. Needs to wait for them and send to
                 // reducer's compute
                 for (uint32_t i = 0; i < num_cores_to_wait; i++) {
+                    /*
                     move_block<true>(cb_out_o, cb_out_accumulate_im_2, out_chunk_tiles);
                     move_block<true>(cb_l_in, cb_prev_sum_2, Sq_chunk_t);
                     max_block<vector_mode>(cb_m_in, cb_prev_max, cb_cur_max, Sq_chunk_t);  // pushed, pushed, popped
@@ -418,6 +423,7 @@ void MAIN {
                     cb_pop_front(cb_m_in, Sq_chunk_t);
                     move_block<true>(cb_cur_max, cb_prev_max, Sq_chunk_t);
                     move_block<true>(cb_cur_sum, cb_prev_sum, Sq_chunk_t);
+                    */
                 }
             }
             /* cb_cur_sum = 1.0 / cb_cur_sum */
