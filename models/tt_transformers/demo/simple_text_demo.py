@@ -157,6 +157,7 @@ def prepare_generator_args(
     max_seq_len,
     page_params,
     paged_attention,
+    model_location_generator,
 ):
     submesh_devices = create_submeshes(mesh_device, data_parallel)
     state_dict = None
@@ -185,6 +186,7 @@ def prepare_generator_args(
             paged_attention_config=paged_attention_config,
             dtype=ttnn.bfloat8_b,
             state_dict=state_dict,
+            model_location_generator=model_location_generator,
         )
         model_args.append(model_args_i)
         model.append(model_i)
@@ -537,6 +539,7 @@ def test_demo_text(
     request,
     token_accuracy,
     stress_test,
+    model_location_generator,
 ):
     """
     Simple demo with limited dependence on reference code.
@@ -634,7 +637,6 @@ def test_demo_text(
     # To simulate a deployment environment, the demo supports repeating batched prompts.
     # This loop will rotate the prompts between the users for each batch, to simulate users sending different requests
     # If batch_size=1, the same prompt is repeated for each batch
-
     model_args, model, page_table, tt_kv_cache, tokenizer = prepare_generator_args(
         num_devices=num_devices,
         data_parallel=data_parallel,
@@ -645,6 +647,7 @@ def test_demo_text(
         max_seq_len=max_seq_len,
         page_params=page_params,
         paged_attention=paged_attention,
+        model_location_generator=model_location_generator,
     )
 
     if token_accuracy:

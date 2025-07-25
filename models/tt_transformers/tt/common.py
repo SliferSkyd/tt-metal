@@ -521,6 +521,7 @@ def create_tt_model(
     dtype=ttnn.bfloat8_b,
     state_dict=None,
     num_layers=None,
+    model_location_generator=None,
 ):
     from models.tt_transformers.tt.model import Transformer
     from models.tt_transformers.tt.model_config import ModelArgs
@@ -537,7 +538,8 @@ def create_tt_model(
 
     # Avoid loading state_dict for every DP model
     if not state_dict:
-        state_dict = tt_model_args.load_state_dict()
+        model_location = model_location_generator(tt_model_args.CKPT_DIR, download_if_ci_v2=True)
+        state_dict = tt_model_args.load_state_dict(model_location)
 
     model = Transformer(
         args=tt_model_args,

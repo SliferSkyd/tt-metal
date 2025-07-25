@@ -1620,7 +1620,7 @@ class ModelArgs:
         return self.model_config
 
     # TODO Update function for large models: For 1 layer tests we only want to load 1 checkpoint file, instead of all.
-    def load_state_dict(self):
+    def load_state_dict(self, model_location):
         if self.dummy_weights:
             if self.checkpoint_type == CheckpointType.HuggingFace:
                 from transformers import AutoConfig, AutoModelForCausalLM
@@ -1643,7 +1643,7 @@ class ModelArgs:
                 from transformers import AutoConfig, AutoModelForCausalLM
 
                 model = AutoModelForCausalLM.from_pretrained(
-                    self.CKPT_DIR,
+                    model_location,
                     torch_dtype="auto"
                     # Note that the default setting is torch.dtype.float32, but model weights are
                     # may come in any dtype. If the model's weights are in torch.dtype.bfloat16, this would result in 2x memory usage from an
