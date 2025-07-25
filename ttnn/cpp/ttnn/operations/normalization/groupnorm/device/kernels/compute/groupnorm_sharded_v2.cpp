@@ -101,8 +101,16 @@ void MAIN {
                                     : cb_out0;
 #endif
 
-    // tile offset
-    uint32_t index_subblock_w_offset = 0;
+#ifdef UNTILIZE_OUT
+    DPRINT << "UNTILIZE OUT: " << "\n";
+#endif
+#ifndef UNTILIZE_OUT
+    DPRINT << "UNTILIZE OUT NOT: "
+           << "\n"
+#endif
+
+        // tile offset
+        uint32_t index_subblock_w_offset = 0;
     uint32_t index_h_offset = 0;
     uint32_t index_w_offset = 0;
     uint32_t index_b_offset = 0;
