@@ -252,6 +252,7 @@ void kernel_main() {
                             page_table_ptr,
                             false,
                             DHt - vDHt /* src_skip_cols */);
+                        v_tile_id += (DHt - vDHt);
                     } else {
                         read_chunk_with_padding<is_dram, v_tile_bytes>(
                             v_reader,
@@ -264,6 +265,7 @@ void kernel_main() {
                             barrier_threshold,
                             false,
                             DHt - vDHt /* src_skip_cols */);
+                        v_tile_id += (DHt - vDHt);
                     }
                 }
             }

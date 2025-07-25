@@ -150,7 +150,7 @@ def run_flash_mla_prefill_impl(
     d_rope,
     q_dtype,
     dtype,
-    use_paged_attention=None,
+    paged_attention_cfg: PagedAttentionConfig | None = None,
 ):
     # Log the test parameters
     logger.info(f"Running FlashMLA Prefill with parameters: ")
@@ -162,18 +162,6 @@ def run_flash_mla_prefill_impl(
     logger.info(f"Dimensionality of RoPE: {d_rope}")
     logger.info(f"Query Data Type: {q_dtype}")
     logger.info(f"Key-Value Data Type: {dtype}")
-
-    # Paged attention configuration
-    paged_attention_cfg = None
-    if use_paged_attention:
-        block_size = ttnn.TILE_SIZE
-        assert seq_len % block_size == 0, f"Sequence length must be a multiple of {block_size=} for paged attention."
-
-        max_num_blocks = seq_len // block_size * batch
-        paged_attention_cfg = PagedAttentionConfig(
-            block_size=block_size,
-            max_num_blocks=max_num_blocks,
-        )
 
     ######################
     ### Torch Setup
@@ -187,7 +175,7 @@ def run_flash_mla_prefill_impl(
 
     # Page-related setup
     tt_k_torch = k
-    page_table = None
+    tt_page_table = None
     if paged_attention_cfg:
         page_table = page_table_setup(batch, paged_attention_cfg)
         tt_k_torch = to_paged_cache(
@@ -201,6 +189,13 @@ def run_flash_mla_prefill_impl(
             paged_attention_cfg,
         )
         assert torch.all(tt_k_torch_og == k), "Paged cache conversion for K failed."
+
+        tt_page_table = ttnn.from_torch(
+            page_table,
+            device=device,
+            dtype=ttnn.int32,
+            layout=ttnn.ROW_MAJOR_LAYOUT,
+        )
 
     padded_num_heads = nearest_pow_2(nearest_n(nh, n=32))
     q_chunk_size = padded_num_heads
@@ -244,19 +239,31 @@ def run_flash_mla_prefill_impl(
     ##########################
     ### FlashMLA Prefill
     ##########################
-    tt_out = ttnn.transformer.flash_mla_prefill(
-        tt_q,
-        tt_k,
-        head_dim_v=kv_lora_rank,
-        scale=scale,
-        program_config=sdpa_program_config,
-        compute_kernel_config=compute_kernel_config,
-        memory_config=ttnn.DRAM_MEMORY_CONFIG,
-        attn_mask=None,
-        is_causal=True,
-    )
+    if tt_page_table:
+        tt_out = ttnn.transformer.chunked_flash_mla_prefill(
+            tt_q,
+            tt_k,
+            kv_lora_rank,
+            tt_page_table,
+            0,
+            scale=scale,
+            program_config=sdpa_program_config,
+            compute_kernel_config=compute_kernel_config,
+            memory_config=ttnn.DRAM_MEMORY_CONFIG,
+        )
+    else:
+        tt_out = ttnn.transformer.flash_mla_prefill(
+            tt_q,
+            tt_k,
+            head_dim_v=kv_lora_rank,
+            scale=scale,
+            program_config=sdpa_program_config,
+            compute_kernel_config=compute_kernel_config,
+            memory_config=ttnn.DRAM_MEMORY_CONFIG,
+            attn_mask=None,
+            is_causal=True,
+        )
     tt_back = ttnn.to_torch(tt_out)  # now (B, H_padded, S_padded, D)
-    print("raw to_torch shape:", tt_back.shape)
     # slice out the padded heads and sequence length; no permute needed
     tt_out_torch = tt_back[:, :nh, :seq_len, :]  # (B, nh, S, D)
 
@@ -305,7 +312,7 @@ def run_flash_mla_prefill_impl(
     "use_paged_attention",
     [
         False,
-        # True,
+        True,
     ],
 )
 def test_flash_mla_prefill(
