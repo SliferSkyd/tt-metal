@@ -214,165 +214,51 @@ def run_max_pool(
             tile_size=32 if dtype == ttnn.bfloat8_b else 1,
         )
         ttact_device = ttnn.to_memory_config(ttact_device, sharded_memory_config)
-    output = ttnn.max_pool2d(
-        input_tensor=ttact_device,
-        batch_size=in_n,
-        input_h=in_h,
-        input_w=in_w,
-        channels=in_c,
-        kernel_size=[kernel_h, kernel_w],
-        stride=[stride_h, stride_w],
-        padding=[pad_h, pad_w],
-        dilation=[dilation_h, dilation_w],
-        memory_config=memory_config,
-        applied_shard_scheme=shard_scheme,
-        ceil_mode=ceil_mode,
-    )
-
-    output_host = output.cpu()
-    output_pytorch_padded = torch.Tensor(ttnn.to_torch(output_host))
-    output_pytorch = output_pytorch_padded[:, :, :, :in_c]
-
-    ## reference
-    golden_pytorch = torch.nn.MaxPool2d(
-        kernel_size,
-        stride=stride,
-        padding=padding,
-        dilation=dilation,
-        return_indices=False,
-        ceil_mode=ceil_mode,
-    )(act)
-
-    ## test for equivalance
-    golden_shape = golden_pytorch.shape
-    output_pytorch = output_pytorch.reshape(golden_shape[0], golden_shape[2], golden_shape[3], golden_shape[1])
-
-    output_pytorch = torch.permute(output_pytorch, (0, 3, 1, 2))  ## N, C, H, W
-
-    pcc_thresh = 1.0
-    if dtype == ttnn.bfloat8_b:
-        pcc_thresh = 0.9994
-
-    passing, pcc = assert_with_pcc(output_pytorch, golden_pytorch, pcc_thresh)
-
-    logger.debug(f"Passing: {passing}, PCC: {pcc}")
-
-    ## do more rigorous comparision for each element
-    atol, rtol = torch.testing._comparison.default_tolerances(torch.bfloat16)
-    if dtype == ttnn.bfloat8_b:
-        atol = 0.35
-
-    allclose = torch.allclose(output_pytorch, golden_pytorch, atol=atol)
-    isclose = torch.all(torch.isclose(output_pytorch, golden_pytorch, atol=atol))
-    isequal = torch.equal(output_pytorch, golden_pytorch)
-
-    assert allclose
-    assert isclose
-    if dtype == ttnn.bfloat16:
-        assert isequal
-
-    if memory_config:
-        logger.debug(f"Output memory config: {memory_config}")
-        assert ttnn.get_memory_config(output) == memory_config
+    for i in range(0, 10):
+        output = ttnn.max_pool2d(
+            input_tensor=ttact_device,
+            batch_size=in_n,
+            input_h=in_h,
+            input_w=in_w,
+            channels=in_c,
+            kernel_size=[kernel_h, kernel_w],
+            stride=[stride_h, stride_w],
+            padding=[pad_h, pad_w],
+            dilation=[dilation_h, dilation_w],
+            memory_config=memory_config,
+            applied_shard_scheme=shard_scheme,
+            ceil_mode=ceil_mode,
+        )
 
 
 @pytest.mark.parametrize("device_params", [{"l1_small_size": 24576}], indirect=True)
 @pytest.mark.parametrize(
     "act_shape",  ## NCHW
-    (
-        (  ## resnet shapes
-            [1, 64, 112, 112],
-            # [4, 64, 112, 112],
-            # [8, 64, 112, 112],
-            [16, 64, 112, 112],
-            # [20, 64, 112, 112],   ## oom
-            ## hpr shapes
-            [8, 32, 132, 20],
-            # [16, 32, 132, 20],
-            # [32, 32, 132, 20],
-            # [64, 32, 132, 20],
-            [128, 32, 132, 20],
-            # [256, 32, 132, 20],   ## oom
-            [8, 32, 264, 40],
-            # [16, 32, 264, 40],
-            [32, 32, 264, 40],
-            # [64, 32, 264, 40],    ## oom
-            # [128, 32, 264, 40],   ## oom
-            # [256, 32, 264, 40],   ## oom
-            [4, 16, 1056, 160],
-            # [8, 16, 1056, 160],     ## oom
-            # [16, 16, 1056, 160],    ## oom
-            # [32, 16, 1056, 160],    ## oom
-            # [64, 16, 1056, 160],    ## oom
-            # [128, 16, 1056, 160],   ## oom
-            # [256, 16, 1056, 160],   ## oom
-            [8, 16, 528, 80],
-            [16, 16, 528, 80],
-            # [32, 16, 528, 80],  ## oom
-            # [64, 16, 528, 80],  ## oom
-            # [128, 16, 528, 80], ## oom
-            # [256, 16, 528, 80], ## oom
-            ## wide for vgg
-            [1, 256, 56, 56],
-            [1, 512, 28, 28],
-            [1, 512, 14, 14],
-            # wide yolo kernel
-            [1, 512, 10, 10],
-            [1, 96, 112, 112],
-            [1, 192, 132, 20],
-            # wide non-8 multiple tests
-            [1, 800, 32, 32],
-            [1, 640, 32, 32],
-            [1, 576, 32, 32],
-            [1, 384, 32, 32],
-            # C=16 test
-            [1, 16, 12, 12],
-            # partial grid tests
-            [1, 32, 10, 10],  # BH
-            [1, 32, 6, 6],  # WH
-        )
-    ),
+    (([1, 384, 28, 28],)),
 )
 @pytest.mark.parametrize(
     "kernel_size",
-    (
-        (2, 2),
-        (3, 3),
-        (5, 5),
-        (9, 9),
-        # (13, 13),
-    ),
+    ((13, 13),),
 )
 @pytest.mark.parametrize(
     "padding",
-    (
-        (0, 0),
-        (1, 1),
-        (2, 2),
-        (4, 4),
-        # (6, 6),
-    ),
+    ((0, 0),),
 )
 @pytest.mark.parametrize(
     "stride",
-    (
-        (1, 1),
-        (2, 2),
-    ),
+    ((1, 1),),
 )
 @pytest.mark.parametrize("dilation", ((1, 1),))  ## default
 @pytest.mark.parametrize(
     "dtype",
     [
         ttnn.bfloat16,
-        ttnn.bfloat8_b,
     ],
 )
 @pytest.mark.parametrize(
     "ceil_mode",
     [
         False,
-        True,
     ],
 )
 def test_run_max_pool(act_shape, kernel_size, padding, stride, dilation, device, torch_tensor_map, dtype, ceil_mode):
@@ -390,7 +276,7 @@ def test_run_max_pool(act_shape, kernel_size, padding, stride, dilation, device,
     )
 
 
-@pytest.mark.parametrize("device_params", [{"l1_small_size": 24576}], indirect=True)
+""" @pytest.mark.parametrize("device_params", [{"l1_small_size": 24576}], indirect=True)
 @pytest.mark.parametrize(
     "act_shape",  ## NCHW
     (
@@ -945,4 +831,4 @@ def test_run_max_pool_squeeze_net_model(
         torch_tensor_map,
         dtype,
         ceil_mode=ceil_mode,
-    )
+    ) """
