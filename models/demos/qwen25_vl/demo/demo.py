@@ -412,7 +412,6 @@ def test_demo(
         logger.info(
             f"vision_model_prefill at {batch_idx}: {profiler.get_duration('vision_model_prefill', iteration=batch_idx)}"
         )
-        # exit()
 
         # Prepare text + vision inputs for decoder model
         logger.info(f"Prepare text + vision inputs for decoder model batch {batch_idx}")
