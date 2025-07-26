@@ -247,13 +247,6 @@ class DropInVisionTransformer(torch.nn.Module):
         all_pixel_values = pixel_values
         all_grid_thw = grid_thw
         final_outputs = []
-        # todo)) refactor this code to leverage tt-mesh's ttnn.ShardTensorToMesh(mesh_device, dim=batch_size_dim) for data parallelism
-        # two main ideas for perf opt:
-        # - [x] hoist the attention mask creation out of the loop using 43008 (2048*21) as seq_len --> does saved dynamic graph compilation time
-        # - [ ] understand the cu_window_seqlens deeper --> maybe every image has the same cu_window_seqlens now with 300 DPI target image
-        # - [x] understand the attention mask usage deeper
-        # - [ ] make a sdpa kernel for qwen2.5 vl --> pass in cu_window_seqlens/cu_seqlens instead of attention_mask --> 300 DPI takes too long to copy attention_mask to device
-        # - [ ] tensor parallel the vision model (seq_len dimension) --> >10 seconds to run tt_model.forward() for 300 DPI
 
         # [INFO] 300 DPI scanned doc with Letter paper (8.5x11 inches) has resolution around 2550x3300
         # Calculate padded sequence length (divisible by 2048) required by models/tt_transformers/tt/attention.py::forward_prefill
