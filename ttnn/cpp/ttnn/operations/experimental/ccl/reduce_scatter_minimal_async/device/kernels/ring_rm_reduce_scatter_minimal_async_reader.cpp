@@ -9,6 +9,8 @@
 #include <cstdint>
 #include <utility>
 
+#include "debug/dprint.h"
+
 using address_t = uint32_t;
 using tt::tt_metal::BufferType;
 
@@ -85,12 +87,12 @@ void kernel_main() {
             cb_reserve_back(cb_in0, 1);
             uint32_t l1_write_addr = get_write_ptr(cb_in0);
             uint32_t page_id = rows_read;
-            uint64_t noc_read_addr = get_noc_addr(tile_id, input_tensor_addrgen, single_slice_row_offset_size);
+            uint64_t noc_read_addr = get_noc_addr(page_id, input_tensor_addrgen, single_slice_row_offset_size);
             noc_async_read(noc_read_addr, l1_write_addr, slice_width_row_size);
 
             // Read intermediate tensor slice
             if (do_reduce) {
-                cb_reserve_back(cb_intermediate_id, tile_granularity);
+                cb_reserve_back(cb_intermediate_id, 1);
                 uint32_t intermediate_l1_write_addr = get_write_ptr(cb_intermediate_id);
                 uint32_t intermediate_page_id = rows_read;
                 uint64_t intermediate_noc_read_addr =

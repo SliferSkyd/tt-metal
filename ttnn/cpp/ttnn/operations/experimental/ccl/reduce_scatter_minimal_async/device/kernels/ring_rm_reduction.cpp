@@ -5,6 +5,9 @@
 #include <cstdint>
 #include "compute_kernel_api/eltwise_binary.h"
 
+#include "debug/dprint.h"
+#include "compute_kernel_api/tile_move_copy.h"
+
 namespace NAMESPACE {
 void MAIN {
     // Define all compile-time arguments at the beginning
@@ -12,8 +15,9 @@ void MAIN {
     constexpr uint32_t intermediate_cb = get_compile_time_arg_val(1);
     constexpr uint32_t output_cb = get_compile_time_arg_val(2);
     constexpr uint32_t ring_size = get_compile_time_arg_val(3);
-    constexpr uint32_t tiles_per_slice_row = get_compile_time_arg_val(4);
-    constexpr bool direction = get_compile_time_arg_val(5);
+    constexpr uint32_t input_tensor_num_pages = get_compile_time_arg_val(4);
+    constexpr uint32_t tiles_per_slice_row = get_compile_time_arg_val(5);
+    constexpr bool direction = get_compile_time_arg_val(6);
 
     binary_op_init_common(input_cb_id, intermediate_cb, output_cb);
     add_tiles_init(input_cb_id, intermediate_cb, false);
@@ -38,20 +42,35 @@ void MAIN {
             uint32_t cb_tile_id = 0;
             uint32_t tiles_per_slice_row_processed = 0;
             uint32_t tiles_per_slice_row_to_process = tiles_per_slice_row;
-            while (tiles_per_slice_row_processed < tiles_per_slice_row_to_process) {
-                acquire_dst();
-                for (uint32_t dst_tile_id = 0; dst_tile_id < tile_granularity; ++dst_tile_id) {
-                    add_tiles(input_cb_id, intermediate_cb, cb_tile_id, cb_tile_id, dst_tile_id);
-                    pack_tile(dst_tile_id, output_cb, cb_tile_id);
 
-                    cb_tile_id++;
-                    tiles_per_slice_row_processed++;
-                    if (tiles_per_slice_row_processed == tiles_per_slice_row_to_process) {
-                        break;
-                    }
-                }
+            // acquire_dst();
+            // for (uint32_t tile_id = 0; tile_id < tiles_per_slice_row; tile_id++) {
+            //     add_tiles(input_cb_id, intermediate_cb, tile_id, tile_id, tile_id);
+            //     pack_tile(tile_id, output_cb);
+            // }
+            // release_dst();
+
+            for (uint32_t tile_id = 0; tile_id < tiles_per_slice_row; tile_id++) {
+                acquire_dst();
+                copy_tile(input_cb_id, tile_id, 0);
+                pack_tile(0, output_cb);
                 release_dst();
             }
+
+            // while (tiles_per_slice_row_processed < tiles_per_slice_row_to_process) {
+            //     acquire_dst();
+            //     for (uint32_t dst_tile_id = 0; dst_tile_id < tile_granularity; ++dst_tile_id) {
+            //         add_tiles(input_cb_id, intermediate_cb, cb_tile_id, cb_tile_id, dst_tile_id);
+            //         pack_tile(dst_tile_id, output_cb, cb_tile_id);
+
+            //         cb_tile_id++;
+            //         tiles_per_slice_row_processed++;
+            //         if (tiles_per_slice_row_processed == tiles_per_slice_row_to_process) {
+            //             break;
+            //         }
+            //     }
+            //     release_dst();
+            // }
             cb_pop_front(input_cb_id, 1);
             cb_pop_front(intermediate_cb, 1);
             cb_push_back(output_cb, 1);

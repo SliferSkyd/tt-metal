@@ -536,7 +536,7 @@ tt::tt_metal::operation::ProgramWithCallbacks ring_rm_reduce_scatter_minimal_asy
         ring_size);
     uint32_t slice_width_elements = input_tensor_width_elements / ring_size;
 
-    uint32_t tiles_per_slice_row = tt::round_up(slice_width_elements, tile_volume_elements);
+    uint32_t tiles_per_slice_row = tt::round_up(slice_width_elements, tile_volume_elements) / tile_volume_elements;
     uint32_t cb_page_size = tile_volume_elements * input_tensor.element_size();
     uint32_t cb_num_pages = 3 * tiles_per_slice_row;  // Triple buffering
 
@@ -603,12 +603,13 @@ tt::tt_metal::operation::ProgramWithCallbacks ring_rm_reduce_scatter_minimal_asy
         auto worker_sender_reader_kernel_id = tt::tt_metal::CreateKernel(
             program,
             "ttnn/cpp/ttnn/operations/experimental/ccl/reduce_scatter_minimal_async/device/kernels/"
-            "ring_reduce_scatter_minimal_async_reader.cpp",
+            "ring_rm_reduce_scatter_minimal_async_reader.cpp",
             core_idx % num_senders_per_link ? sender_forward_core_ranges : sender_backward_core_ranges,
             sender_reader_kernel_config);
         reader_kernel_ids.push_back(worker_sender_reader_kernel_id);
 
         // Writer
+        uint32_t slice_width_row_size = slice_width_elements * input_tensor.element_size();
         auto sender_writer_kernel_config = tt::tt_metal::WriterDataMovementConfig{};
         sender_writer_kernel_config.compile_args = {
             ring_index,                                              // my_chip_id
@@ -619,15 +620,16 @@ tt::tt_metal::operation::ProgramWithCallbacks ring_rm_reduce_scatter_minimal_asy
             reader_output_cb_index,                                  // cb_reader_output_id
             input_tensor_num_pages,                                  // input_tensor_num_pages
             op_config.get_page_size(),                               // input_tensor_page_size
-            slice_width_elements * input_tensor.element_size(),      // slice_width_row_size
+            slice_width_row_size,                                    // slice_width_row_size
             packet_size_bytes,                                       // packet_size_bytes
+            tt::div_up(slice_width_row_size, packet_size_bytes),     // packets_to_send_per_row
             ring_size,                                               // ring_size
             core_idx % num_senders_per_link,                         // direction
         };
         auto worker_sender_writer_kernel_id = tt::tt_metal::CreateKernel(
             program,
             "ttnn/cpp/ttnn/operations/experimental/ccl/reduce_scatter_minimal_async/device/kernels/"
-            "ring_reduce_scatter_minimal_async_writer.cpp",
+            "ring_rm_reduce_scatter_minimal_async_writer.cpp",
             core_idx % num_senders_per_link ? sender_forward_core_ranges : sender_backward_core_ranges,
             sender_writer_kernel_config);
         writer_kernel_ids.push_back(worker_sender_writer_kernel_id);
@@ -639,13 +641,14 @@ tt::tt_metal::operation::ProgramWithCallbacks ring_rm_reduce_scatter_minimal_asy
             intermediate_cb_index,
             compute_output_cb_index,
             ring_size,
+            input_tensor_num_pages,
             tiles_per_slice_row,
             core_idx % num_senders_per_link};
 
         auto sender_reduce_kernel_id = tt::tt_metal::CreateKernel(
             program,
             "ttnn/cpp/ttnn/operations/experimental/ccl/reduce_scatter_minimal_async/device/kernels/"
-            "ring_reduction.cpp",
+            "ring_rm_reduction.cpp",
             core_idx % num_senders_per_link ? sender_forward_core_ranges : sender_backward_core_ranges,
             sender_reduce_kernel_config);
         reduce_kernel_ids.push_back(sender_reduce_kernel_id);

@@ -13,6 +13,8 @@
 #include <cstdint>
 #include <utility>
 
+#include "debug/dprint.h"
+
 using address_t = uint32_t;
 using tt::tt_metal::BufferType;
 using ttnn::ccl::Topology;
@@ -31,8 +33,9 @@ constexpr uint32_t input_tensor_num_pages = get_compile_time_arg_val(6);
 constexpr uint32_t input_tensor_page_size = get_compile_time_arg_val(7);
 constexpr uint32_t slice_width_row_size = get_compile_time_arg_val(8);
 constexpr uint32_t packet_size_bytes = get_compile_time_arg_val(9);
-constexpr uint32_t ring_size = get_compile_time_arg_val(10);
-constexpr bool direction = get_compile_time_arg_val(11);
+constexpr uint32_t packets_to_send_per_row = get_compile_time_arg_val(10);
+constexpr uint32_t ring_size = get_compile_time_arg_val(11);
+constexpr bool direction = get_compile_time_arg_val(12);
 
 void kernel_main() {
     ///////////////////////////////////////////////////
@@ -113,7 +116,7 @@ void kernel_main() {
                 uint64_t remote_noc0_dest_noc_addr =
                     get_noc_addr(page_id, intermediate_addrgen, single_slice_row_offset_size, 0 /*noc_id*/);
 
-                uint32_t packets_to_send = div_up(slice_width_row_size, packet_size_bytes);
+                uint32_t packets_to_send = packets_to_send_per_row;
                 while (packets_to_send > 0) {
                     if (packets_to_send == 1) {
                         // Standard fabric write
@@ -170,8 +173,8 @@ void kernel_main() {
                 cb_wait_front(cb_output_id, 1);
                 size_t l1_read_addr = get_read_ptr(cb_output_id);
                 uint32_t page_id = rows_read;
-                uint64_t local_noc_addr = get_noc_addr(page_id, output_addrgen);
-                noc_async_write(l1_read_addr, local_noc_addr, input_tensor_page_size, single_slice_row_offset_size);
+                uint64_t local_noc_addr = get_noc_addr(page_id, output_addrgen, single_slice_row_offset_size);
+                // noc_async_write(l1_read_addr, local_noc_addr, slice_width_row_size);
 
                 noc_async_write_barrier();
                 cb_pop_front(cb_output_id, 1);
