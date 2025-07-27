@@ -5,6 +5,8 @@
 #include <cstdint>
 
 #include "compute_kernel_api/eltwise_binary_st.h"
+#include "dataflow_api.h"
+
 #include "debug/dprint.h"
 #include "debug/dprint_tensix.h"
 #include "debug/dprint.h"

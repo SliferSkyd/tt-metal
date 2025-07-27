@@ -31,6 +31,8 @@
 #include "dataflow_api_addrgen.h"
 #include "tools/profiler/kernel_profiler.hpp"
 
+#if not defined(COMPILE_FOR_TRISC)
+
 // clang-format off
 /**
  * Returns the absolute logical X coordinate value that this kernel is running on. The absolute coordinate
@@ -150,6 +152,8 @@ FORCE_INLINE T get_common_arg_val(int arg_idx) {
     static_assert("Error: only 4B args are supported" && sizeof(T) == 4);
     return *((tt_l1_ptr T*)(get_common_arg_addr(arg_idx)));
 }
+
+#endif
 
 // clang-format off
 /**
