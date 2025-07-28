@@ -11,93 +11,59 @@ import ttnn
 from tests.ttnn.utils_for_testing import assert_equal
 
 
-@pytest.mark.parametrize("height", [64])
-@pytest.mark.parametrize("width", [128])
-def test_example(device, height, width):
-    torch.manual_seed(0)
+def get_tensor(input_shape, ttnn_dtype, cpu_dtype, output_dtype, device, *, recip=False, sqrt=False):
+    ttnn_shape = input_shape
+    if len(ttnn_shape) == 0:
+        ttnn_shape = [1]
 
-    torch_input_tensor = torch.rand((height, width), dtype=torch.bfloat16)
-    torch_output_tensor = torch_input_tensor
+    if ttnn_dtype == ttnn.bfloat8_b and (recip or sqrt):
+        torch_input = 4 * torch.rand(input_shape, dtype=cpu_dtype) + 20
+    elif ttnn_dtype != ttnn.int32:
+        # uniform distribution [-10, 10)
+        torch_input = 20 * torch.rand(input_shape, dtype=cpu_dtype) - 10
+        if recip:
+            torch_input[(0 <= torch_input) & (torch_input < 1e-10)] += 1e-10
+            torch_input[(-1e-10 < torch_input) & (torch_input < 0)] -= 1e-10
+    else:
+        torch_input = torch.randint(-10, 10, input_shape, dtype=cpu_dtype)
 
-    input_tensor = ttnn.from_torch(torch_input_tensor, layout=ttnn.TILE_LAYOUT, device=device)
-    output_tensor = ttnn.prim.example(input_tensor)
-    output_tensor = ttnn.to_torch(output_tensor)
+    tt_output = ttnn.empty(ttnn_shape, output_dtype, ttnn.TILE_LAYOUT, device=device)
 
-    assert_equal(torch_output_tensor, output_tensor)
-
-
-@pytest.mark.parametrize("height", [64])
-@pytest.mark.parametrize("width", [128])
-def test_composite_example(device, height, width):
-    torch.manual_seed(0)
-
-    torch_input_tensor = torch.rand((height, width), dtype=torch.bfloat16)
-    torch_output_tensor = torch_input_tensor
-
-    input_tensor = ttnn.from_torch(torch_input_tensor, layout=ttnn.TILE_LAYOUT, device=device)
-    output_tensor = ttnn.composite_example(input_tensor)
-    output_tensor = ttnn.to_torch(output_tensor)
-
-    assert_equal(torch_output_tensor, output_tensor)
+    tt_input = ttnn.from_torch(
+        torch_input,
+        device=device,
+        dtype=ttnn_dtype,
+        layout=ttnn.TILE_LAYOUT,
+        pad_value=float("nan") if ttnn_dtype is not ttnn.bfloat8_b else float("0"),
+        memory_config=ttnn.MemoryConfig(ttnn.TensorMemoryLayout.INTERLEAVED),
+    )
+    return tt_input, tt_output
 
 
-@pytest.mark.parametrize("height", [64])
-@pytest.mark.parametrize("width", [128])
-@pytest.mark.parametrize("return_outputs", [[False, True], [True, False], [True, True]])
-def test_example_multiple_return(device, height, width, return_outputs):
-    torch.manual_seed(0)
+@pytest.mark.parametrize("input_shape", [[3, 4, 5, 113, 150]])
+@pytest.mark.parametrize("ttnn_dtype, cpu_dtype", [[ttnn.bfloat8_b, torch.float32]])
+def test_example(device, input_shape, ttnn_dtype, cpu_dtype, output_dtype=None):
+    output_dtype = output_dtype or ttnn_dtype
 
-    return_output1, return_output2 = return_outputs
-
-    # run torch
-    torch_input_tensor = torch.rand((height, width), dtype=torch.bfloat16)
-    torch_output_tensor = torch_input_tensor
-
-    # run TT
-    input_tensor = ttnn.from_torch(torch_input_tensor, layout=ttnn.TILE_LAYOUT, device=device)
-    output1, output2 = ttnn.prim.example_multiple_return(
-        input_tensor, return_output1=return_output1, return_output2=return_output2
+    tt_input, _ = get_tensor(
+        input_shape,
+        ttnn_dtype,
+        cpu_dtype,
+        output_dtype,
+        device,
     )
 
-    if return_output1:
-        output_tensor1 = ttnn.to_torch(output1)
-        assert_equal(torch_output_tensor, output_tensor1)
-    else:
-        assert output1 == None
-
-    if return_output2:
-        output_tensor2 = ttnn.to_torch(output2)
-        assert_equal(torch_output_tensor, output_tensor2)
-    else:
-        assert output2 == None
-
-
-@pytest.mark.parametrize("height", [64])
-@pytest.mark.parametrize("width", [128])
-@pytest.mark.parametrize("return_outputs", [[False, True], [True, False], [True, True]])
-def test_composite_example_multiple_return(device, height, width, return_outputs):
-    torch.manual_seed(0)
-
-    return_output1, return_output2 = return_outputs
-
-    # run torch
-    torch_input_tensor = torch.rand((height, width), dtype=torch.bfloat16)
-    torch_output_tensor = torch_input_tensor
-
-    # run TT
-    input_tensor = ttnn.from_torch(torch_input_tensor, layout=ttnn.TILE_LAYOUT, device=device)
-    output1, output2 = ttnn.composite_example_multiple_return(
-        input_tensor, return_output1=return_output1, return_output2=return_output2
+    tt_output_grad, tt_input_grad = get_tensor(
+        input_shape,
+        ttnn_dtype,
+        cpu_dtype,
+        output_dtype,
+        device,
     )
 
-    if return_output1:
-        output_tensor1 = ttnn.to_torch(output1)
-        assert_equal(torch_output_tensor, output_tensor1)
-    else:
-        assert output1 == None
-
-    if return_output2:
-        output_tensor2 = ttnn.to_torch(output2)
-        assert_equal(torch_output_tensor, output_tensor2)
-    else:
-        assert output2 == None
+    ttnn.example(
+        tt_output_grad,
+        -2,
+        input=tt_input,
+        input_grad=tt_input_grad,
+    )

@@ -12,84 +12,32 @@
 #include "ttnn/device_operation.hpp"
 #include "ttnn/types.hpp"
 #include "ttnn/decorators.hpp"
+#include "unary_op_types.hpp"
 
 namespace ttnn::operations::examples {
 
 struct ExampleDeviceOperation {
     // Define the operation attributes. This is it to store all variables needed by operations that aren't tensors
     struct operation_attributes_t {
-        bool attribute;
-        int some_other_attribute;
+        UnaryOpType op_type;
+        std::optional<std::variant<int64_t, float, double, bool>> scalar1 = std::nullopt;
+        std::optional<std::variant<int64_t, float, double, bool>> scalar2 = std::nullopt;
     };
 
-    // Define the tensor arguments. This is it to store all tensors passed in and/or out of the operation
-    // Tensor arguments don't need to be just input tensors, they can be output tensors, input/output tensors, optional
-    // tensors, etc.
     struct tensor_args_t {
-        // This example will use a tensor that can only be used as an input
-        const Tensor& input_tensor;
-
-        // However, the following examples show what else can be done with tensor_args_t
-
-        // An example of the tensor that can be used for input/output or just for pre-allocated output
-        // Tensor& io_tensor;
-
-        // An example of an optional tensor
-        // std::optional<Tensor> optional_output_tensor;
-
-        // An example of a vector of tensors
-        // std::vector<Tensor> vector_of_tensors;
-
-        // An example of a tuple of tensors
-        // std::tuple<Tensor, ...> tuple_of_tensors;
-
-        // An example of a vector of optional tensors
-        // std::vector<std::optional<Tensor>> vector_of_optional_tensors;
-
-        // An example of a tuple of tensors
-        // std::tuple<std::vector<std::optional<Tensor>>, std::optional<Tensor>> some_crazy_tuple_of_tensors;
+        const Tensor& output_grad;
+        std::optional<Tensor> input = std::nullopt;
+        std::optional<Tensor> output = std::nullopt;
+        const Tensor& input_grad;
     };
 
-    // Define the return types for the spec(s) of the operation
-    // Can be a single ttnn::TensorSpec, std::optional<ttnn::TensorSpec>, std::vector<ttnn::TensorSpec>,
-    // std::tuple<ttnn::TensorSpec> etc.
     using spec_return_value_t = ttnn::TensorSpec;
-
-    // Define the return types for the tensor(s) of the operation
-    // Can be a single Tensor, std::optional<Tensor, ...>, std::vector<Tensor>, std::tuple<Tensor, ...> etc.
     using tensor_return_value_t = Tensor;
-
-    // Note spec_return_value_t and tensor_return_value_t should follow the same pattern
-    // i.e. if spec_return_value_t is a std::vector<std::optional<ttnn::TensorSpec>> then tensor_return_value_t should
-    // be std::vector<std::optional<Tensor>>
-
-    struct SingleCore {
-        // Shared variables are the variables that are shared between the create and override_runtime_arguments methods
-        struct shared_variables_t {
-            tt::tt_metal::KernelHandle unary_reader_kernel_id;
-            tt::tt_metal::KernelHandle unary_writer_kernel_id;
-        };
-        using cached_program_t = ttnn::device_operation::CachedProgram<shared_variables_t>;
-
-        static cached_program_t create(
-            const operation_attributes_t& operation_attributes,
-            const tensor_args_t& tensor_args,
-            tensor_return_value_t& tensor_return_value);
-
-        static void override_runtime_arguments(
-            cached_program_t& cached_program,
-            const operation_attributes_t& operation_attributes,
-            const tensor_args_t& tensor_args,
-            tensor_return_value_t& tensor_return_value);
-    };
-
     struct MultiCore {
         // Shared variables are the variables that are shared between the create and override_runtime_arguments methods
         struct shared_variables_t {
             tt::tt_metal::KernelHandle unary_reader_kernel_id;
             tt::tt_metal::KernelHandle unary_writer_kernel_id;
-            std::size_t num_cores;
-            std::size_t num_cores_y;
         };
         using cached_program_t = ttnn::device_operation::CachedProgram<shared_variables_t>;
 
@@ -105,7 +53,7 @@ struct ExampleDeviceOperation {
             tensor_return_value_t& tensor_return_value);
     };
 
-    using program_factory_t = std::variant<SingleCore, MultiCore>;
+    using program_factory_t = std::variant<MultiCore>;
 
     // Mandatory methods
 
@@ -124,28 +72,12 @@ struct ExampleDeviceOperation {
     // Create the output tensors based on the operation attributes and tensor args
     static tensor_return_value_t create_output_tensors(const operation_attributes_t&, const tensor_args_t&);
 
-    // API call to map user arguments to operation attributes and tensor args.
-    // This is the only method that is called by the user
-    // The user will be able to call the operation using `tensor_return_value_t output =
-    // ttnn::prim::example(input_tensor)` after the op is registered Keep in mind that the the overload with `queue_id`
-    // argument will be added automatically for primitive operations So, the user can also call this operation using
-    // `tensor_return_value_t output = ttnn::prim::example(queue_id, input_tensor)`
-    static std::tuple<operation_attributes_t, tensor_args_t> invoke(const Tensor& input_tensor);
-
-    // Optional methods
-
-    // In case the operation need a custom hash function, the following method can be implemented
-    /* static tt::stl::hash::hash_t compute_program_hash(
-        const operation_attributes_t&, const tensor_args_t&);
-    */
-
-    // In case the operation needs a custom create_op_performance_model, this method can be implemented
-    /*
-    static tt::tt_metal::tt::tt_metal::operation::OpPerformanceModel create_op_performance_model(
-        const operation_attributes_t&,
-        const tensor_args_t&,
-        tensor_return_value_t&);
-    */
+    static std::tuple<operation_attributes_t, tensor_args_t> invoke(
+        const Tensor& output_grad,
+        std::variant<int64_t, float, double, bool> scalar,
+        std::optional<Tensor> input,
+        UnaryOpType op_type,
+        const Tensor& input_grad);
 };
 
 }  // namespace ttnn::operations::examples
