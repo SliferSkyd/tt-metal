@@ -21,7 +21,16 @@ from models.utility_functions import profiler
 
 
 @torch.no_grad()
-def run_demo_inference(ttnn_device, is_ci_env, prompts, num_inference_steps, vae_on_device, evaluation_range):
+def run_demo_inference(
+    ttnn_device,
+    is_ci_env,
+    prompts,
+    num_inference_steps,
+    vae_on_device,
+    evaluation_range,
+    negative_prompt,
+    guidance_scale,
+):
     batch_size = ttnn_device.get_num_devices()
 
     start_from, _ = evaluation_range
@@ -33,7 +42,7 @@ def run_demo_inference(ttnn_device, is_ci_env, prompts, num_inference_steps, vae
     needed_padding = (batch_size - len(prompts) % batch_size) % batch_size
     prompts = prompts + [""] * needed_padding
 
-    guidance_scale = 5.0
+    # guidance_scale = 5.0
 
     # 0. Set up default height and width for unet
     height = 1024
@@ -91,7 +100,7 @@ def run_demo_inference(ttnn_device, is_ci_env, prompts, num_inference_steps, vae
             device=cpu_device,
             num_images_per_prompt=1,
             do_classifier_free_guidance=True,
-            negative_prompt=None,
+            negative_prompt=negative_prompt,
             negative_prompt_2=None,
             prompt_embeds=None,
             negative_prompt_embeds=None,
@@ -347,5 +356,16 @@ def test_demo(
     num_inference_steps,
     vae_on_device,
     evaluation_range,
+    negative_prompt,
+    guidance_scale,
 ):
-    return run_demo_inference(mesh_device, is_ci_env, prompt, num_inference_steps, vae_on_device, evaluation_range)
+    return run_demo_inference(
+        mesh_device,
+        is_ci_env,
+        prompt,
+        num_inference_steps,
+        vae_on_device,
+        evaluation_range,
+        negative_prompt,
+        guidance_scale,
+    )
