@@ -44,6 +44,36 @@ def merge_perf_files(fname, perf_fname, expected_cols):
 
     merge_res.close()
 
+def merge_perf_files2(fname, perf_fname, expected_cols):
+    mypath = "./"
+    csvfiles = [
+        f
+        for f in listdir(mypath)
+        if isfile(join(mypath, f)) and re.match(f"{perf_fname}_.*_{today}.csv", f) is not None
+    ]
+
+    repo = git.Repo(search_parent_directories=True)
+
+    merge_res = open(fname, "a")
+    if not repo.head.is_detached:
+        merge_res.write(f"branch: {repo.active_branch} \n")
+    merge_res.write(f"hash: {repo.head.object.hexsha} \n")
+    cols = ", ".join(expected_cols)
+    merge_res.write(f"{cols} \n")
+
+    csvfiles.sort()
+    for csvfile in csvfiles:
+        row_name = csvfile.replace("perf_", "")
+        row_name = row_name.replace(f"{today}", "")
+        row_name = row_name.replace(".csv", "")
+
+        f = open(f"./{csvfile}", "r")
+        f.readline()
+        row = f.readline().strip().strip("\n")
+        merge_res.write(f"{row}\n")
+
+    merge_res.close()
+
 
 def process_perf_results(fname, expected_cols):
     with open(fname) as file:
