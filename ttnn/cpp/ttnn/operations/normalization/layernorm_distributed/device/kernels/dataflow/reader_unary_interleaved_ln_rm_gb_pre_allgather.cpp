@@ -50,7 +50,7 @@ void kernel_main() {
 
     generate_reduce_scaler(cb_reduce, scaler);
     if (is_merge_core) {
-        generate_bcast_col_scalar(cb_zero, 0);
+        generate_reduce_scaler(cb_zero, 0);
     }
 
     uint32_t inp_tile_idx = tile_offset;
