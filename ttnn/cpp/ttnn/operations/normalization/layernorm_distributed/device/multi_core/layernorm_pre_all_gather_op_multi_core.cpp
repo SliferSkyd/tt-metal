@@ -261,13 +261,17 @@ operation::ProgramWithCallbacks layernorm_pre_allgather_multi_core(
     CreateCircularBuffer(program, all_cores, cb_intermed1_config);
 
     CircularBufferConfig cb_out0_config =
-        CircularBufferConfig(out0_tiles * out_single_tile_size, {{tt::CBIndex::c_14, out_data_format}})
-            .set_page_size(tt::CBIndex::c_14, out_single_tile_size);
+        CircularBufferConfig(out0_tiles * single_tile_size, {{tt::CBIndex::c_16, cb_data_format}})
+            .set_page_size(tt::CBIndex::c_16, single_tile_size);
     CreateCircularBuffer(program, all_cores, cb_out0_config);
+    CircularBufferConfig cb_zero_config =
+        CircularBufferConfig(out0_tiles * single_tile_size, {{tt::CBIndex::c_13, cb_data_format}})
+            .set_page_size(tt::CBIndex::c_13, single_tile_size);
+    CreateCircularBuffer(program, all_cores, cb_zero_config);
 
     CircularBufferConfig cb_out_final_config =
-        CircularBufferConfig(out0_tiles * out_single_tile_size, {{tt::CBIndex::c_16, out_data_format}})
-            .set_page_size(tt::CBIndex::c_16, out_single_tile_size);
+        CircularBufferConfig(out0_tiles * out_single_tile_size, {{tt::CBIndex::c_14, out_data_format}})
+            .set_page_size(tt::CBIndex::c_14, out_single_tile_size);
     CreateCircularBuffer(program, merge_cores, cb_out_final_config);
 
     // Log all circular buffers with program.circular_buffers(), which returns
@@ -340,7 +344,7 @@ operation::ProgramWithCallbacks layernorm_pre_allgather_multi_core(
                     reader_args[0] = input_addr;
                 }
 
-                {
+                if (core.y == 0) {
                     auto& writer_args = writer_runtime_args_by_core.at(core.x).at(core.y);
                     writer_args[0] = output_addr;
                 }
