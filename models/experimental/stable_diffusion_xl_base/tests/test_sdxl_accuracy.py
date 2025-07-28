@@ -14,6 +14,9 @@ from models.experimental.stable_diffusion_xl_base.utils.fid_score import calcula
 from models.experimental.stable_diffusion_xl_base.tests.test_common import SDXL_L1_SMALL_SIZE
 import json
 from models.utility_functions import profiler
+from models.experimental.stable_diffusion_xl_base.conftest import get_device_name
+
+DEVICE_NAME_LOCAL = get_device_name()
 
 test_demo.__test__ = False
 COCO_CAPTIONS_DOWNLOAD_PATH = "https://github.com/mlcommons/inference/raw/4b1d1156c23965172ae56eacdd8372f8897eb771/text_to_image/coco2014/captions/captions_source.tsv"
@@ -23,7 +26,7 @@ OUT_ROOT, RESULTS_FILE_NAME = "test_reports", "sdxl_test_results.json"
 @pytest.mark.parametrize("device_params", [{"l1_small_size": SDXL_L1_SMALL_SIZE}], indirect=True)
 @pytest.mark.parametrize(
     "num_inference_steps",
-    ((50),),
+    ((10), (15), (20), (25), (30), (35), (40)),
 )
 @pytest.mark.parametrize(
     "vae_on_device",
@@ -35,6 +38,8 @@ OUT_ROOT, RESULTS_FILE_NAME = "test_reports", "sdxl_test_results.json"
 )
 @pytest.mark.parametrize("captions_path", ["models/experimental/stable_diffusion_xl_base/coco_data/captions.tsv"])
 @pytest.mark.parametrize("coco_statistics_path", ["models/experimental/stable_diffusion_xl_base/coco_data/val2014.npz"])
+@pytest.mark.parametrize("negative_prompt", ["normal quality, low quality, worst quality, low res, blurry, nsfw, nude"])
+@pytest.mark.parametrize("guidance_scale", [8])
 def test_accuracy_sdxl(
     mesh_device,
     is_ci_env,
@@ -43,7 +48,10 @@ def test_accuracy_sdxl(
     captions_path,
     coco_statistics_path,
     evaluation_range,
+    negative_prompt,
+    guidance_scale,
 ):
+    os.environ["TT_MM_THROTTLE_PERF"] = "5"
     start_from, num_prompts = evaluation_range
 
     prompts = sdxl_get_prompts(
@@ -52,7 +60,11 @@ def test_accuracy_sdxl(
         num_prompts,
     )
 
-    logger.info(f"Start inference from prompt index: {start_from} to {start_from + num_prompts}")
+    logger.info(
+        f"Start inference from prompt index: {start_from} to {start_from + num_prompts}, mashine: {DEVICE_NAME_LOCAL}"
+    )
+    logger.debug(f"num_inference_steps: {num_inference_steps}, vae_on_device: {vae_on_device}")
+    logger.debug(f"negative prompt: {negative_prompt}, guidance_scale: {guidance_scale}")
 
     images = test_demo(
         mesh_device,
@@ -61,6 +73,8 @@ def test_accuracy_sdxl(
         num_inference_steps,
         vae_on_device,
         evaluation_range,
+        negative_prompt,
+        guidance_scale,
     )
 
     clip = CLIPEncoder()
@@ -88,15 +102,18 @@ def test_accuracy_sdxl(
     data = {
         "model": "sdxl",  # For compatibility with current processes
         "metadata": {
-            "device": "N150",
+            "device": DEVICE_NAME_LOCAL,
             "device_vae": vae_on_device,
             "start_from": start_from,
             "num_prompts": num_prompts,
             "model_name": "sdxl",
+            "num_inference_steps": num_inference_steps,
+            "negative_prompt": negative_prompt,
+            "guidance_scale": guidance_scale,
         },
         "benchmarks_summary": [
             {
-                "device": "N150",
+                "device": DEVICE_NAME_LOCAL,
                 "model": "sdxl",
                 "average_denoising_time": profiler.get("denoising_loop"),
                 "average_vae_time": profiler.get("vae_decode"),
@@ -114,12 +131,14 @@ def test_accuracy_sdxl(
         ],
     }
 
-    os.makedirs(OUT_ROOT, exist_ok=True)
+    new_out_root = OUT_ROOT
+    new_file_name = f"sdxl_test_results_{num_inference_steps}_steps_{num_prompts}_prompts.json"
+    os.makedirs(new_out_root, exist_ok=True)
 
-    with open(f"{OUT_ROOT}/{RESULTS_FILE_NAME}", "w") as f:
+    with open(f"{new_out_root}/{new_file_name}", "w") as f:
         json.dump(data, f, indent=4)
 
-    logger.info(f"Test results saved to {OUT_ROOT}/{RESULTS_FILE_NAME}")
+    logger.info(f"Test results saved to {new_out_root}/{new_file_name}")
 
 
 def sdxl_get_prompts(
