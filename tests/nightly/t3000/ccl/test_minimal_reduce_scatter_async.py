@@ -199,6 +199,7 @@ def run_reduce_scatter_impl(
 
         torch_rs_out = torch.cat(torch_rs_out_tensor, 3)
 
+        assert tuple(tt_rs_out_tensor.shape) == tuple(torch_rs_out_tensor[0].shape)
         tt_rs_out = ttnn.from_device(tt_rs_out_tensor)
         tt_rs_out = ttnn.to_torch(tt_rs_out, mesh_composer=ttnn.ConcatMeshToTensor(t3k_mesh_device, dim=3))
 
