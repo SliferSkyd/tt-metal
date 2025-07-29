@@ -23,17 +23,18 @@ void kernel_main() {
     // nop lets you intentionally not use this core if the dims don't divide nicely
     const uint32_t nop = get_arg_val<uint32_t>(7);
 
-    constexpr bool tensor_is_dram = get_compile_time_arg_val(0) == 1;
-    constexpr uint32_t original_page_size_bytes = get_compile_time_arg_val(1);
-    constexpr uint32_t cb_id_in0 = get_compile_time_arg_val(2);
-    constexpr uint32_t cb_id_in1 = get_compile_time_arg_val(3);
-    constexpr bool page_is_pow_2 = (get_compile_time_arg_val(4) == 1);
-    constexpr uint32_t page_pow_2 = get_compile_time_arg_val(5);
+    constexpr uint32_t original_page_size_bytes = get_compile_time_arg_val(0);
+    constexpr uint32_t cb_id_in0 = get_compile_time_arg_val(1);
+    constexpr uint32_t cb_id_in1 = get_compile_time_arg_val(2);
     //(higher_dim,rep_dim,lower_dim,page_size)
     // cb_id_in0 and cb_id_in1 is each 1 page of size:
     // 128 + page size in bytes
-    constexpr uint32_t LOWER_DIMS = get_compile_time_arg_val(6);
-    constexpr uint32_t REP_DIM = get_compile_time_arg_val(7);
+    constexpr uint32_t LOWER_DIMS = get_compile_time_arg_val(3);
+    constexpr uint32_t REP_DIM = get_compile_time_arg_val(4);
+
+    constexpr auto src_tensor_args = TensorAccessorArgs<5>();
+    constexpr uint32_t args_offset_after_src = src_tensor_args.next_compile_time_args_offset();
+    constexpr auto dst_tensor_args = TensorAccessorArgs<args_offset_after_src>();
 
     constexpr uint32_t LOWER_DIMS_TIMES_REP_DIM = LOWER_DIMS * REP_DIM;
 
@@ -43,16 +44,14 @@ void kernel_main() {
         return;
     }
 
-    const auto s =
-        get_interleaved_addr_gen<tensor_is_dram, page_is_pow_2>(src_addr, original_page_size_bytes, page_pow_2);
-    const auto d =
-        get_interleaved_addr_gen<tensor_is_dram, page_is_pow_2>(dst_addr, original_page_size_bytes, page_pow_2);
+    const auto s = TensorAccessor(src_tensor_args, src_addr, original_page_size_bytes);
+    const auto d = TensorAccessor(dst_tensor_args, dst_addr, original_page_size_bytes);
 
     // alignments pre-calculations
-    constexpr uint64_t r_mask_to_use = tensor_is_dram ? MASK_64 : MASK_16;
-    constexpr uint64_t r_offset_to_use = tensor_is_dram ? OFFSET_64 : OFFSET_16;
+    constexpr uint64_t r_mask_to_use = src_tensor_args.is_dram ? MASK_64 : MASK_16;
+    constexpr uint64_t r_offset_to_use = src_tensor_args.is_dram ? OFFSET_64 : OFFSET_16;
 
-    constexpr uint32_t r_alignment_requirement = tensor_is_dram ? 64 : 16;
+    constexpr uint32_t r_alignment_requirement = src_tensor_args.is_dram ? 64 : 16;
     constexpr uint32_t w_alignment_requirement = 16;
     const uint64_t w_mask_to_use = MASK_16;
     const uint64_t w_offset_to_use = OFFSET_16;
@@ -77,7 +76,7 @@ void kernel_main() {
             uint32_t r_offset = r * LOWER_DIMS;
             for (uint32_t l = lower_dim_start; l < lower_dim_end; l++) {
                 uint32_t read_offset = h_offset + r_offset + l;
-                src_noc_addr = s.get_noc_addr(read_offset, 0);
+                src_noc_addr = s.get_noc_addr(read_offset);
                 data_location = input_buffer + (src_noc_addr & r_offset_to_use);  // Guaranteed aligned to src_noc_addr
                 enhanced_noc_async_read<original_page_size_bytes, false>(
                     src_noc_addr, data_location, original_page_size_bytes);
@@ -86,7 +85,7 @@ void kernel_main() {
                 for (uint32_t n = 0; n < repetitions; n++) {
                     // Perform the writes
                     uint32_t write_offset = h_offset_rep + n * LOWER_DIMS_TIMES_REP_DIM + r_offset + l;
-                    const uint64_t dst_noc_addr = d.get_noc_addr(write_offset, 0);
+                    const uint64_t dst_noc_addr = d.get_noc_addr(write_offset);
                     if ((data_location & w_offset_to_use) != (dst_noc_addr & w_offset_to_use)) {
                         // Can't directly copy
                         const uint32_t target_align_buffer =

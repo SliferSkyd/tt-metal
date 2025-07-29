@@ -18,6 +18,7 @@
 #include "ttnn/operations/core/work_split/work_split_tilize.hpp"
 #include "ttnn/tensor/tensor.hpp"
 #include "ttnn/types.hpp"
+#include <tt-metalium/tensor_accessor_args.hpp>
 
 constexpr uint32_t READ_ALIGNMENT = 64;
 
@@ -174,7 +175,6 @@ tt::tt_metal::operation::ProgramWithCallbacks rm_repeater(
     uint32_t number_of_higher_pages = input_log_shape[0];
     uint32_t number_of_lower_pages = input_log_shape[2];
     uint32_t number_of_rep_dim_pages = input_log_shape[1];
-    uint32_t src0_is_dram = src_buffer->buffer_type() == tt::tt_metal::BufferType::DRAM ? 1 : 0;
     uint32_t cb_size_bytes = READ_ALIGNMENT * 2 + page_size_bytes;
     uint32_t src0_cb_index = 0;
     uint32_t src1_cb_index = 1;
@@ -189,17 +189,10 @@ tt::tt_metal::operation::ProgramWithCallbacks rm_repeater(
             .set_page_size(src1_cb_index, cb_size_bytes);
     auto cb_src1 = tt::tt_metal::CreateCircularBuffer(program, total_cores, cb_src1_config);
 
-    bool page_is_pow_2 = tt::tt_metal::is_power_of_two_at_least_32(page_size_bytes);
-    uint32_t page_pow_2 = page_is_pow_2 ? (std::uint32_t)std::log2(page_size_bytes) : 0;
     std::vector<uint32_t> compile_time_args = {
-        (std::uint32_t)src0_is_dram,
-        (std::uint32_t)page_size_bytes,
-        src0_cb_index,
-        src1_cb_index,
-        page_is_pow_2,
-        page_pow_2,
-        number_of_lower_pages,
-        number_of_rep_dim_pages};
+        (std::uint32_t)page_size_bytes, src0_cb_index, src1_cb_index, number_of_lower_pages, number_of_rep_dim_pages};
+    tt::tt_metal::TensorAccessorArgs(*src_buffer).append_to(compile_time_args);
+    tt::tt_metal::TensorAccessorArgs(*dst_buffer).append_to(compile_time_args);
 
     tt::tt_metal::KernelHandle reader_kernel_id = tt::tt_metal::CreateKernel(
         program,
