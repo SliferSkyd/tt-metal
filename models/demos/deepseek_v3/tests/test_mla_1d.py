@@ -8,9 +8,10 @@ import pytest
 import torch
 from loguru import logger
 
-import ttnn
-
 # Import from local reference files instead of HuggingFace
+from transformers import DynamicCache
+
+import ttnn
 from models.demos.deepseek_v3.reference.modeling_deepseek import DeepseekV3Attention
 from models.demos.deepseek_v3.tt.ccl_1d import CCL1D
 from models.demos.deepseek_v3.tt.mla_1d import MLA1D
@@ -31,7 +32,7 @@ def hf_config_short(hf_config):
 def reference(hf_config_short, reset_seeds):
     """Get the actual DeepSeek MLA model using local implementation."""
 
-    model = DeepseekV3Attention(hf_config_short)
+    model = DeepseekV3Attention(hf_config_short, layer_idx=0)
     model.init_weights_with_random()  # Initialize weights with random values
     return model
 
@@ -59,27 +60,37 @@ def reference_forward(
         torch_input = new_input_tensor
         q_len = torch_input.shape[1]
 
+    # Generate the cache
+    cache = DynamicCache()
+
     # Generate the mask
-    mask = torch.full((bsz, 1, q_len, q_len), float("-inf"))
-    for i, idx in enumerate(position_ids):
-        mask[i, :, : idx + 1, :] = 0.0
+    if mode == "prefill":
+        mask = torch.triu(torch.full((bsz, 1, q_len, q_len), float("-inf")), diagonal=1)
+    else:
+        mask = torch.full((bsz, 1, q_len, q_len), float("-inf"))
+        for i in range(bsz):
+            usable_len = position_ids[i].item() + 1
+            mask[i, 0, :usable_len, :usable_len] = torch.triu(
+                torch.full((usable_len, usable_len), float("-inf")), diagonal=1
+            )
 
     position_ids_table = torch.arange(0, q_len, dtype=torch.long).unsqueeze(0).repeat(bsz, 1)
 
-    out, _, _ = reference_model.forward_mla(
+    out, _, past_key_value = reference_model.forward_mla(
         hidden_states=torch_input,
         attention_mask=mask,
         position_ids=position_ids_table,
+        past_key_value=cache,
     )
+    cache = past_key_value.key_cache[reference_model.layer_idx].squeeze(1)
 
     if mode == "decode":
         # Get last token
-        outs = []
-        for i in range(bsz):
-            outs.append(out[i, position_ids[i], :])
-        out = torch.concat(outs, dim=0).unsqueeze(1)  # [bsz, 1, hidden_size]
+        batch_indices = torch.arange(position_ids.shape[0])
+        out = out[batch_indices, position_ids, :].unsqueeze(1)  # [bsz, 1, hidden_size]
+        cache = cache[batch_indices, position_ids, :].unsqueeze(1)  # [bsz, 1, head_dim + rope_head_dim]
 
-    return out
+    return out, cache
 
 
 def get_cache_on_host(tt_cache, mesh_device):
@@ -165,14 +176,17 @@ def test_forward_pass(
     ### Torch inputs
     ############################
     MAX_START_POS = 512
-    position_idxs = torch.tensor([randint(0, MAX_START_POS) for _ in range(batch_size)]) if mode == "decode" else 0
     torch_input = torch.randn(batch_size, seq_len, hf_config.hidden_size).to(dtype=torch.bfloat16)
+    if mode == "prefill":
+        position_idxs = torch.tensor([seq_len for _ in range(batch_size)])
+    else:
+        position_idxs = torch.tensor([randint(0, MAX_START_POS) for _ in range(batch_size)])
 
     ############################
     ### Torch reference
     ############################
     # TODO: Save reference output?
-    reference_output = reference_forward(
+    reference_output, reference_cache = reference_forward(
         reference_model,
         torch_input,
         position_ids=position_idxs,
@@ -282,7 +296,6 @@ def test_forward_pass(
         logger.info("Checking KVPE cache PCC")
 
         pcc_required_kvpe = 0.999
-        range_to_check = range(start_pos, start_pos + seq_len)
 
         if mode == "decode":
             tt_cache = get_cache_on_host(
@@ -295,11 +308,19 @@ def test_forward_pass(
             tt_cache = get_cache_on_host(run_config["kvpe_cache"], mesh_row)[: MLA1D.MAX_BATCH_SIZE, ...].squeeze(
                 1
             )  # [bsz, max_seq_len, head_dim + rope_head_dim]
-        tt_cache_kv = tt_cache[:, range_to_check, : hf_config.kv_lora_rank]
-        tt_cache_pe = tt_cache[:, range_to_check, hf_config.kv_lora_rank :]
 
-        ref_cache_kv = reference_model.kv_cache[:, range_to_check, :]  # [bsz, _, head_dim]
-        ref_cache_pe = reference_model.pe_cache[:, range_to_check, :]  # [bsz, _, rope_head_dim]
+        # Slice the correct region of the cache
+        if mode == "decode":
+            batch_indices = torch.arange(position_idxs.shape[0])
+            tt_cache = tt_cache[batch_indices, position_idxs, :].unsqueeze(1)  # [bsz, 1, head_dim + rope_head_dim]
+        else:
+            tt_cache = tt_cache[:batch_size, :seq_len, :]
+
+        tt_cache_kv = tt_cache[..., : hf_config.kv_lora_rank]
+        tt_cache_pe = tt_cache[..., hf_config.kv_lora_rank :]
+
+        ref_cache_kv = reference_cache[..., : hf_config.kv_lora_rank]  # [bsz, _, head_dim]
+        ref_cache_pe = reference_cache[..., hf_config.kv_lora_rank :]  # [bsz, _, rope_head_dim]
 
         kv_passing, kv_pcc_message = comp_pcc(ref_cache_kv, tt_cache_kv, pcc_required_kvpe)
         pe_passing, pe_pcc_message = comp_pcc(ref_cache_pe, tt_cache_pe, pcc_required_kvpe)

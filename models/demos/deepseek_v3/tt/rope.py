@@ -45,6 +45,7 @@ def get_cos_sin_matrix(hf_config):
         "beta_slow": hf_config.rope_scaling["beta_slow"],
         "mscale": hf_config.rope_scaling["mscale"],
         "mscale_all_dim": hf_config.rope_scaling["mscale_all_dim"],
+        "meta_style": True,  # Use meta-style frequencies
     }
 
     reference_rope = DeepseekV3YarnRotaryEmbedding(**args)
@@ -54,11 +55,11 @@ def get_cos_sin_matrix(hf_config):
     sin = reference_rope.sin_cached
 
     # Undo the HF permute
-    cos = cos[:, : cos.shape[1] // 2]
-    cos = torch.stack((cos, cos), dim=-1).flatten(-2)
+    # cos = cos[:, : cos.shape[1] // 2]
+    # cos = torch.stack((cos, cos), dim=-1).flatten(-2)
 
-    sin = sin[:, : sin.shape[1] // 2]
-    sin = torch.stack((sin, sin), dim=-1).flatten(-2)
+    # sin = sin[:, : sin.shape[1] // 2]
+    # sin = torch.stack((sin, sin), dim=-1).flatten(-2)
 
     cos = cos.unsqueeze(0).unsqueeze(0)  # [1, 1, max_seq_len, dim]
     sin = sin.unsqueeze(0).unsqueeze(0)  # [1, 1, max_seq_len, dim]

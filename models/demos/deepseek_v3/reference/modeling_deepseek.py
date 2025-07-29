@@ -127,7 +127,8 @@ class DeepseekV3RotaryEmbedding(nn.Module):
         self.register_buffer("cos_cached", emb.cos().to(dtype), persistent=False)
         self.register_buffer("sin_cached", emb.sin().to(dtype), persistent=False)
 
-    def forward(self, x, seq_len=None):
+    def forward(self, x, seq_len=None, meta_style=False):
+        self.meta_style = meta_style
         # x: [bs, num_attention_heads, seq_len, head_size]
         if self.max_seq_len_cached is None or seq_len > self.max_seq_len_cached:
             self._set_cos_sin_cache(seq_len=seq_len, device=x.device, dtype=x.dtype)
@@ -239,6 +240,7 @@ class DeepseekV3YarnRotaryEmbedding(DeepseekV3RotaryEmbedding):
         beta_slow=1,
         mscale=1,
         mscale_all_dim=0,
+        meta_style=False,
     ):
         self.scaling_factor = scaling_factor
         self.original_max_position_embeddings = original_max_position_embeddings
@@ -246,6 +248,7 @@ class DeepseekV3YarnRotaryEmbedding(DeepseekV3RotaryEmbedding):
         self.beta_slow = beta_slow
         self.mscale = mscale
         self.mscale_all_dim = mscale_all_dim
+        self.meta_style = meta_style
         super().__init__(dim, max_position_embeddings, base, device)
 
     def _set_cos_sin_cache(self, seq_len, device, dtype):
@@ -277,21 +280,30 @@ class DeepseekV3YarnRotaryEmbedding(DeepseekV3RotaryEmbedding):
             / yarn_get_mscale(self.scaling_factor, self.mscale_all_dim)
         )
 
-        emb = torch.cat((freqs, freqs), dim=-1)
+        if self.meta_style:
+            emb = torch.stack((freqs, freqs), dim=-1).flatten(-2)
+        else:
+            emb = torch.cat((freqs, freqs), dim=-1)
+
         self.register_buffer("cos_cached", (emb.cos() * _mscale).to(dtype), persistent=False)
         self.register_buffer("sin_cached", (emb.sin() * _mscale).to(dtype), persistent=False)
 
 
 # Copied from transformers.models.llama.modeling_llama.rotate_half
-def rotate_half(x):
+def rotate_half(x, meta_style=False):
     """Rotates half the hidden dims of the input."""
-    x1 = x[..., : x.shape[-1] // 2]
-    x2 = x[..., x.shape[-1] // 2 :]
-    return torch.cat((-x2, x1), dim=-1)
+    if meta_style:
+        x1 = x[..., ::2]
+        x2 = x[..., 1::2]
+        return torch.stack((-x2, x1), dim=-1).flatten(-2)
+    else:
+        x1 = x[..., : x.shape[-1] // 2]
+        x2 = x[..., x.shape[-1] // 2 :]
+        return torch.cat((-x2, x1), dim=-1)
 
 
 # Copied from transformers.models.llama.modeling_llama.apply_rotary_pos_emb
-def apply_rotary_pos_emb(q, k, cos, sin, position_ids, unsqueeze_dim=1):
+def apply_rotary_pos_emb(q, k, cos, sin, position_ids, unsqueeze_dim=1, meta_style=False):
     """Applies Rotary Position Embedding to the query and key tensors.
 
     Args:
@@ -315,14 +327,15 @@ def apply_rotary_pos_emb(q, k, cos, sin, position_ids, unsqueeze_dim=1):
     cos = cos[position_ids].unsqueeze(unsqueeze_dim)
     sin = sin[position_ids].unsqueeze(unsqueeze_dim)
 
-    b, h, s, d = q.shape
-    q = q.view(b, h, s, d // 2, 2).transpose(4, 3).reshape(b, h, s, d)
+    if not meta_style:
+        b, h, s, d = q.shape
+        q = q.view(b, h, s, d // 2, 2).transpose(4, 3).reshape(b, h, s, d)
 
-    b, h, s, d = k.shape
-    k = k.view(b, h, s, d // 2, 2).transpose(4, 3).reshape(b, h, s, d)
+        b, h, s, d = k.shape
+        k = k.view(b, h, s, d // 2, 2).transpose(4, 3).reshape(b, h, s, d)
 
-    q_embed = (q * cos) + (rotate_half(q) * sin)
-    k_embed = (k * cos) + (rotate_half(k) * sin)
+    q_embed = (q * cos) + (rotate_half(q, meta_style) * sin)
+    k_embed = (k * cos) + (rotate_half(k, meta_style) * sin)
     return q_embed, k_embed
 
 
@@ -617,7 +630,7 @@ class DeepseekV3Attention(nn.Module):
             if param.requires_grad:
                 print(f"Initializing {name} with torch.randn")
                 with torch.no_grad():
-                    param.copy_(torch.randn_like(param))
+                    param.copy_(torch.randn_like(param) * 0.1)
 
     def _init_rope(self):
         if self.config.rope_scaling is None:
@@ -794,17 +807,17 @@ class DeepseekV3Attention(nn.Module):
         k_nope = self.kv_a_layernorm(compressed_kv).view(bsz, 1, q_len, self.kv_lora_rank)
 
         kv_seq_len = k_nope.shape[-2]
-        # if past_key_value is not None:
-        #     if self.layer_idx is None:
-        #         raise ValueError(
-        #             f"The cache structure has changed since version v4.36. If you are using {self.__class__.__name__} "
-        #             "for auto-regressive decoding with k/v caching, please make sure to initialize the attention class "
-        #             "with a layer index."
-        #         )
-        #     kv_seq_len += past_key_value.get_usable_length(kv_seq_len, self.layer_idx)
-        cos, sin = self.rotary_emb(k_nope, seq_len=kv_seq_len)
+        if past_key_value is not None:
+            if self.layer_idx is None:
+                raise ValueError(
+                    f"The cache structure has changed since version v4.36. If you are using {self.__class__.__name__} "
+                    "for auto-regressive decoding with k/v caching, please make sure to initialize the attention class "
+                    "with a layer index."
+                )
+            kv_seq_len += past_key_value.get_usable_length(kv_seq_len, self.layer_idx)
+        cos, sin = self.rotary_emb(k_nope, seq_len=kv_seq_len, meta_style=True)
 
-        q_pe, k_pe = apply_rotary_pos_emb(q_pe, k_pe, cos, sin, position_ids)
+        q_pe, k_pe = apply_rotary_pos_emb(q_pe, k_pe, cos, sin, position_ids, meta_style=True)
 
         query_states = k_pe.new_empty(bsz, self.num_heads, q_len, self.kv_lora_rank + self.qk_rope_head_dim)
         query_states[:, :, :, : self.kv_lora_rank] = q_nope
@@ -813,9 +826,9 @@ class DeepseekV3Attention(nn.Module):
         key_states = k_pe.new_empty(bsz, 1, q_len, self.kv_lora_rank + self.qk_rope_head_dim)
         key_states[:, :, :, : self.kv_lora_rank] = k_nope
         key_states[:, :, :, self.kv_lora_rank :] = k_pe
-        # if past_key_value is not None:
-        #     cache_kwargs = {"sin": sin, "cos": cos}  # Specific to RoPE models
-        #     key_states, value_states = past_key_value.update(key_states, value_states, self.layer_idx, cache_kwargs)
+        if past_key_value is not None:
+            cache_kwargs = {"sin": sin, "cos": cos}  # Specific to RoPE models
+            key_states, _ = past_key_value.update(key_states, key_states, self.layer_idx, cache_kwargs)
         attn_weights = torch.matmul(query_states, key_states.transpose(2, 3)) * self.softmax_scale
 
         if attn_weights.size() != (bsz, self.num_heads, q_len, kv_seq_len):
