@@ -27,11 +27,20 @@ def load_torch_model(reference_model, target_prefix, module="semantic_sub", mode
             torch_model = SegformerForSemanticSegmentation.from_pretrained("nvidia/segformer-b0-finetuned-ade-512-512")
         state_dict = torch_model.state_dict()
     else:
-        weights = (
-            model_location_generator("vision-models/segformer", model_subdir="", download_if_ci_v2=True)
-            / "segformer_b0_ade_512_512.pth"
-        )
-        # TODO CIv2 weight load for Image Classification. Issue - https://github.com/tenstorrent/tt-metal/issues/25888
+        if module == "image_classification":
+            weights = (
+                model_location_generator(
+                    "vision-models/segformer-classification", model_subdir="", download_if_ci_v2=True
+                )
+                / "pytorch_model.bin"
+            )
+        elif module == "semantic_sub":
+            weights = (
+                model_location_generator(
+                    "vision-models/segformer-segmentation", model_subdir="", download_if_ci_v2=True
+                )
+                / "segformer_b0_ade_512_512.pth"
+            )
         state_dict = torch.load(weights)
 
     new_state_dict = {}
