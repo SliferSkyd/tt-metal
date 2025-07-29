@@ -52,6 +52,17 @@ bool run_dm(IDevice* device, const Matmul1DConfig& test_config) {
         test_config.test_id,   // Test ID
     };
 
+    std::vector<uint32_t> risc1_compile_args = {
+        origin_core_worker.x,  // Origin X coordinate
+        origin_core_worker.y,  // Origin Y coordinate
+        start_core_worker.x,   // Start X coordinate
+        start_core_worker.y,   // Start Y coordinate
+        end_core_worker.x,     // End X coordinate
+        end_core_worker.y,     // End Y coordinate
+        1,                     // RISC core ID
+        test_config.test_id,   // Test ID
+    };
+
     // Kernels
     auto risc0_kernel = CreateKernel(
         program,
@@ -59,6 +70,13 @@ bool run_dm(IDevice* device, const Matmul1DConfig& test_config) {
         matmul_cores,
         DataMovementConfig{
             .processor = DataMovementProcessor::RISCV_0, .noc = NOC::NOC_0, .compile_args = risc0_compile_args});
+
+    auto risc1_kernel = CreateKernel(
+        program,
+        "tests/tt_metal/tt_metal/data_movement/1d_matmul/kernels/2cluster-1d_matmul.cpp",
+        matmul_cores,
+        DataMovementConfig{
+            .processor = DataMovementProcessor::RISCV_1, .noc = NOC::NOC_1, .compile_args = risc1_compile_args});
 
     // Assign unique id
     log_info(tt::LogTest, "Running Test ID: {}, Run ID: {}", test_config.test_id, unit_tests::dm::runtime_host_id);

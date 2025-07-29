@@ -4,6 +4,7 @@
 #include "risc_common.h"
 #include "test_config.h"
 #include "in0_kernel.h"
+#include "in1_kernel.h"
 
 using namespace TestConfig;
 
@@ -27,8 +28,8 @@ void kernel_main() {
         in0_sender_receiver_run(
             origin_x_coord, origin_y_coord, phy_x_coord, phy_y_coord, start_x, start_y, end_x, end_y, g_mhartid);
     } else if ((g_mhartid == 1)) {
-        // in1_receiver_run(origin_x_coord, origin_y_coord, phy_x_coord, phy_y_coord, start_x, start_y, end_x, end_y,
-        // g_mhartid);
+        in1_receiver_run(
+            origin_x_coord, origin_y_coord, phy_x_coord, phy_y_coord, start_x, start_y, end_x, end_y, g_mhartid);
     } else if ((g_mhartid == 2)) {
         // output_writer_run(origin_x_coord, origin_y_coord, phy_x_coord, phy_y_coord, start_x, start_y, end_x, end_y,
         // g_mhartid);
