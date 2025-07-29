@@ -13,11 +13,18 @@
 
 namespace NAMESPACE {
 void MAIN {
-    // How many blocks of tiles to work on
-    uint32_t per_core_block_cnt = get_arg_val<uint32_t>(0);
+    // Args for reading data from DRAM
+    uint32_t src0_addr = get_arg_val<uint32_t>(0);
+    uint32_t src0_bank_id = get_arg_val<uint32_t>(1);
+    uint32_t src1_addr = get_arg_val<uint32_t>(2);
+    uint32_t src1_bank_id = get_arg_val<uint32_t>(3);
+    uint32_t num_tiles = get_arg_val<uint32_t>(4);
 
+    // Args for computing the results
+    // How many blocks of tiles to work on
+    uint32_t per_core_block_cnt = get_arg_val<uint32_t>(5);
     // How many tiles per block
-    uint32_t per_core_block_size = get_arg_val<uint32_t>(1);
+    uint32_t per_core_block_size = get_arg_val<uint32_t>(6);
 
     // Input and output circular buffer ids.
     constexpr auto cb_in0 = tt::CBIndex::c_0;

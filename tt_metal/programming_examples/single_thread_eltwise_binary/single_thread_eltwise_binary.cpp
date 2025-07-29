@@ -147,7 +147,17 @@ int main() {
             core,
             {src0_dram_buffer->address(), src0_bank_id, src1_dram_buffer->address(), src1_bank_id, num_tiles});
 
-        SetRuntimeArgs(program, eltwise_binary_kernel_id, core, {num_tiles, 1});
+        SetRuntimeArgs(
+            program,
+            eltwise_binary_kernel_id,
+            core,
+            {src0_dram_buffer->address(),
+             src0_bank_id,
+             src1_dram_buffer->address(),
+             src1_bank_id,
+             num_tiles,
+             num_tiles,
+             1});
 
         SetRuntimeArgs(program, unary_writer_kernel_id, core, {dst_dram_buffer->address(), dst_bank_id, num_tiles});
 
