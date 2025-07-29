@@ -21,7 +21,6 @@ void kernel_main() {
 #ifndef IN0_SHARDED
     constexpr bool src0_is_dram = get_compile_time_arg_val(0) == 1;
 #endif
-
     constexpr bool src1_is_dram = get_compile_time_arg_val(1) == 1;
 
     constexpr uint32_t cb_id_in0 = 0;

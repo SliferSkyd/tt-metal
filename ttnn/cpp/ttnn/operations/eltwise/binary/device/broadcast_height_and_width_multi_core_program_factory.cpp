@@ -10,6 +10,7 @@
 #include <tt-metalium/work_split.hpp>
 #include <tt-metalium/util.hpp>
 #include <tt-metalium/host_api.hpp>
+#include <tt-metalium/tensor_accessor_args.hpp>
 #include "ttnn/device_operation.hpp"
 #include "ttnn/operations/cb_utils.hpp"
 #include "ttnn/operations/data_movement/bcast/bcast.hpp"
@@ -156,31 +157,36 @@ BinaryDeviceOperation::BroadcastHeightAndWidthMultiCore::create(
     KernelHandle binary_reader_kernel_id{};
 
     if (src1_buffer != nullptr) {
-        auto src1_is_dram = static_cast<uint32_t>(src1_buffer->buffer_type() == tt_metal::BufferType::DRAM);
+        bool src0_is_dram = src0_buffer->buffer_type() == tt_metal::BufferType::DRAM;
+        bool src1_is_dram = src1_buffer->buffer_type() == tt_metal::BufferType::DRAM;
+        std::vector<uint32_t> reader_compile_time_args = {(uint32_t)src0_is_dram, (uint32_t)src1_is_dram};
         binary_reader_kernel_id = tt_metal::CreateKernel(
             program,
             "ttnn/cpp/ttnn/operations/eltwise/binary/device/kernels/dataflow/"
             "reader_bcast_hw_interleaved_partitioned.cpp",
             all_device_cores,
-            tt_metal::ReaderDataMovementConfig({src0_is_dram, src1_is_dram}, reader_defines));
+            tt_metal::ReaderDataMovementConfig(reader_compile_time_args, reader_defines));
     } else {
+        bool src0_is_dram = src0_buffer->buffer_type() == tt_metal::BufferType::DRAM;
+        std::vector<uint32_t> reader_compile_time_args = {(uint32_t)src0_is_dram};
         binary_reader_kernel_id = tt_metal::CreateKernel(
             program,
             "ttnn/cpp/ttnn/operations/eltwise/binary/device/kernels/dataflow/"
             "reader_bcast_scalar_interleaved_partitioned.cpp",
             all_device_cores,
-            tt_metal::ReaderDataMovementConfig({src0_is_dram}, reader_defines));
+            tt_metal::ReaderDataMovementConfig(reader_compile_time_args, reader_defines));
     }
 
     std::map<std::string, std::string> writer_defines;
     if (output_sharded) {
         writer_defines["OUT_SHARDED"] = "1";
     }
+    bool dst_buffer_is_dram = dst_buffer->buffer_type() == tt_metal::BufferType::DRAM;
     KernelHandle unary_writer_kernel_id = tt_metal::CreateKernel(
         program,
         "ttnn/cpp/ttnn/operations/eltwise/unary/device/kernels/dataflow/writer_unary_interleaved_start_id.cpp",
         all_device_cores,
-        tt_metal::WriterDataMovementConfig({cb_output, dst_is_dram}, writer_defines));
+        tt_metal::WriterDataMovementConfig({cb_output, dst_buffer_is_dram}, writer_defines));
 
     auto bcast_kernel_id = tt_metal::CreateKernel(
         program,

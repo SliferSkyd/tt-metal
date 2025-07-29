@@ -26,10 +26,10 @@ void kernel_main() {
 
 #ifdef BACKWARDS
     uint32_t end_id = start_id - num_tiles;
-    for (uint32_t i = start_id; i != end_id; --i) {
+    for (uint32_t i = start_id; i != end_id; i--) {
 #else
     uint32_t end_id = start_id + num_tiles;
-    for (uint32_t i = start_id; i < end_id; ++i) {
+    for (uint32_t i = start_id; i < end_id; i++) {
 #endif
         cb_wait_front(cb_id_out, onetile);
         uint32_t l1_read_addr = get_read_ptr(cb_id_out);

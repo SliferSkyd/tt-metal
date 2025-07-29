@@ -17,17 +17,15 @@ void kernel_main() {
     uint32_t NC = get_arg_val<uint32_t>(7);
     uint32_t HtWt = get_arg_val<uint32_t>(8);  // HtWt of input tensor
 
-    constexpr bool dst_is_dram = get_compile_time_arg_val(0) == 1;
+    constexpr auto dst_tensor_args = TensorAccessorArgs<0>();
 
     constexpr uint32_t cb_id_out0 = tt::CBIndex::c_2;
 
     // single-tile ublocks
     constexpr uint32_t onetile = 1;
     const uint32_t tile_bytes = get_tile_size(cb_id_out0);
-    const DataFormat data_format = get_dataformat(cb_id_out0);
 
-    const InterleavedAddrGenFast<dst_is_dram> s = {
-        .bank_base_address = dst_addr, .page_size = tile_bytes, .data_format = data_format};
+    auto dst_accessor = TensorAccessor(dst_tensor_args, dst_addr, tile_bytes);
 
     uint32_t tile_id = 0;
     uint32_t i_nc = 0;
@@ -38,7 +36,8 @@ void kernel_main() {
                 cb_wait_front(cb_id_out0, onetile);
                 uint32_t l1_read_addr = get_read_ptr(cb_id_out0);
 
-                noc_async_write_tile(tile_id, s, l1_read_addr);
+                auto noc_addr = dst_accessor.get_noc_addr(tile_id);
+                noc_async_write(l1_read_addr, noc_addr, tile_bytes);
 
                 noc_async_write_barrier();
 
