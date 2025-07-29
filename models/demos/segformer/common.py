@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import os
+import zipfile
 from pathlib import Path
 
 import torch
@@ -58,3 +59,56 @@ def load_torch_model(reference_model, target_prefix, module="semantic_sub", mode
     reference_model.load_state_dict(new_state_dict)
     reference_model.eval()
     return reference_model
+
+
+def download_and_unzip_dataset(model_location_generator, dataset_path, dataset_name):
+    if model_location_generator == None or "TT_GH_CI_INFRA" not in os.environ:
+        if not os.path.exists(f"models/demos/segformer/demo/{dataset_name}"):
+            os.system("bash models/demos/segformer/demo/data_download.sh")
+        return f"models/demos/segformer/demo/{dataset_name}"
+    else:
+        zip_path = (
+            model_location_generator(f"vision-models/{dataset_path}", model_subdir="", download_if_ci_v2=True)
+            / f"{dataset_name}.zip"
+        )
+        extract_dir = zip_path.parent / f"{dataset_name}"
+
+        if not extract_dir.exists():
+            with zipfile.ZipFile(zip_path, "r") as zip_ref:
+                zip_ref.extractall(extract_dir)
+        # print(f"Files extracted to {extract_dir}:")
+        # for root, dirs, files in os.walk(extract_dir):
+        #     print(f"{root}: {len(files)} files, {len(dirs)} dirs")
+        # with zipfile.ZipFile(zip_path, "r") as zip_ref:
+        #     print("ZIP contents:")
+        #     for f in zip_ref.namelist():
+        #         print(f)
+        file_path = str(extract_dir / dataset_name)
+        return file_path
+
+
+# def download_and_unzip_dataset(model_location_generator, dataset_path, dataset_name):
+#     if model_location_generator == None or "TT_GH_CI_INFRA" not in os.environ:
+#         if not os.path.exists(f"models/demos/segformer/demo/{dataset_name}"):
+#             os.system("bash models/demos/segformer/demo/data_download.sh")
+#         return f"models/demos/segformer/demo/{dataset_name}"
+#     else:
+#         download_url = (
+#             model_location_generator(f"vision-models/{dataset_path}", model_subdir="", download_if_ci_v2=True)
+#             / f"{dataset_name}.zip"
+#         )
+#         dataset_local_zip = os.path.join("models/demos/segformer/demo", f"{dataset_name}.zip")
+#         extract_dir = dataset_local_zip[:-4]
+
+#         if not dataset_local_zip.exists():
+#             if download_url is None:
+#                 raise FileNotFoundError(f"{download_url} not found and no download_url provided.")
+#             response = requests.get(download_url)
+#             dataset_local_zip.parent.mkdir(parents=True, exist_ok=True)
+#             with open(dataset_local_zip, "wb") as f:
+#                 f.write(response.content)
+
+#         if not extract_dir.exists():
+#             with zipfile.ZipFile(dataset_local_zip, "r") as zip_ref:
+#                 zip_ref.extractall(extract_dir)
+#         return extract_dir
