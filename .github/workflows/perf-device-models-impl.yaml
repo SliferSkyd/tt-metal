@@ -62,7 +62,7 @@ jobs:
           wheel-artifact-name: ${{ inputs.wheel-artifact-name }}
       - name: Setup report
         run: |
-          cat Models_Device_Perf_$(date +%Y_%m_%d).csv
+          touch Models_Device_Perf_$(date +%Y_%m_%d).csv
           > Models_Device_Perf_$(date +%Y_%m_%d).csv
           export DEVICE_PERF_REPORT_FINAL=Models_Device_Perf_$(date +%Y_%m_%d).csv
       - name: non-civ2 tests
