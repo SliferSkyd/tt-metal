@@ -59,7 +59,6 @@ tt::tt_metal::operation::ProgramWithCallbacks rm_repeater_last_dim(
     // write page Since the logical volumes match, we are guaranteed that the very last page is aligned
     uint32_t number_of_pages = input_log_shape[-2];
     uint32_t responsibility = ((number_of_pages - 1) / num_cores_total) + 1;
-    uint32_t src0_is_dram = src_buffer->buffer_type() == tt::tt_metal::BufferType::DRAM ? 1 : 0;
     uint32_t cb_size_bytes = READ_ALIGNMENT * 2 + (source_page_size_bytes & 0xF) == 0 ? source_page_size_bytes
                              : (source_page_size_bytes & 0x7) == 0                    ? source_page_size_bytes * 2
                              : (source_page_size_bytes & 0x3) == 0                    ? source_page_size_bytes * 4
@@ -75,20 +74,10 @@ tt::tt_metal::operation::ProgramWithCallbacks rm_repeater_last_dim(
         tt::tt_metal::CircularBufferConfig(cb_size_bytes, {{src1_cb_index, cb_data_format}})
             .set_page_size(src1_cb_index, cb_size_bytes);
     auto cb_src1 = tt::tt_metal::CreateCircularBuffer(program, total_cores, cb_src1_config);
-    bool source_page_is_pow_2 = tt::tt_metal::is_power_of_two_at_least_32(source_page_size_bytes);
-    uint32_t source_page_pow_2 = source_page_is_pow_2 ? (std::uint32_t)std::log2(source_page_size_bytes) : 0;
-    bool dest_page_is_pow_2 = tt::tt_metal::is_power_of_two_at_least_32(dest_page_size_bytes);
-    uint32_t dest_page_pow_2 = dest_page_is_pow_2 ? (std::uint32_t)std::log2(dest_page_size_bytes) : 0;
-    std::vector<uint32_t> compile_time_args = {
-        (std::uint32_t)src0_is_dram,
-        (std::uint32_t)source_page_size_bytes,
-        (std::uint32_t)num_repeats,
-        src0_cb_index,
-        src1_cb_index,
-        source_page_is_pow_2,
-        source_page_pow_2,
-        dest_page_is_pow_2,
-        dest_page_pow_2};
+
+    std::vector<uint32_t> compile_time_args = {source_page_size_bytes, num_repeats, src0_cb_index, src1_cb_index};
+    tt::tt_metal::TensorAccessorArgs(*src_buffer).append_to(compile_time_args);
+    tt::tt_metal::TensorAccessorArgs(*dst_buffer).append_to(compile_time_args);
 
     tt::tt_metal::KernelHandle reader_kernel_id = tt::tt_metal::CreateKernel(
         program,
