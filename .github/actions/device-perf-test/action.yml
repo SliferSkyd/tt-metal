@@ -5,6 +5,9 @@ inputs:
   commands:
     required: true
     description: "Shell commands to run the test"
+  slack_webhook_url:
+    required: true
+    description: "Slack webhook URL"
 runs:
   using: "composite"
   steps:
@@ -25,5 +28,5 @@ runs:
     - uses: ./.github/actions/slack-report
       if: ${{ failure() }}
       with:
-        slack_webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+        slack_webhook_url: ${{ inputs.slack_webhook_url }}
         owner: U084DCKE0B0
