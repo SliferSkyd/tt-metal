@@ -252,7 +252,9 @@ uint32_t calculate_L1_usage(
         return factor * alignment_bytes;
     };
 
-    uint32_t mul_cb_size = 2 * 8 * in_cb_pagesize;
+    uint32_t num_pages_to_8 = 8 / in_ntiles_c;
+
+    uint32_t mul_cb_size = 2 * num_pages_to_8 * in_cb_pagesize;
 
     return in_scalar_cb_size_0 + in_scalar_cb_size_1 + clear_value_cb_size + 2 * in_cb_config_0_size + mul_cb_size +
            in_cb_config_1_size + align(out_cb_config_size) /* global, involved */;

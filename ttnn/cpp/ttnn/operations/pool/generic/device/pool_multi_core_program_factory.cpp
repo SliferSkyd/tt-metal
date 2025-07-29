@@ -408,8 +408,10 @@ Pool2D::MultiCore::cached_program_t pool2d_multi_core_sharded_with_halo_v2_impl_
     auto [weight_cb_id, cb_weight] =
         tt::tt_metal::create_cb(next_cb_index++, program, all_cores, in_cb_pagesize, in_cb_npages, in_df);
 
-    auto [mul_cb_id, cb_mul] =
-        tt::tt_metal::create_cb(next_cb_index++, program, all_cores, in_cb_pagesize, multi_buffering_factor * 8, in_df);
+    uint32_t num_pages_to_8 = 8 / in_ntiles_c;
+
+    auto [mul_cb_id, cb_mul] = tt::tt_metal::create_cb(
+        next_cb_index++, program, all_cores, in_cb_pagesize, multi_buffering_factor * num_pages_to_8, in_df);
 
     log_info(tt::LogOp, "weight: Page size = {}, Num pages = {}", in_cb_pagesize, in_cb_npages);
 
@@ -423,7 +425,7 @@ Pool2D::MultiCore::cached_program_t pool2d_multi_core_sharded_with_halo_v2_impl_
 
     auto [out_cb_id, cb_out] = tt::tt_metal::create_cb(
         next_cb_index++, program, all_cores, out_cb_pagesize, out_cb_npages, out_df, output.buffer());
-    log_debug(tt::LogOp, "CB {} :: PS = {}, NP = {}", out_cb_id, out_cb_pagesize, out_cb_npages);
+    log_info(tt::LogOp, "CB {} :: PS = {}, NP = {}", out_cb_id, out_cb_pagesize, out_cb_npages);
 
     TT_FATAL(output.memory_config().is_sharded(), "Output memory config needs to be sharded");
 

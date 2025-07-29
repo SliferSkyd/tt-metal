@@ -6,12 +6,30 @@
 #include "dataflow_api.h"
 #include "reader_pool2d_sharded_common.hpp"
 
-#define ENABLE_DEBUG_PRINT 0
+#define ENABLE_DEBUG_PRINT 1
 
 #if ENABLE_DEBUG_PRINT == 1
 #include "debug/dprint.h"
 #include "debug/dprint_pages.h"
 #endif
+
+template <uint32_t cb_id>
+FORCE_INLINE void zero_out_tiles() {
+    constexpr uint32_t tile_size = get_tile_size(cb_id);
+    static_assert(
+        tile_size % MEM_ZEROS_SIZE == 0, "Tile size must be a multiple of MEM_ZEROS_BASE for zeroing out tiles");
+    const uint32_t num_tiles = get_local_cb_interface(cb_id).fifo_num_pages;
+    const uint32_t num_zeros_reads = (tile_size / MEM_ZEROS_SIZE) * num_tiles;
+    uint64_t zeros_noc_addr = get_noc_addr(MEM_ZEROS_BASE);
+    uint32_t write_addr = get_write_ptr(cb_id);
+
+    noc_async_read_one_packet_set_state(zeros_noc_addr, MEM_ZEROS_SIZE);
+    for (uint32_t i = 0; i < num_zeros_reads; ++i) {
+        noc_async_read_one_packet_with_state(zeros_noc_addr, write_addr);
+        write_addr += MEM_ZEROS_SIZE;
+    }
+    noc_async_write_barrier();
+}
 
 template <
     bool is_wide_reduction,
@@ -31,6 +49,7 @@ FORCE_INLINE void read_window_with_top_left_index(
     if constexpr (is_wide_reduction) {
         for (uint32_t c_i = 0; c_i < in_nblocks_c; ++c_i) {
             cb_reserve_back(in_cb_id, 1);
+            // zero_out_tiles<in_cb_id>();
             uint32_t out_l1_write_addr = get_write_ptr(in_cb_id);
 
             uint32_t read_bytes = MAX_BYTES_PER_REDUCTION;
@@ -55,7 +74,10 @@ FORCE_INLINE void read_window_with_top_left_index(
             cb_push_back(in_cb_id, 1);
         }
     } else {
+        // DPRINT << "saljem " << ENDL();
         cb_reserve_back(in_cb_id, 1);
+        // zero_out_tiles<in_cb_id>();
+        // DPRINT << "poslao " << ENDL();
         uint32_t out_l1_write_addr = get_write_ptr(in_cb_id);
         uint32_t h_multiples = 0;
         for (uint32_t h = 0; h < window_h; ++h, h_multiples += in_w_padded) {
@@ -65,7 +87,9 @@ FORCE_INLINE void read_window_with_top_left_index(
             out_l1_write_addr += in_nbytes_c * window_w;
         }
         noc_async_read_barrier();
+        DPRINT << "saljem" << ENDL();
         cb_push_back(in_cb_id, 1);
+        // tt::data_movement::common::print_bf16_pages(get_read_ptr(in_cb_id), 64, 32);
     }
 }
 
@@ -171,7 +195,7 @@ void kernel_main() {
     }
 
     if constexpr (reader_id == 0) {
-        fill_with_val(get_write_ptr(weight_cb_id), TILE_HEIGHT * TILE_WIDTH / 4, 0x3f80);
+        fill_with_val(get_write_ptr(weight_cb_id), TILE_HEIGHT * TILE_WIDTH, 0x3f80);
     } else {
         fill_with_val(
             get_write_ptr(weight_cb_id) + (TILE_HEIGHT * TILE_WIDTH) / 4, TILE_HEIGHT * TILE_WIDTH / 4, 0x3f80);
