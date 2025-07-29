@@ -5,6 +5,7 @@
 #pragma once
 
 #include <umd/device/types/cluster_descriptor_types.h>
+#include "context/metal_context.hpp"
 #include "gtest/gtest.h"
 #include <map>
 #include <tt-metalium/host_api.hpp>
@@ -15,8 +16,6 @@
 #include <tt-metalium/command_queue.hpp>
 #include <tt-metalium/device.hpp>
 #include <tt-metalium/device_pool.hpp>
-#include "llrt.hpp"
-#include <tt-logger/tt-logger.hpp>
 
 namespace tt::tt_metal {
 
@@ -107,6 +106,7 @@ protected:
             tt::tt_metal::detail::CloseDevices(id_to_device_);
             id_to_device_.clear();
             devices_.clear();
+            MetalContext::instance().teardown();
         }
     }
 
