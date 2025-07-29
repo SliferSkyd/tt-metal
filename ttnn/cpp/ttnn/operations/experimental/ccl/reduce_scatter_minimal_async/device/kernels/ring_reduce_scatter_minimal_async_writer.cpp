@@ -118,16 +118,17 @@ void kernel_main() {
 
         fabric_direction_connection->wait_for_empty_write_slot();
 
-        fabric_direction_connection->send_payload_without_header_non_blocking_from_address(
-            l1_read_addr, intermediate_page_size);
+        // fabric_direction_connection->send_payload_without_header_non_blocking_from_address(
+        //     l1_read_addr, intermediate_page_size);
 
-        fabric_direction_connection->send_payload_flush_non_blocking_from_address(
-            (uint32_t)pkt_hdr, sizeof(PACKET_HEADER_TYPE));
+        // fabric_direction_connection->send_payload_flush_non_blocking_from_address(
+        //     (uint32_t)pkt_hdr, sizeof(PACKET_HEADER_TYPE));
         noc_async_writes_flushed();
     }
     reinterpret_cast<volatile uint32_t*>(1000000)[5] = 0xD0C0FFEE;
 
     if (fabric_connection.is_logically_connected()) {
+        // THIS IS EXPOSING THE ISSUE
         fabric_connection.close();
     }
 

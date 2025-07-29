@@ -75,8 +75,8 @@ void kernel_main() {
     reinterpret_cast<volatile uint32_t*>(1000000)[10] = 0x10C0FFEE;
     reinterpret_cast<volatile uint32_t*>(1000000)[12] = 0;
     reinterpret_cast<volatile uint32_t*>(1000000)[11] = 0;
+    DPRINT << "reading to: " << DEC() << (uint32_t)l1_write_addr << "\n";
     for (uint32_t x = 0; x < 1000; ++x) {
-        // DPRINT << "noc_address: " << HEX() << (uint64_t)input_tensor_addrgen.get_noc_addr(0) << "\n";
         reinterpret_cast<volatile uint32_t*>(1000000)[11] = x;
         noc_async_read_tile(0, input_tensor_addrgen, l1_write_addr);
     }

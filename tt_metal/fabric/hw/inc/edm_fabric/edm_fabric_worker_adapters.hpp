@@ -467,13 +467,33 @@ struct WorkerToFabricEdmSenderImpl {
         // buffer index stored at location after handshake addr
         if (!I_USE_STREAM_REG_FOR_CREDIT_RECEIVE) {
             const uint64_t remote_buffer_index_addr = dest_noc_addr_coord_only | edm_copy_of_wr_counter_addr;
-            noc_inline_dw_write(remote_buffer_index_addr, this->buffer_slot_write_counter.counter);
+            DPRINT << "remote_buffer_index_addr: " << HEX() << remote_buffer_index_addr << "\n";
+            DPRINT << "noc_get_interim_inline_value_addr(noc, addr): " << HEX()
+                   << noc_get_interim_inline_value_addr(noc_index, remote_buffer_index_addr) << "\n";
+            // print out the noc cmd buf state
+            // write_cmd_buf
+            // DPRINT << "NOC_CTRL: " << HEX() << NOC_CMD_BUF_READ_REG(noc_index, write_cmd_buf, NOC_AT_LEN_BE) <<
+            //     "\nNOC_TARG_ADDR_LO: " << NOC_CMD_BUF_READ_REG(noc_index, write_cmd_buf, NOC_AT_LEN_BE) <<
+            //     "\nNOC_RET_ADDR_LO: " << NOC_CMD_BUF_READ_REG(noc_index, write_cmd_buf, NOC_AT_LEN_BE) <<
+            //     "\nNOC_RET_ADDR_MID: " << NOC_CMD_BUF_READ_REG(noc_index, write_cmd_buf, NOC_AT_LEN_BE) <<
+            //     "\nNOC_BRCST_EXCLUDE: " << NOC_CMD_BUF_READ_REG(noc_index, write_cmd_buf, NOC_AT_LEN_BE) <<
+            //     "\nNOC_AT_LEN_BE: " << NOC_CMD_BUF_READ_REG(noc_index, write_cmd_buf, NOC_AT_LEN_BE) <<
+            //     "\nNOC_CMD_CTRL: " << NOC_CMD_BUF_READ_REG(noc_index, write_cmd_buf, NOC_AT_LEN_BE) << "\n";
+
+            // When enabled - noc hanghappens
+            // -- even if seemingly fabric ack is removed
+            noc_inline_dw_write(remote_buffer_index_addr, this->buffer_slot_write_counter.counter);  // this write is
+                                                                                                     // oka
         } else {
             const uint64_t remote_buffer_index_addr = dest_noc_addr_coord_only | edm_copy_of_wr_counter_addr;
             noc_inline_dw_write(remote_buffer_index_addr, this->get_buffer_slot_index());
         }
         const uint64_t dest_edm_connection_state_addr = dest_noc_addr_coord_only | edm_connection_handshake_l1_addr;
+        DPRINT << "remote_buffer_index_addr: " << HEX() << dest_edm_connection_state_addr << "\n";
+        DPRINT << "noc_get_interim_inline_value_addr(noc, addr): " << HEX()
+               << noc_get_interim_inline_value_addr(noc_index, dest_edm_connection_state_addr) << "\n";
         noc_inline_dw_write(dest_edm_connection_state_addr, close_connection_request_value);
+        return;
     }
 
     // Advanced usage API:
@@ -482,6 +502,7 @@ struct WorkerToFabricEdmSenderImpl {
     // Must be called alongside (after) close_start().
     void close_finish() {
         WAYPOINT("FCFW");
+        return;
         // Need to wait for the ack to teardown notice, from edm
         while (*this->worker_teardown_addr != 1) {
             invalidate_l1_cache();

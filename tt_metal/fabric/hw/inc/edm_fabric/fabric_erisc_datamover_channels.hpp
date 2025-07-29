@@ -249,6 +249,8 @@ struct EdmChannelWorkerInterface {
 
         this->copy_read_counter_to_worker_location_info();
 
+        DPRINT << "worker_semaphore_address: " << HEX() << worker_semaphore_address << "\n";
+        return;
         noc_semaphore_inc<posted>(worker_semaphore_address, 1, tt::tt_fabric::worker_handshake_noc);
     }
 
