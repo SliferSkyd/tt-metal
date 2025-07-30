@@ -13,6 +13,7 @@ from models.experimental.uniad.reference import uniad_utils
 from tests.ttnn.integration_tests.uniad.test_ttnn_motion_transformer_decoder import custom_preprocessor_motion_decoder
 from models.experimental.uniad.tt.ttnn_motion_head import TtMotionHead
 from models.experimental.uniad.tt import ttnn_uniad_utils
+from tests.ttnn.utils_for_testing import assert_with_pcc
 
 from ttnn.model_preprocessing import (
     infer_ttnn_module_args,
@@ -433,5 +434,40 @@ def test_uniad_MotionHead(device, reset_seeds):
     torch_output = reference_model.forward_test(bev_embed, outs_track, outs_seg)
     ttnn_output = ttnn_model.forward_test(ttnn_bev_embed, ttnn_outs_track, ttnn_outs_seg)
 
-    # from tests.ttnn.utils_for_testing import assert_with_pcc
-    # assert_with_pcc(torch_output,ttnn.to_torch(ttnn_output),pcc=0.99)
+    assert_with_pcc(
+        torch_output[0][0]["traj_0"], ttnn.to_torch(ttnn_output[0][0]["traj_0"]), pcc=0.999
+    )  # 0.9993774037698014
+    assert_with_pcc(
+        torch_output[0][0]["traj_scores_0"], ttnn.to_torch(ttnn_output[0][0]["traj_scores_0"]), pcc=0.98
+    )  #  0.9898022321172142
+    assert_with_pcc(
+        torch_output[0][0]["traj_1"], ttnn.to_torch(ttnn_output[0][0]["traj_1"]), pcc=0.99
+    )  # 0.996325248631942
+    assert_with_pcc(
+        torch_output[0][0]["traj_scores_1"], ttnn.to_torch(ttnn_output[0][0]["traj_scores_1"]), pcc=0.94
+    )  # 0.9471425940670963
+    assert_with_pcc(
+        torch_output[0][0]["traj"], ttnn.to_torch(ttnn_output[0][0]["traj"]), pcc=0.99
+    )  # 0.9944974337090697
+    assert_with_pcc(
+        torch_output[0][0]["traj_scores"], ttnn.to_torch(ttnn_output[0][0]["traj_scores"]), pcc=0.93
+    )  # 0.9495251948032097
+
+    assert_with_pcc(
+        torch_output[1]["all_traj_scores"], ttnn.to_torch(ttnn_output[1]["all_traj_scores"]), pcc=0.94
+    )  # 0.9556107035315878
+    assert_with_pcc(
+        torch_output[1]["all_traj_preds"], ttnn.to_torch(ttnn_output[1]["all_traj_preds"]), pcc=0.99
+    )  # 0.9966735089661874
+    assert_with_pcc(
+        torch_output[1]["valid_traj_masks"], ttnn.to_torch(ttnn_output[1]["valid_traj_masks"]), pcc=0.99
+    )  # 1.0
+    assert_with_pcc(
+        torch_output[1]["sdc_traj_query"], ttnn.to_torch(ttnn_output[1]["sdc_traj_query"]), pcc=0.99
+    )  # 0.9961219810395238
+    assert_with_pcc(
+        torch_output[1]["sdc_track_query"], ttnn.to_torch(ttnn_output[1]["sdc_track_query"]), pcc=0.999
+    )  # 0.9999985195832592
+    assert_with_pcc(
+        torch_output[1]["sdc_track_query_pos"], ttnn.to_torch(ttnn_output[1]["sdc_track_query_pos"]), pcc=0.9999
+    )  # 0.9999986120892685

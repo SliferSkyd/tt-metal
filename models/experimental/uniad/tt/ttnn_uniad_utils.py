@@ -86,14 +86,30 @@ def anchor_coordinate_transform(anchors, bbox_results, with_translation_transfor
             transformed_anchors = ttnn.permute(
                 transformed_anchors, (0, 1, 2, 4, 3)  # "b g m t c -> b g m c t"
             )  # 1, num_groups, num_modes, 12, 2 -> 1, num_groups, num_modes, 2, 12
-            device = rot_yaw.device()
-            rot_yaw = ttnn.to_torch(rot_yaw)
-            transformed_anchors = ttnn.to_torch(transformed_anchors)
-            transformed_anchors = torch.matmul(
-                rot_yaw, transformed_anchors
+
+            rot_yaw = ttnn.squeeze(rot_yaw, 0)
+            transformed_anchors = ttnn.squeeze(transformed_anchors, 0)
+
+            input_rot_yaw_ttnn_bc = ttnn.experimental.broadcast_to(
+                rot_yaw,
+                ttnn.Shape(
+                    (
+                        transformed_anchors.shape[0],
+                        transformed_anchors.shape[1],
+                        transformed_anchors.shape[2],
+                        rot_yaw.shape[-1],
+                    )
+                ),
+                memory_config=ttnn.DRAM_MEMORY_CONFIG,
+            )
+
+            transformed_anchors = ttnn.matmul(
+                input_rot_yaw_ttnn_bc, transformed_anchors
             )  # -> num_agents, num_groups, num_modes, 12, 2
-            rot_yaw = ttnn.from_torch(rot_yaw, device=device, layout=ttnn.TILE_LAYOUT)
-            transformed_anchors = ttnn.from_torch(transformed_anchors, device=device, layout=ttnn.TILE_LAYOUT)
+
+            rot_yaw = ttnn.unsqueeze(rot_yaw, 0)
+            transformed_anchors = ttnn.unsqueeze(transformed_anchors, 0)
+
             transformed_anchors = ttnn.permute(transformed_anchors, (0, 1, 2, 4, 3))  # , "b g m c t -> b g m t c")
         if with_translation_transform:
             transformed_anchors = (
@@ -136,12 +152,21 @@ def trajectory_coordinate_transform(
             # Squeezing because matmul doesn't support 5D
             rot_yaw = ttnn.squeeze(rot_yaw, 0)
             transformed_trajectory = ttnn.squeeze(transformed_trajectory, 0)
-            device = rot_yaw.device()
-            rot_yaw = ttnn.to_torch(rot_yaw)
-            transformed_trajectory = ttnn.to_torch(transformed_trajectory)
-            transformed_trajectory = torch.matmul(rot_yaw, transformed_trajectory)  # -> A, G, P, 12, 2
-            rot_yaw = ttnn.from_torch(rot_yaw, device=device, layout=ttnn.TILE_LAYOUT)
-            transformed_trajectory = ttnn.from_torch(transformed_trajectory, device=device, layout=ttnn.TILE_LAYOUT)
+
+            input_rot_yaw_ttnn_bc = ttnn.experimental.broadcast_to(
+                rot_yaw,
+                ttnn.Shape(
+                    (
+                        transformed_trajectory.shape[0],
+                        transformed_trajectory.shape[1],
+                        transformed_trajectory.shape[2],
+                        rot_yaw.shape[-1],
+                    )
+                ),
+                memory_config=ttnn.DRAM_MEMORY_CONFIG,
+            )
+            transformed_trajectory = ttnn.matmul(input_rot_yaw_ttnn_bc, transformed_trajectory)  # -> A, G, P, 12, 2
+
             rot_yaw = ttnn.unsqueeze(rot_yaw, 0)
             transformed_trajectory = ttnn.unsqueeze(transformed_trajectory, 0)
 
@@ -222,7 +247,7 @@ class TtBaseInstance3DBoxes:
         assert b.dim() == 2, f"Indexing on Boxes with {item} failed to return a matrix!"
         return original_type(b, box_dim=self.box_dim, with_yaw=self.with_yaw)
 
-    def to(self, device: Union[str, torch.device], *args, **kwargs) -> "TtBaseInstance3DBoxes":
+    def to(self, device, *args, **kwargs) -> "TtBaseInstance3DBoxes":
         original_type = type(self)
         return original_type(self.tensor.to(device, *args, **kwargs), box_dim=self.box_dim, with_yaw=self.with_yaw)
 

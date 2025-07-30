@@ -2,9 +2,7 @@
 
 # SPDX-License-Identifier: Apache-2.0
 
-import torch
 import pickle
-import torch.nn as nn
 import numpy as np
 
 import ttnn
@@ -63,24 +61,24 @@ class TtMotionHead:
         self.vehicle_id_list = vehicle_id_list
 
         self.use_nonlinear_optimizer = use_nonlinear_optimizer
-        self._build_loss(loss_traj)
+        # self._build_loss(loss_traj)
         self._load_anchors(anchor_info_path)
         self._build_layers(transformerlayers, det_layer_num)
         self._init_layers()
 
-    def _build_loss(self, loss_traj):
-        """
-        Build the loss function for the motion prediction task.
+    # def _build_loss(self, loss_traj):
+    #     """
+    #     Build the loss function for the motion prediction task.
 
-        Args:
-            loss_traj (dict): A dictionary containing the parameters for the loss function.
+    #     Args:
+    #         loss_traj (dict): A dictionary containing the parameters for the loss function.
 
-        Returns:
-            None
-        """
-        # self.loss_traj = build_loss(loss_traj)
-        # self.unflatten_traj = nn.Unflatten(3, (self.predict_steps, 5))
-        self.log_softmax = nn.LogSoftmax(dim=2)
+    #     Returns:
+    #         None
+    #     """
+    #     # self.loss_traj = build_loss(loss_traj)
+    #     # self.unflatten_traj = nn.Unflatten(3, (self.predict_steps, 5))
+    #     self.log_softmax = nn.LogSoftmax(dim=2)
 
     def _load_anchors(self, anchor_info_path):
         """
@@ -95,9 +93,12 @@ class TtMotionHead:
         anchor_infos = pickle.load(open(anchor_info_path, "rb"))
         self.kmeans_anchors = ttnn.stack(
             [
-                ttnn.from_torch(torch.from_numpy(a), device=self.device, layout=ttnn.TILE_LAYOUT, dtype=ttnn.bfloat16)
+                ttnn.to_device(
+                    ttnn.to_dtype(ttnn.Tensor(a.astype(np.float32), layout=ttnn.TILE_LAYOUT), dtype=ttnn.bfloat16),
+                    device=self.device,
+                )
                 for a in anchor_infos["anchors_all"]
-            ],
+            ],  # changing this reduced the outputs_traj_scores pcc from 0.95 to 0.94
             dim=0,
         )  # Nc, Pc, steps, 2
 

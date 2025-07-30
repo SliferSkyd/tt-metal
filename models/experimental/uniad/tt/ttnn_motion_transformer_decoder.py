@@ -561,11 +561,6 @@ class TtMotionTransformerDecoder:
                             dtype=ttnn.bfloat16,
                         )
 
-            # fuse static and dynamic intention embedding
-            # query_embed_intention = self.static_dynamic_fuser(
-            #     torch.cat([static_intention_embed, dynamic_query_embed], dim=-1)
-            # )  # (B, A, P, D)
-
             for index, layer in enumerate(self.static_dynamic_fuser):
                 if index == 0:
                     query_embed_intention = layer(
@@ -584,9 +579,6 @@ class TtMotionTransformerDecoder:
                             bias=self.parameters.static_dynamic_fuser[index].bias,
                             dtype=ttnn.bfloat16,
                         )
-
-            # # fuse intention embedding with query embedding
-            # query_embed = self.in_query_fuser(torch.cat([query_embed, query_embed_intention], dim=-1))
 
             for index, layer in enumerate(self.in_query_fuser):
                 if index == 0:
