@@ -45,7 +45,7 @@ int main() {
         constexpr CoreCoord core = {0, 0};
 
         constexpr uint32_t single_tile_size = 2 * 1024;
-        constexpr uint32_t num_tiles = 64;
+        constexpr uint32_t num_tiles = 1;
         constexpr uint32_t dram_buffer_size =
             single_tile_size * num_tiles;  // num_tiles of FP16_B, hard-coded in the reader/writer kernels
 
@@ -132,7 +132,7 @@ int main() {
 
         EnqueueWriteBuffer(cq, src0_dram_buffer, src0_vec, false);
 
-        constexpr float val_to_add = -1.0f;
+        constexpr float val_to_add = -2.0f;
         std::vector<uint32_t> src1_vec = create_constant_vector_of_bfloat16(dram_buffer_size, val_to_add);
 
         EnqueueWriteBuffer(cq, src1_dram_buffer, src1_vec, false);
