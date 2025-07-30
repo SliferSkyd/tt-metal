@@ -591,7 +591,7 @@ inline void fabric_client_disconnect(volatile tt_l1_ptr fabric_push_client_inter
     uint64_t client_q_addr = get_noc_addr_helper(client_interface->router_addr_h, FABRIC_ROUTER_CLIENT_QUEUE_START);
 
     // update wr ptr for the next client
-    noc_inline_dw_write<true>(
+    noc_inline_dw_write<false>(
         client_q_addr + offsetof(fabric_push_client_queue_t, router_wr_ptr), client_interface->wr_ptr);
 
     // update curr client index so that the next client in the queue can connect
