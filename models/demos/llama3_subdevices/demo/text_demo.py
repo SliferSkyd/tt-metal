@@ -1058,7 +1058,7 @@ def test_demo_text(
         total_inference_decode_time += profiler.get_duration(f"inference_decode_time_{i}")
 
     # Average prefill time for each user
-    avg_time_to_first_token = total_inference_prefill_time
+    avg_time_to_first_token = total_inference_prefill_time / batch_size
     # Average decode time per batch iteration
     avg_decode_iteration_time = total_inference_decode_time / (iteration - 1)
 
@@ -1089,6 +1089,7 @@ def test_demo_text(
 
     # Decode performance for some specific tokens
     tok_1_perf = profiler.get_duration(f"inference_decode_time_{1}")  # Iteration 0 is compile time
+    tok_9_perf = profiler.get_duration(f"inference_decode_time_{9}") if 9 < iteration else 0
     tok_128_perf = profiler.get_duration(f"inference_decode_time_{127}") if 127 < iteration else 0
     tok_1024_perf = profiler.get_duration(f"inference_decode_time_{1023}") if 1023 < iteration else 0
     tok_4096_perf = profiler.get_duration(f"inference_decode_time_{4095}") if 4095 < iteration else 0
@@ -1098,21 +1099,26 @@ def test_demo_text(
 
     logger.info("")
     logger.info(f"=== Performance metrics ===")
-    logger.info(
-        f"1st token decode time: {tok_1_perf*1000:.2f}ms [{round(1/tok_1_perf, 2)} t/s/u, {round((1/tok_1_perf)*batch_size, 2)} t/s]"
-    )
-    if tok_128_perf > 0:
+    # logger.info(
+    #     f"1st token decode time: {tok_1_perf*1000:.2f}ms [{round(1/tok_1_perf, 2)} t/s/u, {round((1/tok_1_perf)*batch_size, 2)} t/s]"
+    # )
+    if tok_9_perf > 0:
         logger.info(
-            f"128th token decode time: {tok_128_perf*1000:.2f}ms [{round(1/tok_128_perf, 2)} t/s/u, {round((1/tok_128_perf)*batch_size, 2)} t/s]"
+            f"Token position 128 decode time: {tok_9_perf*1000:.2f}ms [{round(1/tok_9_perf, 2)} t/s/u, {round((1/tok_9_perf)*batch_size, 2)} t/s]"
         )
-    if tok_1024_perf > 0:
-        logger.info(
-            f"1024th token decode time: {tok_1024_perf*1000:.2f}ms [{round(1/tok_1024_perf, 2)} t/s/u, {round((1/tok_1024_perf)*batch_size, 2)} t/s]"
-        )
-    if tok_4096_perf > 0:
-        logger.info(
-            f"4096th token decode time: {tok_4096_perf*1000:.2f}ms [{round(1/tok_4096_perf, 2)} t/s/u, {round((1/tok_4096_perf)*batch_size, 2)} t/s]"
-        )
+
+    # if tok_128_perf > 0:
+    #     logger.info(
+    #         f"128th token decode time: {tok_128_perf*1000:.2f}ms [{round(1/tok_128_perf, 2)} t/s/u, {round((1/tok_128_perf)*batch_size, 2)} t/s]"
+    #     )
+    # if tok_1024_perf > 0:
+    #     logger.info(
+    #         f"1024th token decode time: {tok_1024_perf*1000:.2f}ms [{round(1/tok_1024_perf, 2)} t/s/u, {round((1/tok_1024_perf)*batch_size, 2)} t/s]"
+    #     )
+    # if tok_4096_perf > 0:
+    #     logger.info(
+    #         f"4096th token decode time: {tok_4096_perf*1000:.2f}ms [{round(1/tok_4096_perf, 2)} t/s/u, {round((1/tok_4096_perf)*batch_size, 2)} t/s]"
+    #     )
 
     # Print some of the perf metrics
     logger.info("==")
