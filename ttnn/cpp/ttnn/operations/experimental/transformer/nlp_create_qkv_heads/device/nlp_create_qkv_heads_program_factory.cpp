@@ -67,7 +67,7 @@ NlpCreateHeadsDeviceOperation::Interleaved::cached_program_t NlpCreateHeadsDevic
     uint32_t kv_out_h_tiles = q_out_h_tiles;
     uint32_t kv_out_w_tiles = q_out_w_tiles;
     if (read_from_input_tensor_kv) {
-        kv_out_h_tiles = input_tensor_kv.value().get_padded_shape()[2] / TILE_HEIGHT;
+        kv_out_h_tiles = input_tensor_kv.value().padded_shape()[2] / TILE_HEIGHT;
     }
     uint32_t kv_out_HtWt = kv_out_h_tiles * kv_out_w_tiles;
     uint32_t kv_out_CHtWt = num_kv_heads * kv_out_HtWt;
@@ -87,8 +87,8 @@ NlpCreateHeadsDeviceOperation::Interleaved::cached_program_t NlpCreateHeadsDevic
             tt::tt_metal::split_work_to_cores(compute_with_storage_grid_size, num_blocks_q);
     uint32_t num_blocks_kv = num_blocks_q;
     if (read_from_input_tensor_kv) {
-        num_blocks_kv = input_tensor_kv.value().get_padded_shape()[0] * input_tensor_kv.value().get_padded_shape()[1] *
-                        input_tensor_kv.value().get_padded_shape()[2] / TILE_HEIGHT;
+        num_blocks_kv = input_tensor_kv.value().padded_shape()[0] * input_tensor_kv.value().padded_shape()[1] *
+                        input_tensor_kv.value().padded_shape()[2] / TILE_HEIGHT;
     }
 
     auto

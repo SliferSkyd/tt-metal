@@ -119,8 +119,8 @@ NlpCreateHeadsDeviceOperation::spec_return_value_t NlpCreateHeadsDeviceOperation
     }
 
     const auto& input_tensor = tensor_args.input_tensor_q;
-    const auto input_shape = input_tensor.get_padded_shape();
-    const auto logical_input_shape = input_tensor.get_logical_shape();
+    const auto input_shape = input_tensor.padded_shape();
+    const auto logical_input_shape = input_tensor.logical_shape();
 
     auto sequence_length_q = input_shape[2];
     auto sequence_length_q_logical = logical_input_shape[2];
@@ -136,9 +136,9 @@ NlpCreateHeadsDeviceOperation::spec_return_value_t NlpCreateHeadsDeviceOperation
     auto sequence_length_kv_logical = sequence_length_q_logical;
     if (tensor_args.input_tensor_kv.has_value()) {
         const auto& input_tensor_kv = tensor_args.input_tensor_kv.value();
-        const auto input_shape_kv = input_tensor_kv.get_padded_shape();
+        const auto input_shape_kv = input_tensor_kv.padded_shape();
         sequence_length_kv = input_shape_kv[2];
-        const auto logical_input_shape_kv = input_tensor_kv.get_logical_shape();
+        const auto logical_input_shape_kv = input_tensor_kv.logical_shape();
         sequence_length_kv_logical = logical_input_shape_kv[2];
     }
 
@@ -148,14 +148,6 @@ NlpCreateHeadsDeviceOperation::spec_return_value_t NlpCreateHeadsDeviceOperation
     const Shape k_output_shape =
         operation_attributes.transpose_k_heads
             ? Shape({input_shape[0], operation_attributes.num_kv_heads, head_dim, sequence_length_kv_logical})
-            : v_output_shape;
-
-    const Shape q_output_padded_shape({input_shape[0], operation_attributes.num_q_heads, sequence_length_q, head_dim});
-    const Shape v_output_padded_shape(
-        {input_shape[0], operation_attributes.num_kv_heads, sequence_length_kv, head_dim});
-    const Shape k_output_padded_shape =
-        operation_attributes.transpose_k_heads
-            ? Shape({input_shape[0], operation_attributes.num_kv_heads, head_dim, sequence_length_kv})
             : v_output_shape;
 
     if (operation_attributes.output_mem_config.is_sharded()) {
@@ -183,45 +175,45 @@ NlpCreateHeadsDeviceOperation::spec_return_value_t NlpCreateHeadsDeviceOperation
     }
 
     return {
-//         TensorSpec(
-//             q_output_shape,
-// <<<<<<< HEAD
-//             tt::tt_metal::TensorLayout(
-//                 input_tensor.dtype(), tt::tt_metal::PageConfig(Layout::TILE), operation_attributes.output_mem_config)),
-//         TensorSpec(
-//             k_output_shape,
-//             tt::tt_metal::TensorLayout(
-//                 input_tensor.dtype(), tt::tt_metal::PageConfig(Layout::TILE), operation_attributes.output_mem_config)),
-//         TensorSpec(
-//             v_output_shape,
-//             tt::tt_metal::TensorLayout(
-//                 input_tensor.dtype(), tt::tt_metal::PageConfig(Layout::TILE), operation_attributes.output_mem_config))};
-// =======
         TensorSpec(
             q_output_shape,
-        tt::tt_metal::TensorLayout::fromPaddedShape(
-            input_tensor.get_dtype(),
-            tt::tt_metal::PageConfig(Layout::TILE),
-            operation_attributes.output_mem_config,
-            q_output_shape,
-            q_output_padded_shape)),
+            tt::tt_metal::TensorLayout(
+                input_tensor.dtype(), tt::tt_metal::PageConfig(Layout::TILE), operation_attributes.output_mem_config)),
         TensorSpec(
             k_output_shape,
-            tt::tt_metal::TensorLayout::fromPaddedShape(
-                input_tensor.get_dtype(),
-                tt::tt_metal::PageConfig(Layout::TILE),
-                operation_attributes.output_mem_config,
-                k_output_shape,
-                k_output_padded_shape)),
+            tt::tt_metal::TensorLayout(
+                input_tensor.dtype(), tt::tt_metal::PageConfig(Layout::TILE), operation_attributes.output_mem_config)),
         TensorSpec(
             v_output_shape,
-            tt::tt_metal::TensorLayout::fromPaddedShape(
-                input_tensor.get_dtype(),
-                tt::tt_metal::PageConfig(Layout::TILE),
-                operation_attributes.output_mem_config,
-                v_output_shape,
-                v_output_padded_shape))};
-// >>>>>>> 62a4ce22a6 (#21896: Fix NlpCreateHeads to use different seq lenght tensors for q and kv, and also fix padding in case seq_len is not divisible by 32. Update SDXL cross-attentions to use fixed op.)
+            tt::tt_metal::TensorLayout(
+                input_tensor.dtype(), tt::tt_metal::PageConfig(Layout::TILE), operation_attributes.output_mem_config))};
+    // =======
+    // TensorSpec(
+    //     q_output_shape,
+    // tt::tt_metal::TensorLayout::fromPaddedShape(
+    //     input_tensor.dtype(),
+    //     tt::tt_metal::PageConfig(Layout::TILE),
+    //     operation_attributes.output_mem_config,
+    //     q_output_shape,
+    //     q_output_padded_shape)),
+    // TensorSpec(
+    //     k_output_shape,
+    //     tt::tt_metal::TensorLayout::fromPaddedShape(
+    //         input_tensor.dtype(),
+    //         tt::tt_metal::PageConfig(Layout::TILE),
+    //         operation_attributes.output_mem_config,
+    //         k_output_shape,
+    //         k_output_padded_shape)),
+    // TensorSpec(
+    //     v_output_shape,
+    //     tt::tt_metal::TensorLayout::fromPaddedShape(
+    //         input_tensor.dtype(),
+    //         tt::tt_metal::PageConfig(Layout::TILE),
+    //         operation_attributes.output_mem_config,
+    //         v_output_shape,
+    //         v_output_padded_shape))};
+    // >>>>>>> 62a4ce22a6 (#21896: Fix NlpCreateHeads to use different seq lenght tensors for q and kv, and also fix
+    // padding in case seq_len is not divisible by 32. Update SDXL cross-attentions to use fixed op.)
 }
 
 NlpCreateHeadsDeviceOperation::tensor_return_value_t NlpCreateHeadsDeviceOperation::create_output_tensors(

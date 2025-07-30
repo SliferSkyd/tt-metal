@@ -39,6 +39,8 @@ class TtAttention(nn.Module):
             exp_approx_mode=False,
         )
 
+        self.use_new = True
+
         q_weights = state_dict[f"{module_path}.to_q.weight"].unsqueeze(0).unsqueeze(0)
         k_weights = state_dict[f"{module_path}.to_k.weight"].unsqueeze(0).unsqueeze(0)
         v_weights = state_dict[f"{module_path}.to_v.weight"].unsqueeze(0).unsqueeze(0)
@@ -72,11 +74,7 @@ class TtAttention(nn.Module):
                 fused_qkv_weights, model_config.attention_weights_dtype, device=device, layout=ttnn.TILE_LAYOUT
             )
         else:
-            self.tt_q_weights, _ = prepare_linear_params(device, q_weights, None, model_config.attention_weights_dtype)
-            self.tt_k_weights, _ = prepare_linear_params(device, k_weights, None, model_config.attention_weights_dtype)
-            self.tt_v_weights, _ = prepare_linear_params(device, v_weights, None, model_config.attention_weights_dtype)
-
-            if 0:
+            if self.use_new:
                 fused_kv_weights = torch.cat(
                     [
                         torch.transpose(k_weights, -2, -1),
@@ -87,7 +85,21 @@ class TtAttention(nn.Module):
                 self.tt_kv_weights = ttnn.from_torch(
                     fused_kv_weights, model_config.attention_weights_dtype, device=device, layout=ttnn.TILE_LAYOUT
                 )
-                self.tt_q_weights, _ = prepare_linear_params(device, q_weights, None, model_config.attention_weights_dtype)
+                self.tt_q_weights, _ = prepare_linear_params(
+                    device, q_weights, None, model_config.attention_weights_dtype
+                )
+                self.kv_program_config = model_config.get_matmul_config(f"{module_path}.to_kv")
+                assert self.kv_program_config is not None, "kv_program_config should not be None"
+            else:
+                self.tt_q_weights, _ = prepare_linear_params(
+                    device, q_weights, None, model_config.attention_weights_dtype
+                )
+                self.tt_k_weights, _ = prepare_linear_params(
+                    device, k_weights, None, model_config.attention_weights_dtype
+                )
+                self.tt_v_weights, _ = prepare_linear_params(
+                    device, v_weights, None, model_config.attention_weights_dtype
+                )
 
             self.k_program_config = model_config.get_matmul_config(f"{module_path}.to_k")
             self.v_program_config = model_config.get_matmul_config(f"{module_path}.to_v")
@@ -134,80 +146,99 @@ class TtAttention(nn.Module):
             qkv_fused = ttnn.sharded_to_interleaved(qkv_fused, ttnn.L1_MEMORY_CONFIG)
 
             (
-                q,
-                k,
-                v,
-            ) = ttnn.experimental.nlp_create_qkv_heads(qkv_fused, num_heads=self.heads, transpose_k_heads=False)
+                q_heads,
+                k_heads,
+                v_heads,
+            ) = ttnn.experimental.nlp_create_qkv_heads(
+                qkv_fused, num_heads=self.heads, transpose_k_heads=False, memory_config=ttnn.DRAM_MEMORY_CONFIG
+            )
+            ttnn.deallocate(qkv_fused)
         else:
-            q_heads = ttnn.linear(
+            q_heads = ttnn.matmul(
                 hidden_states,
                 self.tt_q_weights,
                 program_config=self.dense_out_program_config,
                 compute_kernel_config=self.q_compute_kernel_config,
                 memory_config=ttnn.L1_MEMORY_CONFIG,
             )
-            k_heads = ttnn.matmul(
-                encoder_hidden_states,
-                self.tt_k_weights,
-                memory_config=ttnn.L1_MEMORY_CONFIG,
-                compute_kernel_config=self.default_compute_kernel_config,
-                program_config=self.k_program_config,
-            )
-            v_heads = ttnn.matmul(
-                encoder_hidden_states,
-                self.tt_v_weights,
-                memory_config=ttnn.L1_MEMORY_CONFIG,
-                compute_kernel_config=self.default_compute_kernel_config,
-                program_config=self.v_program_config,
-            )
 
-            q_heads, _, _ = ttnn.experimental.nlp_create_qkv_heads(
-                q_heads,
-                num_heads=self.heads,
-                num_kv_heads=0,
-                transpose_k_heads=False,
-                memory_config=ttnn.DRAM_MEMORY_CONFIG,
-            )
+            if self.use_new == False:
+                k_heads = ttnn.matmul(
+                    encoder_hidden_states,
+                    self.tt_k_weights,
+                    memory_config=ttnn.L1_MEMORY_CONFIG,
+                    compute_kernel_config=self.default_compute_kernel_config,
+                    program_config=self.k_program_config,
+                )
+                v_heads = ttnn.matmul(
+                    encoder_hidden_states,
+                    self.tt_v_weights,
+                    memory_config=ttnn.L1_MEMORY_CONFIG,
+                    compute_kernel_config=self.default_compute_kernel_config,
+                    program_config=self.v_program_config,
+                )
 
-            v_heads, _, _ = ttnn.experimental.nlp_create_qkv_heads(
-                v_heads,
-                num_heads=self.heads,
-                num_kv_heads=0,
-                transpose_k_heads=False,
-                memory_config=ttnn.DRAM_MEMORY_CONFIG,
-            )
+                q_heads, _, _ = ttnn.experimental.nlp_create_qkv_heads(
+                    q_heads,
+                    num_heads=self.heads,
+                    num_kv_heads=0,
+                    transpose_k_heads=False,
+                    memory_config=ttnn.DRAM_MEMORY_CONFIG,
+                )
 
-            k_heads, _, _ = ttnn.experimental.nlp_create_qkv_heads(
-                k_heads,
-                num_heads=self.heads,
-                num_kv_heads=0,
-                transpose_k_heads=False,
-                memory_config=ttnn.DRAM_MEMORY_CONFIG,
-            )
+                v_heads, _, _ = ttnn.experimental.nlp_create_qkv_heads(
+                    v_heads,
+                    num_heads=self.heads,
+                    num_kv_heads=0,
+                    transpose_k_heads=False,
+                    memory_config=ttnn.DRAM_MEMORY_CONFIG,
+                )
 
-            if 0:
-                kv_fused = ttnn.linear(
+                k_heads, _, _ = ttnn.experimental.nlp_create_qkv_heads(
+                    k_heads,
+                    num_heads=self.heads,
+                    num_kv_heads=0,
+                    transpose_k_heads=False,
+                    memory_config=ttnn.DRAM_MEMORY_CONFIG,
+                )
+            else:
+                print("In new code path")
+                print("encoder_hidden_states.shape: ", encoder_hidden_states.shape)
+                print("self.tt_kv_weights.shape: ", self.tt_kv_weights.shape)
+                kv_fused = ttnn.matmul(
                     encoder_hidden_states,
                     self.tt_kv_weights,
-                    bias=None,
+                    memory_config=ttnn.L1_MEMORY_CONFIG,
+                    compute_kernel_config=self.default_compute_kernel_config,
+                    program_config=self.kv_program_config,
                 )
 
                 (
-                    q,
-                    k,
-                    v,
+                    q_heads,
+                    k_heads,
+                    v_heads,
                 ) = ttnn.experimental.nlp_create_qkv_heads(
-                    q,
+                    q_heads,
                     kv_fused,
                     num_heads=self.heads,
                     num_kv_heads=self.heads,
                     transpose_k_heads=False,
+                    memory_config=ttnn.DRAM_MEMORY_CONFIG,
                 )
+                ttnn.deallocate(kv_fused)
+                # ttnn.deallocate(q_heads)
+
+            print(f"q_heads.shape: {q_heads.shape}")
+            print(f"q_heads.padded_shape: {q_heads.padded_shape}")
+            print(f"k_heads.shape: {k_heads.shape}")
+            print(f"k_heads.padded_shape: {k_heads.padded_shape}")
+            print(f"v_heads.shape: {v_heads.shape}")
+            print(f"v_heads.padded_shape: {v_heads.padded_shape}")
 
         hidden_states = ttnn.transformer.scaled_dot_product_attention(
-            q,
-            k,
-            v,
+            q_heads,
+            k_heads,
+            v_heads,
             is_causal=False,
             attn_mask=attention_mask,
             program_config=self.sdpa_program_config,

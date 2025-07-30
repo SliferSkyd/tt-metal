@@ -683,6 +683,22 @@ class ModelOptimisations:
             fused_activation=None,
         )
 
+        # 40 cores, [1, 1, 96, 2048] x [1, 1, 2048, 1280]
+        self.matmul_configs["1D_ATTEN_KV_FUSED_LINEAR_1280"] = self.matmul_configs["1D_ATTEN_K_V_LINEAR_1280"]
+
+        # 40 cores, [1, 1, 96, 2048] x [1, 1, 2048, 2560]
+        self.matmul_configs["1D_ATTEN_KV_FUSED_LINEAR_2560"] = ttnn.MatmulMultiCoreReuseMultiCast1DProgramConfig(
+            compute_with_storage_grid_size=(8, 8),
+            in0_block_w=4,  # max is 64, 4 seems optimal
+            out_subblock_h=3,
+            out_subblock_w=2,
+            per_core_M=3,
+            per_core_N=2,
+            mcast_in0=True,
+            fuse_batch=True,
+            fused_activation=None,
+        )
+
         self.matmul_configs["2D_RESNET_CONV_2560_1280"] = ttnn.MatmulMultiCoreReuseMultiCastProgramConfig(
             compute_with_storage_grid_size=(8, 8),
             in0_block_w=2,
@@ -840,6 +856,14 @@ class ModelOptimisations:
                     return self.matmul_configs["2D_TM_LINEAR_1280"]
 
             # # # ATTN OUT LINEAR # # #
+            if "attn1.to_kv" in matmul_path or "attn2.to_kv" in matmul_path:
+                print("Using 1D_ATTEN_KV_FUSED_LINEAR_1280")
+                print(f"MM config is: {self.matmul_configs['1D_ATTEN_KV_FUSED_LINEAR_1280']}")
+                if "down_blocks.1" in matmul_path or "up_blocks.1" in matmul_path:
+                    return self.matmul_configs["1D_ATTEN_KV_FUSED_LINEAR_1280"]
+                else:
+                    print("Using 1D_ATTEN_KV_FUSED_LINEAR_2560")
+                    return self.matmul_configs["1D_ATTEN_KV_FUSED_LINEAR_2560"]
             if "attn1.to_out" in matmul_path or "attn2.to_out" in matmul_path or "attn2.to_q" in matmul_path:
                 if "down_blocks.1" in matmul_path or "up_blocks.1" in matmul_path:
                     return self.matmul_configs["2D_ATTN_OUT_LINEAR_640"]
