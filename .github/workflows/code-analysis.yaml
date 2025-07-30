@@ -1,197 +1,932 @@
-name: "Code analysis"
+name: Code Owner Analysis
 
 on:
-  schedule:
-    - cron: "0 */3 * * *" # This cron schedule runs the workflow every 3 hours
-  workflow_call:
-    inputs:
-      distro:
-        required: false
-        type: string
-        default: "ubuntu"
-      version:
-        required: false
-        type: string
-        default: "22.04"
-      architecture:
-        required: false
-        type: string
-        default: "amd64"
   workflow_dispatch:
     inputs:
-      distro:
-        required: false
+      branch:
+        description: 'Branch to analyze'
+        required: true
+        default: 'main'
         type: string
-        default: "ubuntu"
-      version:
+      post_as_new_comment:
+        description: 'Post analysis as new comment (instead of updating existing)'
         required: false
-        type: string
-        default: "22.04"
-      architecture:
-        required: false
-        type: string
-        default: "amd64"
+        default: false
+        type: boolean
 
 jobs:
-  determine-scan-type:
+  analyze-codeowners:
     runs-on: ubuntu-latest
-    outputs:
-      do-full-scan: ${{ steps.compute-outputs.outputs.do-full-scan }}
-      do-scan: ${{ steps.compute-outputs.outputs.do-scan }}
-    steps:
-      - id: find-changes
-        uses: tenstorrent/tt-metal/.github/actions/find-changed-files@main
-
-      - id: compute-outputs
-        shell: bash
-        run: |
-          do_full_scan=$([[ "${{ github.ref_name }}" == "main" || "${{ steps.find-changes.outputs.clang-tidy-config-changed }}" == "true" ]] && echo "true" || echo "false")
-          do_scan=$([[ "$do_full_scan" == "true" || "${{ steps.find-changes.outputs.any-code-changed }}" == "true" || "${{ steps.find-changes.outputs.cmake-changed }}" == "true" ]] && echo "true" || echo "false")
-          echo "Do a scan: $do_scan"
-          echo "Do a full scan: $do_full_scan"
-          echo "do-full-scan=$do_full_scan" >> "$GITHUB_OUTPUT"
-          echo "do-scan=$do_scan" >> "$GITHUB_OUTPUT"
-
-  build-docker-image:
-    uses: ./.github/workflows/build-docker-artifact.yaml
     permissions:
-      packages: write
-    secrets: inherit
-    with:
-      distro: ${{ inputs.distro || 'ubuntu' }}
-      version: ${{ inputs.version || '22.04' }}
-      architecture: ${{ inputs.architecture || 'amd64' }}
+      contents: read
+      pull-requests: write
+      actions: read
 
-  clang-tidy:
-    name: 🤖 Clang Tidy
-    needs: [ build-docker-image, determine-scan-type ]
-    if: ${{ needs.determine-scan-type.outputs.do-scan == 'true' }}
-    runs-on: tt-beta-ubuntu-2204-xlarge
-    environment: ${{ github.ref == 'refs/heads/main' && 'mainline' || '' }}
-    container:
-      image: ${{ needs.build-docker-image.outputs.dev-tag || 'docker-image-unresolved!'}}
-      env:
-        CCACHE_REMOTE_ONLY: "true"
-        CCACHE_TEMPDIR: /tmp/ccache
-        CARGO_HOME: /tmp/.cargo
-        TT_FROM_PRECOMPILED_DIR: /work
-      volumes:
-        - ${{ github.workspace }}/docker-job:/work # Subdir to workaround https://github.com/actions/runner/issues/691
-        - /home/ubuntu/.ccache-ci:/github/home/.ccache # HOME is hardcoded for no clear reason: https://github.com/actions/runner/issues/863
-        - /mnt/MLPerf/ccache:/mnt/MLPerf/ccache
-      # Group 1457 is for the shared ccache drive
-      # tmpfs is for efficiency
-      options: >
-        --group-add 1457
-        --tmpfs /tmp
-    defaults:
-      run:
-        shell: bash
-        working-directory: /work # https://github.com/actions/runner/issues/878
     steps:
-      - name: Check Redis credentials
-        # Failing internal jobs draws attention immediately so we can fix them and make them fast.
-        # Forks will never have secrets; don't fail the job for them, they'll just run slower
-        if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false }}
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fetch all branches
         run: |
-          if [ -z "${{ secrets.REDIS_PASSWORD }}" ]; then
-            echo "Redis password is missing. Did you forget 'secrets: inherit'?"
+          git fetch origin
+          git branch -a
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install codeowners
+
+      - name: Check GitHub CLI availability
+        run: |
+          echo "Checking if gh CLI is available..."
+          gh --version || echo "gh CLI not available"
+          echo "GITHUB_TOKEN available: ${{ secrets.GITHUB_TOKEN != '' }}"
+
+      - name: Create analysis script
+        run: |
+          cat > analyze_codeowners.py << 'EOF'
+          #!/usr/bin/env python3
+
+          import os
+          import sys
+          import json
+          import re
+          from collections import defaultdict, Counter
+          from codeowners import CodeOwners
+
+          def parse_codeowners_file(filepath):
+              """Parse CODEOWNERS file and return ownership rules."""
+              if not os.path.exists(filepath):
+                  print(f"Warning: {filepath} not found")
+                  return []
+
+              try:
+                  with open(filepath, 'r') as f:
+                      content = f.read()
+
+                  codeowners = CodeOwners(content)
+
+                  rules = []
+                  for line_num, line in enumerate(content.split('\n'), 1):
+                      line = line.strip()
+                      if not line or line.startswith('#'):
+                          continue
+
+                      # Parse pattern and owners
+                      parts = line.split()
+                      if len(parts) < 2:
+                          continue
+
+                      pattern = parts[0]
+                      owners = parts[1:]
+
+                      # Filter out team references for individual analysis
+                      individual_owners = [owner for owner in owners if not owner.startswith('@tenstorrent/')]
+
+                      if individual_owners:
+                          rules.append({
+                              'pattern': pattern,
+                              'owners': individual_owners,
+                              'line': line_num
+                          })
+
+                  return rules
+              except Exception as e:
+                  print(f"Error parsing CODEOWNERS file: {e}")
+                  return []
+
+          def find_owners_for_file(filepath, rules, codeowners_obj):
+              """Find owners for a specific file based on CODEOWNERS rules."""
+              try:
+                  owners = codeowners_obj.of(filepath)
+                  # The codeowners package returns tuples of (type, owner_name)
+                  # We need to extract just the individual owner names (not teams)
+                  individual_owners = []
+                  for owner_info in owners:
+                      if isinstance(owner_info, tuple) and len(owner_info) == 2:
+                          owner_type, owner_name = owner_info
+                          # Only include individual usernames, not team references
+                          if owner_type == 'USERNAME' and not owner_name.startswith('@tenstorrent/'):
+                              individual_owners.append(owner_name)
+                  return individual_owners
+              except Exception as e:
+                  print(f"Error finding owners for {filepath}: {e}")
+                  return []
+
+          def get_modified_files(branch, base_branch='main'):
+              """Get list of modified files between branches."""
+              try:
+                  import subprocess
+
+                  print(f"Attempting to get diff between {base_branch} and {branch}...")
+
+                  current_branch = subprocess.run(
+                      ['git', 'branch', '--show-current'],
+                      capture_output=True, text=True, check=True
+                  ).stdout.strip()
+
+                  print(f"Current branch: {current_branch}")
+
+                  # First, try to fetch the branch if it doesn't exist locally
+                  try:
+                      subprocess.run(['git', 'fetch', 'origin', branch], capture_output=True, check=True)
+                      print(f"Fetched branch {branch} from origin")
+                  except subprocess.CalledProcessError:
+                      print(f"Could not fetch branch {branch}")
+
+                  # Try different diff strategies to get files changed in the target branch vs base
+                  # (without checking out the target branch)
+                  # Prioritize three-dot comparison (merge base) as it's more accurate
+                  diff_commands = [
+                      ['git', 'diff', '--name-only', f'origin/{base_branch}...origin/{branch}'],
+                      ['git', 'diff', '--name-only', f'{base_branch}...{branch}'],
+                      ['git', 'diff', '--name-only', f'origin/{base_branch}...{branch}'],
+                      ['git', 'diff', '--name-only', f'{base_branch}...origin/{branch}'],
+                      # Fallback to two-dot comparison
+                      ['git', 'diff', '--name-only', f'{base_branch}..{branch}'],
+                      ['git', 'diff', '--name-only', f'origin/{base_branch}..{branch}'],
+                      ['git', 'diff', '--name-only', f'{base_branch}..origin/{branch}'],
+                  ]
+
+                  for cmd in diff_commands:
+                      try:
+                          print(f"Trying command: {' '.join(cmd)}")
+                          result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+                          files = result.stdout.strip().split('\n')
+                          files = [f for f in files if f.strip()]
+                          if files:
+                              print(f"Success! Found {len(files)} modified files")
+                              return files
+                      except subprocess.CalledProcessError as e:
+                          print(f"Command failed: {' '.join(cmd)} - {e}")
+                          continue
+
+                  print("All diff commands failed. Could not determine modified files.")
+                  print("This might be because:")
+                  print("1. The branch doesn't exist locally or remotely")
+                  print("2. The branch has no differences from the base branch")
+                  print("3. Git references are not properly set up")
+                  return []
+
+              except Exception as e:
+                  print(f"Error in get_modified_files: {e}")
+                  return []
+
+          def get_user_full_name(username):
+              """Get full name for a GitHub username."""
+              try:
+                  import subprocess
+
+                  cmd = ['gh', 'api', f'users/{username}', '--jq', '.name // .login']
+                  result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+
+                  if result.stdout.strip():
+                      return result.stdout.strip()
+                  else:
+                      return username
+              except:
+                  return username
+
+          def get_team_members(team_slug):
+              """Get team members from GitHub organization team."""
+              try:
+                  import subprocess
+                  import os
+
+                  # Use dedicated token for org operations if available
+                  org_token = os.environ.get('ORG_READ_GITHUB_TOKEN')
+                  if org_token:
+                      # Set the token for this specific command
+                      env = os.environ.copy()
+                      env['GH_TOKEN'] = org_token
+                  else:
+                      env = os.environ.copy()
+
+                  # Remove @tenstorrent/ prefix if present
+                  clean_team_slug = team_slug.replace('@tenstorrent/', '')
+
+                  cmd = ['gh', 'api', f'orgs/tenstorrent/teams/{clean_team_slug}/members', '--jq', '[.[] | {login: .login, name: (.name // .login)}]']
+                  result = subprocess.run(cmd, capture_output=True, text=True, check=True, env=env)
+
+                  if result.stdout.strip():
+                      import json
+                      members_data = json.loads(result.stdout)
+                      # Fetch full names for each team member
+                      team_members = []
+                      for member in members_data:
+                          username = member['login']
+                          # Try to get full name from user profile using the same token
+                          try:
+                              full_name_cmd = ['gh', 'api', f'users/{username}', '--jq', '.name // .login']
+                              full_name_result = subprocess.run(full_name_cmd, capture_output=True, text=True, check=True, env=env)
+                              full_name = full_name_result.stdout.strip()
+                              team_members.append((username, full_name))
+                          except:
+                              # Fallback to username if full name fetch fails
+                              team_members.append((username, username))
+                      return team_members
+                  else:
+                      return []
+              except subprocess.CalledProcessError as e:
+                  if "admin:org" in str(e.stderr) or "SAML enforcement" in str(e.stderr):
+                      print(f"    ⚠️  Team member lookup failed: Requires org access token")
+                      return []  # Permission denied due to SAML enforcement, return empty list
+                  else:
+                      print(f"    ⚠️  Team member lookup failed: {e}")
+                      return []
+              except Exception as e:
+                  print(f"    ⚠️  Team member lookup error: {e}")
+                  return []
+
+          def find_prs_for_branch(branch, github_token):
+              """Find PRs that target the specified branch."""
+              if not github_token:
+                  print("Warning: No GitHub token provided, skipping PR analysis")
+                  return []
+
+              try:
+                  import subprocess
+
+                  print(f"Searching for PRs targeting branch: {branch}")
+                  print(f"Current working directory: {os.getcwd()}")
+                  print(f"Repository: {os.environ.get('GITHUB_REPOSITORY', 'unknown')}")
+
+                  cmd = ['gh', 'pr', 'list', '--head', branch, '--state', 'open', '--json', 'number,title,url,author,createdAt']
+                  print(f"Running command: {' '.join(cmd)}")
+
+                  result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+                  print(f"Command stdout: {result.stdout}")
+                  print(f"Command stderr: {result.stderr}")
+
+                  if result.stdout.strip():
+                      prs_data = json.loads(result.stdout)
+                      prs = []
+                      for pr in prs_data:
+                          prs.append({
+                              'number': pr['number'],
+                              'title': pr['title'],
+                              'url': pr['url'],
+                              'author': pr['author']['login'],
+                              'created_at': pr['createdAt']
+                          })
+                          print(f"Found PR: #{pr['number']} - {pr['title']}")
+                      return prs
+                  else:
+                      print(f"No PRs found targeting {branch}")
+                      return []
+
+              except subprocess.CalledProcessError as e:
+                  print(f"gh command failed: {e}")
+                  print(f"stderr: {e.stderr}")
+                  print(f"returncode: {e.returncode}")
+                  return []
+              except Exception as e:
+                  print(f"Error finding PRs: {e}")
+                  return []
+
+          def get_pr_approvals(pr_number):
+              """Get current approval status for a PR."""
+              try:
+                  import subprocess
+
+                  cmd = ['gh', 'pr', 'view', str(pr_number), '--json', 'reviews,author']
+                  result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+
+                  if result.stdout.strip():
+                      pr_data = json.loads(result.stdout)
+                      reviews = pr_data.get('reviews', [])
+
+                      # Filter for approved reviews and get full names
+                      approved_reviews = [review for review in reviews if review.get('state') == 'APPROVED']
+                      approved_users = []
+                      for review in approved_reviews:
+                          username = review['author']['login']
+                          full_name = get_user_full_name(username)
+                          approved_users.append((username, full_name))
+
+                      return approved_users
+                  else:
+                      return []
+
+              except subprocess.CalledProcessError as e:
+                  print(f"Error getting PR approvals: {e}")
+                  return []
+              except Exception as e:
+                  print(f"Error getting PR approvals: {e}")
+                  return []
+
+          def find_existing_comment(pr_number):
+              """Find existing code owner analysis comment on a PR."""
+              try:
+                  import subprocess
+
+                  cmd = ['gh', 'pr', 'view', str(pr_number), '--json', 'comments']
+                  result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+
+                  if result.stdout.strip():
+                      pr_data = json.loads(result.stdout)
+                      comments = pr_data.get('comments', [])
+
+                      # Look for our analysis comment (get the most recent one)
+                      analysis_comments = []
+                      for comment in comments:
+                          if "Code Owner Analysis Results" in comment.get('body', ''):
+                              analysis_comments.append(comment)
+
+                      if analysis_comments:
+                          # Get the most recent analysis comment
+                          latest_comment = max(analysis_comments, key=lambda x: x.get('createdAt', ''))
+                          # Extract the numeric ID from the URL
+                          url = latest_comment.get('url', '')
+                          if url:
+                              # Extract numeric ID from URL like: https://github.com/tenstorrent/tt-metal/pull/17995#issuecomment-3135406472
+                              # The format is: ...#issuecomment-{numeric_id}
+                              if '#issuecomment-' in url:
+                                  numeric_id = url.split('#issuecomment-')[-1]
+                                  return numeric_id
+                  return None
+              except:
+                  return None
+
+          def update_pr_comment(comment_id, comment_content):
+              """Update an existing comment on a PR."""
+              try:
+                  import subprocess
+                  import tempfile
+                  import os
+                  import json
+
+                  print(f"Updating existing comment {comment_id}...")
+
+                  # Create a JSON file with the correct format
+                  payload = {"body": comment_content}
+
+                  with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+                      json.dump(payload, f)
+                      temp_file = f.name
+
+                  # Use the GitHub CLI to update the comment with JSON input
+                  cmd = ['gh', 'api', f'repos/tenstorrent/tt-metal/issues/comments/{comment_id}', '--method', 'PATCH', '--input', temp_file]
+                  result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+                  print(f"✅ Successfully updated comment {comment_id}")
+
+                  # Clean up temp file after successful API call
+                  os.unlink(temp_file)
+                  return True
+
+              except subprocess.CalledProcessError as e:
+                  print(f"❌ Failed to update comment {comment_id}: {e}")
+                  # Clean up temp file on error
+                  try:
+                      os.unlink(temp_file)
+                  except:
+                      pass
+                  return False
+              except Exception as e:
+                  print(f"❌ Error updating comment {comment_id}: {e}")
+                  # Clean up temp file on error
+                  try:
+                      os.unlink(temp_file)
+                  except:
+                      pass
+                  return False
+
+          def comment_on_pr(pr_number, comment_content, post_as_new=False):
+              """Comment on a PR with the analysis results."""
+              try:
+                  import subprocess
+
+                  if post_as_new:
+                      print(f"Creating new comment on PR #{pr_number}...")
+                      cmd = ['gh', 'pr', 'comment', str(pr_number), '--body', comment_content]
+                      result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+                      print(f"✅ Successfully posted new comment on PR #{pr_number}")
+                      return True
+                  else:
+                      # First check if we already have a comment
+                      existing_comment_id = find_existing_comment(pr_number)
+
+                      if existing_comment_id:
+                          print(f"Found existing comment {existing_comment_id}, updating...")
+                          return update_pr_comment(existing_comment_id, comment_content)
+                      else:
+                          print(f"Creating new comment on PR #{pr_number}...")
+                          cmd = ['gh', 'pr', 'comment', str(pr_number), '--body', comment_content]
+                          result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+                          print(f"✅ Successfully commented on PR #{pr_number}")
+                          return True
+              except subprocess.CalledProcessError as e:
+                  print(f"❌ Failed to comment on PR #{pr_number}: {e}")
+                  return False
+              except Exception as e:
+                  print(f"❌ Error commenting on PR #{pr_number}: {e}")
+                  return False
+
+          def group_codeowners(owners_by_file):
+              """Group codeowners so only one person from each group is needed."""
+              # Create a mapping of owners to their files
+              owner_files = {}
+              for file_path, owners in owners_by_file.items():
+                  for owner in owners:
+                      if owner not in owner_files:
+                          owner_files[owner] = set()
+                      owner_files[owner].add(file_path)
+
+              # Sort owners by number of files they own (descending)
+              sorted_owners = sorted(owner_files.items(), key=lambda x: len(x[1]), reverse=True)
+
+              groups = []
+              used_owners = set()
+
+              for owner, files in sorted_owners:
+                  if owner in used_owners:
+                      continue
+
+                  # Start a new group with this owner
+                  group = [owner]
+                  used_owners.add(owner)
+                  group_files = files.copy()
+
+                  # Try to add other owners who share many files with this group
+                  for other_owner, other_files in sorted_owners:
+                      if other_owner in used_owners:
+                          continue
+
+                      # Calculate overlap with the current group's files
+                      overlap = len(group_files & other_files)
+                      overlap_ratio = overlap / len(group_files) if group_files else 0
+
+                      # If they share more than 30% of files, add them to the group
+                      if overlap_ratio > 0.3:
+                          group.append(other_owner)
+                          used_owners.add(other_owner)
+                          group_files.update(other_files)
+
+                  groups.append(group)
+
+              return groups
+
+          def main():
+              branch = os.environ.get('INPUT_BRANCH', 'main')
+              github_token = os.environ.get('GITHUB_TOKEN')
+              post_as_new_comment = os.environ.get('INPUT_POST_AS_NEW_COMMENT', 'false').lower() == 'true'
+
+              print(f"🔍 Analyzing code ownership for branch: {branch}")
+              print("=" * 60)
+
+              # Parse CODEOWNERS file
+              print("📋 Parsing CODEOWNERS file...")
+              rules = parse_codeowners_file('.github/CODEOWNERS')
+              print(f"Found {len(rules)} ownership rules")
+
+              # Create CodeOwners object for file matching
+              try:
+                  with open('.github/CODEOWNERS', 'r') as f:
+                      codeowners_content = f.read()
+                  codeowners_obj = CodeOwners(codeowners_content)
+              except Exception as e:
+                  print(f"Error creating CodeOwners object: {e}")
+                  codeowners_obj = None
+
+              # Get modified files
+              print(f"\n📁 Getting modified files for branch {branch}...")
+              modified_files = get_modified_files(branch)
+              print(f"Found {len(modified_files)} modified files")
+
+              if not modified_files:
+                   print("No modified files found. Creating minimal analysis report.")
+                   # Find PRs for this branch first
+                   print(f"\n🔗 Finding PRs targeting branch {branch}...")
+                   prs = find_prs_for_branch(branch, github_token)
+
+                   # Create a minimal summary even when no files are found
+                   summary = {
+                       'branch': branch,
+                       'modified_files_count': 0,
+                       'total_owners': 0,
+                       'owner_groups_count': 0,
+                       'owner_groups': [],
+                       'prs': prs,
+                       'files_with_owners': 0,
+                       'files_without_owners': 0,
+                       'status': 'no_modified_files'
+                   }
+
+                   with open('codeowner_analysis.json', 'w') as f:
+                       json.dump(summary, f, indent=2)
+
+                   print("Analysis complete with no modified files.")
+                   return
+
+              # Find owners for each modified file
+              print("\n👥 Finding code owners for modified files...")
+              owners_by_file = {}
+              all_owners = set()
+
+              for file_path in modified_files:
+                  if codeowners_obj:
+                      owners = find_owners_for_file(file_path, rules, codeowners_obj)
+                  else:
+                      owners = []
+
+                  if owners:
+                      owners_by_file[file_path] = owners
+                      all_owners.update(owners)
+                      # Get full names for display
+                      owner_display_names = []
+                      for owner in owners:
+                          full_name = get_user_full_name(owner)
+                          owner_display_names.append(full_name)
+                      print(f"  {file_path}: {', '.join(owner_display_names)}")
+                  else:
+                      # Check if it's owned by a team
+                      try:
+                          all_owners_info = codeowners_obj.of(file_path) if codeowners_obj else []
+                          team_owners = [owner_name for owner_type, owner_name in all_owners_info if owner_type == 'TEAM']
+                          if team_owners:
+                              # Remove @tenstorrent/ prefix from team names
+                              clean_team_names = [team.replace('@tenstorrent/', '') for team in team_owners]
+                              print(f"  {file_path}: No individual owners found (owned by teams: {', '.join(clean_team_names)})")
+                          else:
+                              print(f"  {file_path}: No specific owners found")
+                      except:
+                          print(f"  {file_path}: No specific owners found")
+
+              # Find PRs for this branch
+              print(f"\n🔗 Finding PRs targeting branch {branch}...")
+              prs = find_prs_for_branch(branch, github_token)
+
+              # Get approval status for each PR
+              approved_users = []
+              approved_usernames = []
+              if prs:
+                  for pr in prs:
+                      print(f"\n🔍 Checking approval status for PR #{pr['number']}...")
+                      pr_approvals = get_pr_approvals(pr['number'])
+                      approved_users.extend(pr_approvals)
+                      approved_usernames.extend([username for username, full_name in pr_approvals])
+                      if pr_approvals:
+                          full_names = [full_name for username, full_name in pr_approvals]
+                          print(f"  Approved by: {', '.join(full_names)}")
+                      else:
+                          print(f"  No approvals yet")
+
+              print("\n🎯 Grouping code owners for efficient approval...")
+              owner_groups = group_codeowners(owners_by_file)
+
+              # Show team ownership information
+              team_owned_files = []
+              for file_path in modified_files:
+                  try:
+                      all_owners_info = codeowners_obj.of(file_path) if codeowners_obj else []
+                      team_owners = [owner_name for owner_type, owner_name in all_owners_info if owner_type == 'TEAM']
+                      if team_owners:
+                          team_owned_files.append((file_path, team_owners))
+                  except:
+                      pass
+
+              print(f"\n📊 Analysis Results:")
+              print("=" * 60)
+              print(f"Branch: {branch}")
+              print(f"Modified files: {len(modified_files)}")
+              print(f"Total unique owners: {len(all_owners)}")
+              total_groups = len(owner_groups) + (1 if team_owned_files else 0)
+              print(f"Owner groups needed: {total_groups}")
+
+              # Display all groups including team-owned files
+              group_number = 1
+
+              # First show team-owned files as Group 1
+              if team_owned_files:
+                  print(f"\n  Group {group_number}: Team-owned files")
+                  for file_path, teams in team_owned_files:
+                      # Remove @tenstorrent/ prefix from team names
+                      clean_team_names = [team.replace('@tenstorrent/', '') for team in teams]
+                      print(f"    {file_path}: {', '.join(clean_team_names)}")
+
+                      # Get and display team members
+                      for team in teams:
+                          team_members = get_team_members(team)
+                          if team_members:
+                              full_names = [full_name for username, full_name in team_members]
+                              print(f"    👥 Team members: {', '.join(full_names)}")
+                          else:
+                              print(f"    👥 Team members: Requires SAML authorization for organization")
+
+                  # Check if any team members have approved
+                  team_approvals = []
+                  for team in teams:
+                      team_members = get_team_members(team)
+                      if team_members:
+                          # Check if any team member has approved
+                          for username, full_name in team_members:
+                              if any(approved_username == username for approved_username, _ in approved_users):
+                                  team_approvals.append(full_name)
+
+                  if team_approvals:
+                      print(f"    ✅ Approved by team member: {', '.join(team_approvals)}")
+                      print(f"    🎉 Team approval requirement satisfied!")
+                  else:
+                      print(f"    ❌ Not approved yet")
+                      print(f"    📋 Need approval from a team member")
+
+                  print()
+                  print("  " + "-" * 50)
+                  group_number += 1
+
+              if owner_groups:
+                  for i, group in enumerate(owner_groups, group_number):
+                      # Get full names for group display
+                      group_display_names = []
+                      for owner in group:
+                          full_name = get_user_full_name(owner.lstrip('@'))
+                          group_display_names.append(full_name)
+                      print(f"  Group {i}: {', '.join(group_display_names)}")
+
+                      # Check approval status for this group
+                      # Remove @ prefix from group members for comparison
+                      group_members_clean = [member.lstrip('@') for member in group]
+                      group_approvals = [(username, full_name) for username, full_name in approved_users if username in group_members_clean]
+                      if group_approvals:
+                          full_names = [full_name for username, full_name in group_approvals]
+                          print(f"    ✅ Approved by: {', '.join(full_names)}")
+                          print(f"    🎉 Group approval requirement satisfied!")
+                      else:
+                          print(f"    ❌ Not approved yet")
+                          print(f"    📋 Need approval from one of: {', '.join(group_display_names)}")
+
+                      # Show which files this group is responsible for
+                      group_files = []
+                      unique_files = []
+                      shared_files = []
+
+                      for file_path, file_owners in owners_by_file.items():
+                          # Check if any owner in this group owns this file
+                          if any(owner in file_owners for owner in group):
+                              group_files.append(file_path)
+                              # Check if this group is the ONLY owner of this file
+                              if all(owner in group for owner in file_owners):
+                                  unique_files.append(file_path)
+                              else:
+                                  shared_files.append(file_path)
+
+                              if group_files:
+                                  if len(unique_files) > 1:
+                                      print(f"    📁 Unique Files ({len(unique_files)} total):")
+                                      print(f"      <details>")
+                                      print(f"      <summary>Click to expand file list</summary>")
+                                      print(f"      ")
+                                      for file_path in unique_files:
+                                          print(f"      - `{file_path}`")
+                                      print(f"      </details>")
+                                  elif len(unique_files) == 1:
+                                      # Single unique file - show directly
+                                      print(f"    📁 Unique File: `{unique_files[0]}`")
+
+                                  # Also show shared files
+                                  if shared_files:
+                                      if len(shared_files) > 1:
+                                          print(f"    📁 Shared Files ({len(shared_files)} total):")
+                                          print(f"      <details>")
+                                          print(f"      <summary>Click to expand shared file list</summary>")
+                                          print(f"      ")
+                                          for file_path in shared_files:
+                                              print(f"      - `{file_path}`")
+                                          print(f"      </details>")
+                                      elif len(shared_files) == 1:
+                                          print(f"    📁 Shared File: `{shared_files[0]}`")
+                                  elif not unique_files:
+                                      # No unique files (all shared)
+                                      print(f"    📁 Files: All files are shared with other groups")
+                      print()
+                      print("  " + "-" * 50)
+
+              # Generate summary for GitHub Actions
+              summary = {
+                  'branch': branch,
+                  'modified_files_count': len(modified_files),
+                  'total_owners': len(all_owners),
+                  'owner_groups_count': total_groups,
+                  'owner_groups': owner_groups,
+                  'prs': prs,
+                  'files_with_owners': len(owners_by_file),
+                  'files_without_owners': len(modified_files) - len(owners_by_file),
+                  'status': 'success'
+              }
+
+              # Write summary to file for GitHub Actions
+              with open('codeowner_analysis.json', 'w') as f:
+                  json.dump(summary, f, indent=2)
+
+              print(f"\n💾 Analysis summary saved to codeowner_analysis.json")
+
+              # Generate and post comment on PRs
+              if prs:
+                  print(f"\n💬 Generating PR comments...")
+                  for pr in prs:
+                      # Generate comment content
+                      comment_lines = []
+                      comment_lines.append("## 🔍 Code Owner Analysis Results")
+                      comment_lines.append("")
+                      comment_lines.append(f"**Branch:** `{branch}`")
+                      comment_lines.append(f"**Modified Files:** {len(modified_files)}")
+                      comment_lines.append(f"**Approval Groups Needed:** {total_groups}")
+                      comment_lines.append("")
+
+                      comment_lines.append("### 📋 Approval Groups")
+
+                      # Add team-owned files as Group 1
+                      group_number = 1
+                      if team_owned_files:
+                          comment_lines.append(f"**Group {group_number}:** Team-owned files")
+                          for file_path, teams in team_owned_files:
+                              # Remove @tenstorrent/ prefix from team names
+                              clean_team_names = [team.replace('@tenstorrent/', '') for team in teams]
+                              comment_lines.append(f"  📁 **File:** `{file_path}`: {', '.join(clean_team_names)}")
+
+                              # Get and display team members
+                              for team in teams:
+                                  team_members = get_team_members(team)
+                                  if team_members:
+                                      full_names = [full_name for username, full_name in team_members]
+                                      comment_lines.append(f"  👥 **Team members:** {', '.join(full_names)}")
+                                  else:
+                                      comment_lines.append(f"  👥 **Team members:** Requires org access token")
+
+                          # Check if any team members have approved
+                          team_approvals = []
+                          for file_path, teams in team_owned_files:
+                              for team in teams:
+                                  team_members = get_team_members(team)
+                                  if team_members:
+                                      # Check if any team member has approved
+                                      for username, full_name in team_members:
+                                          if any(approved_username == username for approved_username, _ in approved_users):
+                                              team_approvals.append(full_name)
+
+                          if team_approvals:
+                              comment_lines.append(f"  ✅ **Approved by team member:** {', '.join(team_approvals)}")
+                              comment_lines.append(f"  🎉 **Team approval requirement satisfied!**")
+                          else:
+                              comment_lines.append(f"  ❌ **Not approved yet**")
+                              comment_lines.append(f"  📋 **Need approval from a team member**")
+                          comment_lines.append("")
+                          comment_lines.append("---")
+                          group_number += 1
+
+                      if owner_groups:
+                          for i, group in enumerate(owner_groups, group_number):
+                              # Get full names for group display
+                              group_display_names = []
+                              for owner in group:
+                                  full_name = get_user_full_name(owner.lstrip('@'))
+                                  group_display_names.append(full_name)
+
+                              comment_lines.append(f"**Group {i}:** {', '.join(group_display_names)}")
+
+                              # Check approval status for this group
+                              group_members_clean = [member.lstrip('@') for member in group]
+                              group_approvals = [(username, full_name) for username, full_name in approved_users if username in group_members_clean]
+
+                              if group_approvals:
+                                  full_names = [full_name for username, full_name in group_approvals]
+                                  comment_lines.append(f"  ✅ **Approved by:** {', '.join(full_names)}")
+                              else:
+                                  comment_lines.append(f"  ❌ **Not approved yet**")
+                                  comment_lines.append(f"  📋 **Need approval from one of:** {', '.join(group_display_names)}")
+
+                              # Add file information with dropdown for multiple files
+                              group_files = []
+                              unique_files = []
+                              shared_files = []
+
+                              for file_path, file_owners in owners_by_file.items():
+                                  # Skip files that are team-owned (they're handled separately)
+                                  is_team_owned = any(file_path == team_file for team_file, _ in team_owned_files)
+                                  if is_team_owned:
+                                      continue
+
+                                  # Check if any owner in this group owns this file
+                                  if any(owner in file_owners for owner in group):
+                                      group_files.append(file_path)
+                                      # Check if this group is the ONLY owner of this file
+                                      if all(owner in group for owner in file_owners):
+                                          unique_files.append(file_path)
+                                      else:
+                                          shared_files.append(file_path)
+
+                              if group_files:
+                                  if len(unique_files) > 1:
+                                      comment_lines.append(f"  📁 **Files ({len(unique_files)} total):**")
+                                      comment_lines.append(f"  <details>")
+                                      comment_lines.append(f"  <summary>Click to expand file list</summary>")
+                                      comment_lines.append(f"  ")
+                                      for file_path in unique_files:
+                                          comment_lines.append(f"  - `{file_path}`")
+                                      comment_lines.append(f"  </details>")
+                                  elif len(unique_files) == 1:
+                                      # Single unique file - show directly
+                                      comment_lines.append(f"  📁 **File:** `{unique_files[0]}`")
+                                  else:
+                                      # No unique files (all shared)
+                                      comment_lines.append(f"  📁 **Files:** All files are shared with other groups")
+
+                              comment_lines.append("")
+                              comment_lines.append("---")
+                      else:
+                          comment_lines.append("- No individual owner groups found")
+                          comment_lines.append("")
+
+                      comment_lines.append("> 💡 **Note:** Only one person from each group needs to approve this PR.")
+                      comment_lines.append("")
+                      comment_lines.append("---")
+                      comment_lines.append("*Analysis generated by [Code Owner Analysis Workflow](https://github.com/tenstorrent/tt-metal/blob/Aswinmcw/pr-codeowners/.github/workflows/code-analysis.yaml)*")
+
+                      comment_content = "\n".join(comment_lines)
+
+                      # Post comment on PR
+                      success = comment_on_pr(pr['number'], comment_content, post_as_new_comment)
+                      if success:
+                          print(f"✅ Comment posted on PR #{pr['number']}")
+                      else:
+                          print(f"❌ Failed to post comment on PR #{pr['number']}")
+
+              # Set outputs for GitHub Actions
+              with open(os.environ.get('GITHUB_OUTPUT', '/dev/null'), 'a') as f:
+                  f.write(f"owner_groups_count={total_groups}\n")
+                  f.write(f"total_owners={len(all_owners)}\n")
+                  f.write(f"modified_files={len(modified_files)}\n")
+                  f.write(f"prs_count={len(prs)}\n")
+
+          if __name__ == "__main__":
+              main()
+          EOF
+          chmod +x analyze_codeowners.py
+
+      - name: Run code owner analysis
+        env:
+          INPUT_BRANCH: ${{ github.event.inputs.branch }}
+          INPUT_POST_AS_NEW_COMMENT: ${{ github.event.inputs.post_as_new_comment }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ORG_READ_GITHUB_TOKEN: ${{ secrets.TEMP_METAL_PAT }}
+        run: python analyze_codeowners.py
+
+      - name: Display Code Owner Analysis Results
+        run: |
+          set +e  # Don't exit immediately on error
+
+          echo "📊 Code Owner Analysis Results"
+          echo "=============================="
+
+          if [ -f codeowner_analysis.json ]; then
+            STATUS=$(jq -r '.status // "unknown"' codeowner_analysis.json 2>/dev/null)
+            if [ "$STATUS" = "no_modified_files" ]; then
+              echo "✅ Analysis completed successfully!"
+              echo ""
+              echo "Summary:"
+              jq -r '.branch + " branch has no modified files compared to main"' codeowner_analysis.json 2>/dev/null || echo "(could not parse branch info)"
+              echo ""
+              echo "This means the branch is up to date with main or has no changes."
+              exit 0
+            else
+              echo "✅ Analysis completed successfully!"
+              echo ""
+              echo "Summary:"
+              BRANCH=$(jq -r '.branch' codeowner_analysis.json 2>/dev/null || echo "unknown")
+              FILES=$(jq -r '.modified_files_count' codeowner_analysis.json 2>/dev/null || echo "0")
+              GROUPS=$(jq -r '.owner_groups_count' codeowner_analysis.json 2>/dev/null || echo "0")
+              echo "$BRANCH branch has $FILES modified files requiring $GROUPS approval groups"
+
+              echo ""
+              echo "Approval Groups:"
+              jq -r '.owner_groups[]? | "  Group: " + join(", ")' codeowner_analysis.json 2>/dev/null || echo "(no groups found)"
+            fi
+
+            PR_COUNT=$(jq -r '.prs | length' codeowner_analysis.json 2>/dev/null || echo "0")
+            if [ "$PR_COUNT" -gt 0 ]; then
+              echo ""
+              echo "Related PRs:"
+              jq -r '.prs[]? | "  #" + (.number | tostring) + ": " + .title + " by @" + .author' codeowner_analysis.json 2>/dev/null || echo "(could not list PRs)"
+            fi
+
+            exit 0
+          else
+            echo "❌ Analysis failed - no results file found"
             exit 1
           fi
-          # Conditionally set this here so that it remains unset on forks, otherwise it resolves an invalid URL and the job fails
-          CCACHE_REMOTE_STORAGE="redis://${{ vars.REDIS_USER }}:${{ secrets.REDIS_PASSWORD }}@${{ vars.REDIS_HOST }}:${{ vars.REDIS_PORT }}|read-only=${{ vars.REDIS_IS_READONLY }}"
-          echo "CCACHE_REMOTE_STORAGE=${CCACHE_REMOTE_STORAGE}" >> $GITHUB_ENV
-          echo "CCACHE_REMOTE_STORAGE: ${CCACHE_REMOTE_STORAGE}"
 
-      - name: Create ccache tmpdir
-        run: |
-          mkdir -p /tmp/ccache
-
-      - name: Check out repo
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          fetch-tags: true
-          submodules: recursive
-          path: docker-job # Here be dragons; keep it scoped to our desired volume, yet must be under github.workspace and be sure to clean up at the end
-          clean: true
-
-      - name: Determine merge base
-        if: ${{ needs.determine-scan-type.outputs.do-full-scan != 'true' }}
-        run: |
-          echo "Current branch: ${{ github.ref_name }}"
-          MERGE_BASE=$(git merge-base ${{ github.ref_name }} origin/main)
-          echo "Merge base between ${{ github.ref_name }} and main: $MERGE_BASE"
-          echo "MERGE_BASE=$MERGE_BASE" >> $GITHUB_ENV
-
-      - name: Check out baseline
-        if: ${{ needs.determine-scan-type.outputs.do-full-scan != 'true' }}
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ env.MERGE_BASE }}
-          fetch-depth: 0
-          fetch-tags: true
-          submodules: recursive
-          path: docker-job # Here be dragons; keep it scoped to our desired volume, yet must be under github.workspace and be sure to clean up at the end
-          clean: true
-
-      - name: Create shim
-        run: |
-          # Suppress clang-tidy to first get an up-to-date build tree
-          ln -sf /usr/bin/true ./clang-tidy-shim
-
-      - name: 🔧 CMake configure
-        run: |
-          cmake --preset clang-tidy -DCMAKE_CXX_CLANG_TIDY="$(pwd)/clang-tidy-shim;--warnings-as-errors=*" -DCMAKE_C_CLANG_TIDY="$(pwd)/clang-tidy-shim;--warnings-as-errors=*"
-
-      - name: Prepare baseline ccache summary
-        if: ${{ needs.determine-scan-type.outputs.do-full-scan != 'true' }}
-        run: |
-          # Zero out the stats so we can see how we did this build
-          # NOTE: may be inaccurate if we have >1 build runner on the same machine, using the same local cache
-          ccache -z
-
-      - name: 🛠️ Baseline Build
-        if: ${{ needs.determine-scan-type.outputs.do-full-scan != 'true' }}
-        run: |
-          nice -n 19 cmake --build --preset clang-tidy
-
-      - name: Publish Ccache summary
-        if: ${{ needs.determine-scan-type.outputs.do-full-scan != 'true' }}
-        run: |
-          echo '## CCache Summary' >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          ccache -s >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-
-      - name: Checkout repo
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          fetch-tags: true
-          submodules: recursive
-          path: docker-job # Here be dragons; keep it scoped to our desired volume, yet must be under github.workspace and be sure to clean up at the end
-          clean: false
-
-      - name: Restore shim
-        run: |
-          # Restore shim to legit clang-tidy
-          # Symlink tomfoolery here so that Ninja believes the build command has not changed from the previous run
-          ln -sf $(which clang-tidy-20) ./clang-tidy-shim
-
-      - name: Prepare ccache summary
-        run: |
-          # Zero out the stats so we can see how we did this build
-          # NOTE: may be inaccurate if we have >1 build runner on the same machine, using the same local cache
-          ccache -z
-
-      - name: 🔍 Analyze code with clang-tidy
-        run: |
-          nice -n 19 cmake --build --preset clang-tidy
-
-      - name: Publish Ccache summary
-        run: |
-          echo '## CCache Summary' >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          ccache -s >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
+      # Note: PR commenting is handled directly in the Python script
+      # This provides better functionality including:
+      # - Approval status checking
+      # - Team member lookup
+      # - Update existing comments
+      # - Collapsible file lists
