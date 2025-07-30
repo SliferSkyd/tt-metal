@@ -82,7 +82,7 @@ def run_mixtral_demo(user_input, batch_size, mesh_device, instruct_mode, test_pr
     model_args = TtModelArgs(mesh_device, instruct=instruct_mode, max_seq_len=max_seq_len, max_batch_size=batch_size)
     tokenizer = Tokenizer(model_args.tokenizer_path)
 
-    model_args.n_layers = 32  # Full model
+    model_args.n_layers = 1  # Full model
 
     logger.info("Loading weights...")
     profiler.start("weight_loading")
@@ -103,7 +103,7 @@ def run_mixtral_demo(user_input, batch_size, mesh_device, instruct_mode, test_pr
     logger.info("Loading weights finished!")
 
     max_generated_tokens = 120
-
+    breakpoint()
     profiler.start("preprocess_prefill_inputs")
     # Preprocess initial prompt inputs
     (

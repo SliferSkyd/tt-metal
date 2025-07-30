@@ -117,7 +117,7 @@ def test_mixtral_decoder_inference(t3k_mesh_device, reset_seeds, batch):
         positions = torch.LongTensor(range(max_seq_len))
         freqs_cis_i = precompute_freqs_cis(model_args.head_dim, 128_000)[positions]
         ref_output_bsh = reference_model(pt_decode_input_bsh, freqs_cis_i, positions, mask=attn_mask_torch)
-
+        breakpoint()
         # Reference model
         passing, pcc_message = comp_pcc(ref_output_bsh, tt_out, pcc)
 

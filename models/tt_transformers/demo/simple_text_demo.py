@@ -115,7 +115,7 @@ def create_tt_model(
         max_seq_len=max_seq_len,
     )
 
-    tt_model_args.n_layers = 1
+    tt_model_args.n_layers = 32
 
     # Avoid loading state_dict for every DP model
     if not state_dict:
@@ -683,6 +683,7 @@ def test_demo_text(
             kv_cache=tt_kv_cache,
             prompt_lens=decoding_pos,
         )
+
         profiler.end(f"compile_prefill", iteration=batch_idx)
         logger.info("Finished prefill warmup")
 

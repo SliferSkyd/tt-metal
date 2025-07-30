@@ -9,9 +9,8 @@ from models.tt_transformers.tt.mixtral_mlp import TtMixtralMLP
 from models.tt_transformers.tt.mixtral_moe import TtMoeLayer
 from models.tt_transformers.tt.model_config import ModelArgs
 from models.utility_functions import comp_allclose, comp_pcc
-from ttnn import ConcatMeshToTensor
 
-# pytest -svv models/tt_transformers/tests/test_mixtral_moe.py::test_mixtral_moe_inference[wormhole_b0-True-decode]
+# pytest -svv models/tt_transformers/tests/mixtral/test_mixtral_moe.py::test_mixtral_moe_inference[wormhole_b0-True-decode]
 
 
 @pytest.mark.parametrize("mode", ["prefill", "decode"])
@@ -68,7 +67,6 @@ def test_mixtral_moe_inference(t3k_mesh_device, reset_seeds, mode):
         logger.info(f"[Decoder] Generating token {i}")
 
         pt_decode_input = (torch.rand(batch, seqlen, model_args.dim) * 2) - 1
-        breakpoint()
         if mode == "decode":
             shard_grid = ttnn.CoreRangeSet(
                 {ttnn.CoreRange(ttnn.CoreCoord(0, 0), ttnn.CoreCoord(7, 0))}  # 8 cores: x=0 to x=7, y=0
@@ -102,8 +100,14 @@ def test_mixtral_moe_inference(t3k_mesh_device, reset_seeds, mode):
         # TT Model Output
         logger.info(f"Starting TT Mixtral MOE {mode}")
         tt_out = tt_model(tt_decode_input, mode)
+        # tt_out = ttnn.all_gather(tt_out, dim=3, num_links=1)
         tt_output_torch = (
-            ttnn.to_torch(tt_out, mesh_composer=ConcatMeshToTensor(t3k_mesh_device, dim=0))[0]
+            ttnn.to_torch(
+                tt_out,
+                mesh_composer=ttnn.ConcatMesh2dToTensor(
+                    t3k_mesh_device, dims=(1, -1), mesh_shape=t3k_mesh_device.shape
+                ),
+            )[0]
             .squeeze(2)
             .view(batch, 1, -1)
         )

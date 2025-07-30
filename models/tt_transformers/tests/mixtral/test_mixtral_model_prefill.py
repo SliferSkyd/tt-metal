@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: © 2024 Tenstorrent AI ULC
+# SPDX-FileCopyrightText: © 2023 Tenstorrent Inc.
 
 # SPDX-License-Identifier: Apache-2.0
 import bz2
@@ -9,10 +9,14 @@ import torch
 from loguru import logger
 
 import ttnn
+from models.demos.t3000.mixtral8x7b.reference.model import Transformer
+from models.demos.t3000.mixtral8x7b.tt.mixtral_common import prepare_inputs_ttnn_prefill
 from models.tt_transformers.tt.common import PagedAttentionConfig, create_tt_model
 from models.tt_transformers.tt.generator import Generator
 from models.tt_transformers.tt.model_config import DecodersPrecision
 from models.utility_functions import comp_pcc, skip_for_grayskull
+
+# pytest models/tt_transformers/tests/mixtral/test_mixtral_model_prefill.py::test_model_inference[wormhole_b0-1layer-performance-max128k-128-page_params0-paged_attention-8]
 
 
 @torch.no_grad()
@@ -37,7 +41,7 @@ from models.utility_functions import comp_pcc, skip_for_grayskull
     ),
     ids=(
         "paged_attention",
-        # "default_attention",
+        # "default_attention"
     ),
 )
 @pytest.mark.parametrize(
@@ -123,17 +127,8 @@ def test_model_inference(
         num_layers=num_layers,
     )
 
-    model_args.n_layers = 1
+    cache_pcc = True
 
-    if model_args.base_model_name.startswith("Mistral-") or model_args.base_model_name.startswith("Qwen3-"):
-        # TODO: Per layer KV cache fetching is not implemented for all models
-        # See issue https://github.com/tenstorrent/tt-metal/issues/19806"
-        cache_pcc = False
-    else:
-        cache_pcc = True
-
-    # This sets the minimum PCC for each iteration based on optimization mode
-    # TODO: See issue https://github.com/tenstorrent/tt-metal/issues/19806
     perf_out_pcc_map = {"Mistral-7B-Instruct-v0.3": 0.73}
     acc_out_pcc_map = {"Mistral-7B-Instruct-v0.3": 0.75}
     kv_cache_pcc_map = {"Mistral-7B-Instruct-v0.3": 0.75}
@@ -178,10 +173,11 @@ def test_model_inference(
     encoded_prompt = model_args.encode_prompt(prompt, instruct=instruct)[:seq_len]
     logger.info(f"Prompt length: {len(encoded_prompt)} tokens")
 
-    # Load reference model
+    # Load Reference Model
     if run_ref_pt:
         logger.info("Loading reference model...")
         state_dict_prefix = model_args.get_state_dict_prefix("", None)
+        reference_model = Transformer(args=model_args)
         reference_state_dict = {
             k[len(state_dict_prefix) :]: v
             for k, v in state_dict.items()
@@ -195,9 +191,8 @@ def test_model_inference(
                 )
             )
         }
-        reference_model = model_args.reference_transformer()
-        reference_model.load_state_dict(reference_state_dict)
-        # Embedding on host
+        reference_model.load_state_dict(model_args.load_state_dict())
+        reference_model.eval()
         embd = model_args.reference_embedding()
         embd.load_state_dict({"emb.weight": state_dict[f"{state_dict_prefix}tok_embeddings.weight"]})
         logger.info("Finished loading reference model.")
@@ -205,6 +200,11 @@ def test_model_inference(
     # Select the first token from the prompt for initial decoding
     encoded_prompt_tensor = torch.tensor(encoded_prompt)  # [:,0]
     tt_prefill_input = encoded_prompt_tensor.unsqueeze(0)
+    pt_prefill_ref_input = embd(encoded_prompt_tensor).view(batch_size, seq_len, -1)
+    decode_input, attn_mask, attn_mask_torch = prepare_inputs_ttnn_prefill(
+        pt_prefill_ref_input,
+        tt_model.mesh_device,
+    )
     prompt_lens = [seq_len]
     start_pos = 0
 
@@ -221,16 +221,16 @@ def test_model_inference(
     if run_ref_pt:
         # Run reference model
         logger.info(f"Running reference model...")
-        pt_prefill_input = embd(encoded_prompt_tensor).view(batch_size, seq_len, -1)
-        ref_output = reference_model(pt_prefill_input, start_pos)
-        ref_output = ref_output[:, -1:, :]  # Get last token since TT model only returns the last token
+        positions = torch.LongTensor(range(seq_len))
+        ref_output = reference_model(pt_prefill_ref_input, positions, attn_mask_torch).detach().float()
+        ref_output = ref_output[:, -1:, :]
         logger.info(f"Finished running reference model.")
 
         # Measure PCC if also running reference model
         all_tests_pass = True
-
+        breakpoint()
         # Check output pcc
-        passing, pcc_message = comp_pcc(ref_output, tt_output_torch, expec_out_pcc)
+        passing, pcc_message = comp_pcc(ref_output.view(batch_size, seq_len, -1), tt_output_torch, expec_out_pcc)
         logger.info(f"Output PCC: {pcc_message}")
         if not passing:
             all_tests_pass = False

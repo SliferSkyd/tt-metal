@@ -44,6 +44,7 @@ class MoeLayer(nn.Module):
         self.args = moe_args
 
     def forward(self, inputs: torch.Tensor):
+        breakpoint()
         org_input_shape = inputs.shape
         inputs = inputs.view(-1, inputs.shape[-1])
         gate_logits = self.gate(inputs)
@@ -54,4 +55,5 @@ class MoeLayer(nn.Module):
             batch_idx, nth_expert = torch.where(selected_experts == i)
             expert_ouput = expert(inputs[batch_idx])
             results[batch_idx] += weights[batch_idx, nth_expert, None] * expert_ouput
+        breakpoint()
         return results.view(org_input_shape)

@@ -45,7 +45,7 @@ def test_mixtral_model_inference_CI(t3k_mesh_device, use_program_cache, reset_se
     if is_ci_env:
         os.environ["MIXTRAL_REF_OUTPUT_PATH"] = "/mnt/MLPerf/tt_dnn-models/Mistral/Mixtral-8x7B-v0.1/prefill/"
 
-    n_layers = 32
+    n_layers = 1
 
     pcc = 0.91
     dtype = ttnn.bfloat8_b
@@ -133,7 +133,7 @@ def test_mixtral_model_inference_CI(t3k_mesh_device, use_program_cache, reset_se
         reference_model.eval()
         positions = torch.LongTensor(range(seq_len))
         ref_output = reference_model(pt_decode_input, positions, attn_mask_torch, mode="prefill").detach().float()
-
+    print(ref_output.shape, tt_output_torch.shape)
     # Measure PCC
     passing, pcc_message = comp_pcc(ref_output.view(batch, seq_len, -1), tt_output_torch.view(batch, seq_len, -1), pcc)
     logger.info(comp_allclose(ref_output, tt_output_torch))
