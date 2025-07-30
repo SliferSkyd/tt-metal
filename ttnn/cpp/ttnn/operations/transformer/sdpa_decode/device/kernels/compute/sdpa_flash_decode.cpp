@@ -377,7 +377,7 @@ void MAIN {
                     // Write o, m, l into cb_out
                     move_block<true>(cb_out_accumulate_im, cb_out_o, out_chunk_tiles);
                     move_block<true>(cb_cur_max, cb_out_m, Sq_chunk_t);
-                    move_block<true>(cb_cur_sum, cb_out_l, Sq_chunk_t);
+                    move_block<true>(cb_prev_sum, cb_out_l, Sq_chunk_t);
                 }
             }
         }
