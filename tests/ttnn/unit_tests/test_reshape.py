@@ -18,6 +18,7 @@ from models.utility_functions import skip_for_grayskull
     "input_shape, output_shape",
     [
         ((10, 20), (20, 10)),
+        ((512, 1024), (524288,)),
     ],
 )
 @pytest.mark.parametrize("enable_cache", [True])

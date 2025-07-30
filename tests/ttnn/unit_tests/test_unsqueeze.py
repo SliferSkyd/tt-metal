@@ -28,6 +28,8 @@ import ttnn
         ((0, 2), 0, ttnn.TILE_LAYOUT),
         ((1, 512, 1024), 0, ttnn.ROW_MAJOR_LAYOUT),
         ((1, 512, 1024), 0, ttnn.TILE_LAYOUT),
+        ((1, 3, 512, 1024), 0, ttnn.ROW_MAJOR_LAYOUT),
+        ((1, 3, 512, 1024), 0, ttnn.TILE_LAYOUT),
         ((19, 512, 1024), 0, ttnn.ROW_MAJOR_LAYOUT),
         ((19, 512, 1024), 0, ttnn.TILE_LAYOUT),
         ((2, 512, 1024), 0, ttnn.ROW_MAJOR_LAYOUT),

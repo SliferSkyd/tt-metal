@@ -675,6 +675,13 @@ def test_unary_neg_ttnn(input_shapes, device, ttnn_dtype):
         (torch.Size([1, 256, 64, 128])),
         (torch.Size([1, 32, 128, 256])),
         (torch.Size([1, 64, 64, 128])),
+        (torch.Size([1, 1024, 32, 64])),
+        (torch.Size([1, 128, 256, 512])),
+        (torch.Size([1, 2048, 32, 64])),
+        (torch.Size([1, 512, 32, 64])),
+        (torch.Size([1, 512, 64, 128])),
+        (torch.Size([1, 64, 128, 256])),
+        (torch.Size([1, 64, 256, 512])),
     ),
 )
 def test_unary_relu_ttnn(input_shapes, device):
@@ -1115,3 +1122,23 @@ def test_fill(device, h, w, scalar, torch_dtype, ttnn_dtype):
     output_tensor = ttnn.to_torch(output_tensor)
 
     assert torch.equal(torch_output_tensor, output_tensor)
+
+
+@pytest.mark.parametrize(
+    "input_shapes",
+    ((torch.Size([1, 256, 32, 32])),),
+)
+def test_unary_relu_ttnn_panoptic(input_shapes, device):
+    in_data, input_tensor = data_gen_with_range(input_shapes, -10, 10, device)
+    ttnn_input = ttnn.view(input_tensor, [1, 1, 8, 32])
+    ttnn_padded = ttnn.pad(ttnn_input, padding=[(0, 0), (0, 0), (0, 24), (0, 0)], value=0)
+
+    _, output_tensor = data_gen_with_range([1, 1, 32, 32], -1, 1, device)
+
+    cq_id = 0
+    ttnn.relu(ttnn_padded, output_tensor=output_tensor, queue_id=cq_id)
+    golden_tensor = torch.relu(in_data)
+    golden_tensor = torch.reshape(golden_tensor, (1, 1, 32, 32))
+
+    comp_pass = compare_pcc([output_tensor], [golden_tensor])
+    assert comp_pass

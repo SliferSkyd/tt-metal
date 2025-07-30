@@ -67,6 +67,9 @@ def test_squeeze(device, input_shape, dim, layout):
         (1, 1, 480, 640),
         (3, 1, 1, 1, 1280),
         (1, 512, 1024),
+        (1, 1, 512, 1024),
+        (1, 19, 512, 1024),
+        (1, 2, 512, 1024),
     ],
 )
 def test_squeeze_default(device, input_shape, layout):

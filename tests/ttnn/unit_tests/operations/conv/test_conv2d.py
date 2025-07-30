@@ -243,6 +243,7 @@ def test_conv_dram(
         (1, 64, 64, 256, 512, 3, 3, 1, 1, 1, 1, 1, False),
     ],
 )
+@pytest.mark.parametrize("device_params", [{"l1_small_size": 2 * 1024}], indirect=True)
 def test_conv2d_panoptic(
     device,
     batch_size,
@@ -266,8 +267,8 @@ def test_conv2d_panoptic(
         config_override=None,
         torch_tensor_map=torch_tensor_map,
         math_fidelity=ttnn.MathFidelity.HiFi4,
-        output_dtype=ttnn.float32,
-        weights_dtype=ttnn.float32,
+        output_dtype=ttnn.bfloat16,
+        weights_dtype=ttnn.bfloat8_b,
         batch_size=batch_size,
         output_channels=output_channels,
         input_channels=input_channels,
