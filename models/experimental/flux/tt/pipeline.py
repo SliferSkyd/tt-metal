@@ -384,37 +384,38 @@ class FluxPipeline:
         for i, t in enumerate(tqdm.tqdm(timesteps)):
             sigma_difference = self._scheduler.sigmas[i + 1] - self._scheduler.sigmas[i]
 
-            tt_timestep = ttnn.from_torch(
-                torch.full([1, 1], fill_value=t),
-                layout=ttnn.TILE_LAYOUT,
+            # Create host tensors first, then copy to avoid memory leaks
+            tt_timestep_host = ttnn.full(
+                [1, 1],
+                fill_value=t,
                 dtype=ttnn.float32,
-                mesh_mapper=unsharded,
+                layout=ttnn.TILE_LAYOUT,
             )
 
             # Handle guidance based on model type
             if self._guidance_embeds:
                 # Dev model: Pass guidance scale for dynamic shifting
-                tt_guidance = ttnn.from_torch(
-                    torch.full([1, 1], fill_value=guidance_scale),
-                    layout=ttnn.TILE_LAYOUT,
+                tt_guidance_host = ttnn.full(
+                    [1, 1],
+                    fill_value=guidance_scale,
                     dtype=ttnn.float32,
-                    mesh_mapper=unsharded,
+                    layout=ttnn.TILE_LAYOUT,
                 )
             else:
                 # Schnell model: No guidance needed
-                tt_guidance = None
+                tt_guidance_host = None
 
-            tt_sigma_difference = ttnn.from_torch(
-                torch.full([1, 1], fill_value=sigma_difference),
-                layout=ttnn.TILE_LAYOUT,
+            tt_sigma_difference_host = ttnn.full(
+                [1, 1],
+                fill_value=sigma_difference,
                 dtype=ttnn.bfloat16,
-                mesh_mapper=unsharded,
+                layout=ttnn.TILE_LAYOUT,
             )
 
-            ttnn.copy_host_to_device_tensor(tt_timestep, self._trace.timestep_input)
-            if self._guidance_embeds and tt_guidance is not None:
-                ttnn.copy_host_to_device_tensor(tt_guidance, self._trace.guidance_input)
-            ttnn.copy_host_to_device_tensor(tt_sigma_difference, self._trace.sigma_difference_input)
+            ttnn.copy_host_to_device_tensor(tt_timestep_host, self._trace.timestep_input)
+            if self._guidance_embeds and tt_guidance_host is not None:
+                ttnn.copy_host_to_device_tensor(tt_guidance_host, self._trace.guidance_input)
+            ttnn.copy_host_to_device_tensor(tt_sigma_difference_host, self._trace.sigma_difference_input)
 
             self._step(
                 latents=self._trace.spatial_input_output,
@@ -425,6 +426,12 @@ class FluxPipeline:
                 sigma_difference=sigma_difference,
                 image_rotary_emb=(self._trace.imagerot1_input, self._trace.imagerot2_input),
             )
+
+            # Explicit cleanup to prevent memory leaks
+            ttnn.deallocate(tt_timestep_host)
+            if tt_guidance_host is not None:
+                ttnn.deallocate(tt_guidance_host)
+            ttnn.deallocate(tt_sigma_difference_host)
 
         ttnn.synchronize_device(self._device)
         denoising_end_time = time.time()

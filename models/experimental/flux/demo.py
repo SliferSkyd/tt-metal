@@ -29,8 +29,8 @@ import pytest
 @pytest.mark.parametrize(
     "model_name,num_inference_steps,image_w,image_h,batch_size,mesh_width,t5_on_device",
     [
-        ("schnell", 4, 1024, 1024, 1, 8, True),
-        # ("dev", 50, 1024, 1024, 1, 8, True),
+        # ("schnell", 4, 1024, 1024, 1, 8, True),
+        ("dev", 50, 1024, 1024, 1, 8, True),
     ],
 )
 @pytest.mark.parametrize("device_params", [{"l1_small_size": 16 * 1024, "trace_region_size": 15210496}], indirect=True)
