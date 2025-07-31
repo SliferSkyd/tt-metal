@@ -451,5 +451,20 @@ def test_vit(device, model_name, batch_size, image_size, image_channels, sequenc
         parameters=parameters,
     )
     output = ttnn.to_torch(output)
+
+    # print(output.shape)
+    # print(torch_output.shape)
+    # print(output[7, 0, :1000])
+    # print("\n", torch_output)
     # 1000 classes slicing
     assert_with_pcc(torch_output, output[0, 0, :1000], 0.88)
+    # print(pcc_0)
+    # pcc_1 = assert_with_pcc(torch_output, output[1, 0, :1000], 0.88)
+    # print(pcc_1)
+    # pcc_2 = assert_with_pcc(torch_output, output[2, 0, :1000], 0.88)
+    # print(pcc_2)
+    # pcc_5 = assert_with_pcc(torch_output, output[5, 0, :1000], 0.88)
+    # print(pcc_5)
+    # pcc_7 = assert_with_pcc(torch_output, output[7, 0, :1000], 0.88)
+    # print(pcc_7)
+    # assert pcc_0 or pcc_1 or pcc_2 or pcc_5 or pcc_7

@@ -13,6 +13,7 @@
 #include "compute_kernel_api/eltwise_binary.h"
 #include "compute_kernel_api/layernorm.h"
 #include "compute_kernel_api/tile_move_copy.h"
+#include "debug/dprint_tensix.h"
 
 // SPLIT REDUCE across Cores
 namespace NAMESPACE {
@@ -315,12 +316,16 @@ void MAIN {
                 add_tiles(cb_ex2, cb_eps, i, 0, dst0);
                 tile_regs_wait();
                 // sqrt(Var + eps)
-                sqrt_tile_init();
-                sqrt_tile(dst0);
-                tile_regs_wait();
+                // sqrt_tile_init();
+                // sqrt_tile(dst0);
                 // 1/[sqrt(Var + eps)]
-                recip_tile_init();
-                recip_tile(dst0);
+                ln_rsqrt_tile_init();
+                ln_rsqrt_tile(dst0);
+                // dprint_tensix_dest_reg(0);
+
+                tile_regs_wait();
+                // recip_tile_init();
+                // recip_tile(dst0);
                 tile_regs_commit();
                 tile_regs_wait();
                 pack_tile(dst0, cb_ex2pe);

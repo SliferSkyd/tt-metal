@@ -27,6 +27,7 @@ ttnn::Tensor ExecuteLayerNorm::invoke(
 
     // For 0D tensors
     TT_FATAL(rank > 0, "LayerNorm operation not supported for 0D tensors. (rank={})", rank);
+    std::cout << "layernorm call" << std::endl;
 
     // For 0V tensors
     if (input_tensor.logical_volume() == 0) [[unlikely]] {
