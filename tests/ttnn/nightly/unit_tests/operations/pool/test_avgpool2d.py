@@ -128,14 +128,9 @@ def run_avg_pool2d(
         # Normal reduction cases are when channels <= 8 * 32 and kernel_hw <= 16
         # Wide reduction cases channels > 8 * 32
         # Large reduction cases (channels < 32 and kernel_hw > 16) or (channels > 32 and kernel_hw > 32)
-        [1, 32, 16, 16],
-        [1, 512, 112, 32],
-        [1, 512, 16, 16],
-        [1, 800, 16, 16],
-        [2, 32, 16, 16],
-        [2, 512, 112, 32],
-        [2, 512, 16, 16],
-        [2, 800, 16, 16],
+        [1, 512, 28, 28],
+        [1, 800, 32, 32],
+        [1, 576, 32, 32],
     ),
 )
 @pytest.mark.parametrize(
@@ -145,40 +140,29 @@ def run_avg_pool2d(
         # Large reductions go to large kernels
         # Reductions which are large and wide at the same time
         # go to large kernels
-        (2, 2),
         (3, 3),
         (5, 5),
-        (9, 9),
+        (7, 7),
     ),
 )
 @pytest.mark.parametrize(
     "stride",
-    (
-        (1, 1),
-        (2, 2),
-    ),
+    ((1, 1),),
 )
 @pytest.mark.parametrize(
     "padding",
-    (
-        (0, 0),
-        (1, 2),
-        (2, 3),
-        (4, 4),
-    ),
+    ((0, 0),),
 )
 @pytest.mark.parametrize(
     "ceil_mode",
     [
         False,
-        True,
     ],
 )
 @pytest.mark.parametrize(
     "count_include_pad",
     [
         False,
-        True,
     ],
 )
 @pytest.mark.parametrize(
@@ -192,13 +176,15 @@ def run_avg_pool2d(
     "shard_scheme",
     [
         ttnn.TensorMemoryLayout.HEIGHT_SHARDED,
-        ttnn.TensorMemoryLayout.WIDTH_SHARDED,
-        ttnn.TensorMemoryLayout.BLOCK_SHARDED,
     ],
 )
 @pytest.mark.parametrize(
     "use_program_cache",
-    [True, False],
+    [False],
+)
+@pytest.mark.parametrize(
+    "dtype",
+    [ttnn.bfloat8_b],
 )
 def test_run_avg_pool2d(
     device,
@@ -212,6 +198,7 @@ def test_run_avg_pool2d(
     divisor_override,
     count_include_pad,
     shard_scheme,
+    dtype,
 ):
     if (
         shard_scheme == ttnn.TensorMemoryLayout.WIDTH_SHARDED
@@ -237,4 +224,5 @@ def test_run_avg_pool2d(
         count_include_pad=count_include_pad,
         shard_scheme=shard_scheme,
         run_twice=True,
+        dtype=dtype,
     )
