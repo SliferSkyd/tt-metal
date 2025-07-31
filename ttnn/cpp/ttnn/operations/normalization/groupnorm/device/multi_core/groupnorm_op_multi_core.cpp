@@ -32,14 +32,28 @@ inline bool is_dram(const std::optional<const Tensor>& input_tensor) {
 
 int get_max_subblock(uint32_t n, uint32_t max_subblock_w) {
     if (n <= max_subblock_w) {
+        log_info(tt::LogOp, "Using subblock size {} for {} as it is less than or equal to {}", n, n, max_subblock_w);
         return n;
     }
 
     for (int quotient = max_subblock_w; quotient > 1; --quotient) {
         if (n % quotient == 0) {
+            log_info(
+                tt::LogOp,
+                "Using subblock size {} for {} as it is the largest divisor of {} that is less than or equal to {}",
+                quotient,
+                n,
+                n,
+                max_subblock_w);
             return quotient;
         }
     }
+    log_info(
+        tt::LogOp,
+        "Using subblock size 1 for {} as it is the only divisor of {} that is less than or equal to {}",
+        n,
+        n,
+        max_subblock_w);
     return 1;
 }
 bool is_rectangle_grid(const std::vector<CoreCoord>& core_coords) {
@@ -297,6 +311,14 @@ operation::ProgramWithCallbacks groupnorm_multi_core_sharded(
     uint32_t subblock_wt = get_max_subblock(block_wt, 8);
     uint32_t num_subblocks_w = block_wt / subblock_wt;
     bool block_wt_last = (per_core_Nt + num_groups_per_core - 1) / num_groups_per_core;
+    log_info(tt::LogOp, "per_core_N: {}, per_core_M: {}", per_core_N, per_core_M);
+    log_info(tt::LogOp, "block_wt: {}, num_groups_per_reset: {}", block_wt, num_groups_per_reset);
+    log_info(
+        tt::LogOp,
+        "subblock_wt: {}, num_subblocks_w: {}, block_wt_last: {}",
+        subblock_wt,
+        num_subblocks_w,
+        block_wt_last);
 
     log_debug(tt::LogOp, "num_cores: {}", num_cores);
     log_debug(tt::LogOp, "num_rows_per_batch_per_core: {}", per_core_M / num_batches_per_core);
@@ -1218,6 +1240,13 @@ operation::ProgramWithCallbacks groupnorm_multi_core(
     uint32_t subblock_wt = get_max_subblock(block_wt, 8);
     uint32_t num_subblocks_w = block_wt / subblock_wt;
     bool block_wt_last = (per_core_Nt + num_groups_per_core - 1) / num_groups_per_core;
+    log_info(tt::LogOp, "block_wt: {}, num_groups_per_reset: {}", block_wt, num_groups_per_reset);
+    log_info(
+        tt::LogOp,
+        "subblock_wt: {}, num_subblocks_w: {}, block_wt_last: {}",
+        subblock_wt,
+        num_subblocks_w,
+        block_wt_last);
 
     // support for uneven batches across rows
     bool equal_batches_per_core = true;

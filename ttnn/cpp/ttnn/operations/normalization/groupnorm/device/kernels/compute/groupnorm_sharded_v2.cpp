@@ -19,7 +19,8 @@
 #include "compute_kernel_api/untilize.h"
 #include "compute_kernel_api/matmul.h"
 
-// #include "debug/dprint.h"
+#include "debug/dprint.h"
+#include "dprint_pages.h"
 // #include "debug/waypoint.h"
 
 // SPLIT REDUCE across Cores
@@ -36,10 +37,10 @@ void MAIN {
     constexpr uint32_t num_cols_per_group = get_compile_time_arg_val(6);
 
     volatile uint32_t block_h = get_compile_time_arg_val(7);
-    constexpr uint32_t block_w = get_compile_time_arg_val(8);
-    constexpr uint32_t block_hw = get_compile_time_arg_val(9);
+    constexpr uint32_t block_w_MAX = get_compile_time_arg_val(8);
+    constexpr uint32_t block_hw_MAX = get_compile_time_arg_val(9);
 
-    constexpr uint32_t subblock_w = get_compile_time_arg_val(10);
+    constexpr uint32_t subblock_w_MAX = get_compile_time_arg_val(10);
     constexpr uint32_t num_subblocks_w = get_compile_time_arg_val(11);
 
     constexpr uint32_t per_core_M = get_compile_time_arg_val(12);
@@ -58,8 +59,8 @@ void MAIN {
     constexpr uint32_t GROUP_SIZE_SMALLER_THAN_TILE_W = get_compile_time_arg_val(22);
     constexpr uint32_t group_row_offset = get_compile_time_arg_val(23);
 
-    constexpr uint32_t block_w_minus_one = block_w - 1;
-    constexpr uint32_t block_w_minus_two = block_w - 2;
+    constexpr uint32_t block_w_minus_one = block_w_MAX - 1;
+    constexpr uint32_t block_w_minus_two = block_w_MAX - 2;
     constexpr uint32_t tile_w_minux_group_size = TILE_WIDTH - num_cols_per_group;
 
     // dst regs
@@ -118,6 +119,8 @@ void MAIN {
     uint32_t row_offset = num_cols_per_group;
     uint32_t output_tile_index = 0;
 
+    // DPRINT << "row_offset: " << row_offset << ENDL();
+
 #ifdef UNTILIZE_OUT
     constexpr int cb_outgamma = cb_in;
     constexpr int cb_inbeta = do_gamma ? cb_outgamma : cb_out;
@@ -159,25 +162,38 @@ void MAIN {
 #else
     binary_op_init_common(cb_in0, cb_input_mask, cb_x);
 #endif
+    // tt::compute::common::print_full_tile(cb_in, 0, true);
+    // tt::compute::common::print_full_tile(cb_in, 1, false);
 
     index_b_offset = 0;
     for (uint32_t b = 0; b < batch; ++b) {
         index_g_offset = 0;
         index_mask_offset = 0;
         for (uint32_t g = 0; g < group; ++g) {
+            uint32_t ovf_tile = row_offset % TILE_WIDTH ? 1 : 0;
+            uint32_t subblock_w = (row_offset) / 32 + ovf_tile;
+            uint32_t block_w = subblock_w * num_subblocks_w;
+            uint32_t block_hw = block_h * block_w;
+            // DPRINT << "Index_g_offset: " << index_g_offset  << " G: " << g << ENDL();
             // mask input
             index_h_offset = index_b_offset + index_g_offset;
             reconfig_data_format_srcb(cb_in0, cb_input_mask);
             mul_tiles_init(cb_in0, cb_input_mask);
             cb_reserve_back(cb_x, block_hw);
-            cb_wait_front(cb_input_mask, block_w);
+            cb_wait_front(cb_input_mask, block_w_MAX);
+            // DPRINT << "subblock_w: " << subblock_w << ENDL();
+            // tt::compute::common::print_full_tile(cb_input_mask, 1, true);
             for (uint32_t i = 0; i < block_h; ++i) {
                 index_subblock_w_offset = 0;
+
                 for (uint32_t j = 0; j < num_subblocks_w; ++j) {
                     tile_regs_acquire();
                     for (uint32_t w = 0; w < subblock_w; ++w) {
+                        // DPRINT << "w: " << w << " index_subblock_w_offset: " << index_subblock_w_offset
+                        //        << " index_h_offset: " << index_h_offset << ENDL();
                         uint32_t index = w + index_subblock_w_offset + index_h_offset;
                         uint32_t index_mask = w + index_subblock_w_offset;
+                        DPRINT << "Index: " << index << " index_mask: " << index_mask << ENDL();
 #ifdef TILIZE_IN
                         mul_tiles(cb_in, cb_input_mask, index, index_mask, w);
 #else
@@ -196,6 +212,8 @@ void MAIN {
             }
             cb_push_back(cb_x, block_hw);
             reconfig_data_format_srcb(cb_input_mask, cb_scaler);
+
+            // tt::compute::common::print_full_tile(cb_x, 1, true);
 
             // Partial-E[x]
             index_h_offset = 0;
@@ -285,7 +303,7 @@ void MAIN {
                 }
                 cb_pop_front(cb_xmm, block_w);
             }
-            cb_pop_front(cb_input_mask, block_w);
+            cb_pop_front(cb_input_mask, block_w_MAX);
             cb_push_back(cb_x, block_hw);
             reconfig_data_format_srcb(cb_input_mask, cb_x);
 
@@ -407,14 +425,17 @@ void MAIN {
 
             // add or copy with previous output results
             uint32_t block_w_curr = index_g_offset == (per_core_N - block_w_last) ? block_w_last : block_w;
-
+            // DPRINT << "block_w_curr: " << block_w_curr << ENDL();
             for (uint32_t w = 0; w < block_w_curr; ++w) {
                 index_h_offset = index_b_offset + index_g_offset;
+                // DPRINT << "index_h_offset: " << index_h_offset << ENDL();
                 uint32_t index_h1_offset = 0;
 
                 if (copy_or_add == true) {
+                    // DPRINT << "copy_tile_init" << ENDL();
                     copy_tile_init(cb_xmm);
                 } else {
+                    // DPRINT << "add_tiles_init" << ENDL();
                     add_tiles_init(cb_out, cb_xmm);
                 }
 
@@ -436,8 +457,12 @@ void MAIN {
                     index_h_offset += per_core_N;
                     index_h1_offset += block_w;
                 }
+                // DPRINT << "G: " << g << ENDL();
+                // tt::compute::common::print_full_tile(cb_out, w, true);
 
                 // update group tile offset
+                // DPRINT << "index_block_w: " << index_block_w << ENDL();
+                // DPRINT << "group_reset_index: " << group_reset_index << ENDL();
                 if (index_block_w >= block_w_curr - 1) {
                     index_block_w = 0;
 
@@ -458,6 +483,8 @@ void MAIN {
             cb_pop_front(cb_xmm, block_hw);
 
             if constexpr (GROUP_SIZE_IS_POWER_OF_2) {
+                // DPRINT << "GROUP_SIZE_IS_POWER_OF_2" << ENDL();
+                // DPRINT << "row_offset: " << row_offset << ENDL();
                 if (row_offset == TILE_WIDTH) {
                     index_g_offset += block_w;
                     row_offset = num_cols_per_group;
@@ -467,6 +494,11 @@ void MAIN {
                     row_offset += num_cols_per_group;
                 }
             } else if constexpr (GROUP_SIZE_SMALLER_THAN_TILE_W) {
+                // DPRINT << "GROUP_SIZE_SMALLER_THAN_TILE_W" << ENDL();
+                // DPRINT << "row_offset: " << row_offset << " G: "<< g<< ENDL();
+                // DPRINT << "block_w_minus_one: " << block_w_minus_one << ENDL();
+                // DPRINT << "group_row_offset: " << group_row_offset << ENDL();
+                // DPRINT << "num_cols_per_group: " << num_cols_per_group << ENDL();
                 if (row_offset == TILE_WIDTH) {
                     index_g_offset += block_w_minus_one;
                     row_offset = num_cols_per_group;
@@ -478,6 +510,7 @@ void MAIN {
                 } else {
                     row_offset += num_cols_per_group;
                 }
+                // DPRINT << "index_g_offset: " << index_g_offset << " G: " << g << ENDL();
             } else {
                 if (row_offset > TILE_WIDTH) {
                     index_g_offset += block_w_minus_one;
@@ -493,6 +526,9 @@ void MAIN {
 
     cb_push_back(cb_out, per_core_MN);
     cb_pop_front(cb_in, per_core_MN);
+
+    // tt::compute::common::print_full_tile(cb_out, 0, true);
+    // tt::compute::common::print_full_tile(cb_out, 1, true);
 
     if constexpr (do_gamma) {
         index_h_offset = 0;
@@ -516,6 +552,9 @@ void MAIN {
         cb_wait_front(cb_outgamma, per_core_MN);
     }
 
+    // tt::compute::common::print_full_tile(cb_outgamma, 0, true);
+    // tt::compute::common::print_full_tile(cb_outgamma, 1, true);
+
     if constexpr (do_beta) {
         index_h_offset = 0;
         add_bcast_rows_init_short(cb_inbeta, cb_beta);
@@ -537,6 +576,8 @@ void MAIN {
         cb_pop_front(cb_inbeta, per_core_MN);
         cb_wait_front(cb_outbeta, per_core_MN);
     }
+    // tt::compute::common::print_full_tile(cb_outbeta, 0, true);
+    // tt::compute::common::print_full_tile(cb_outbeta, 1, true);
 
 #ifdef UNTILIZE_OUT
     // untilize
