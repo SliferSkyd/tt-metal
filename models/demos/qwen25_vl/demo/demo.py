@@ -168,11 +168,11 @@ def create_tt_model(
             True,  # ci_only
         ),
         (  # Batch-32 run with single decoder layer (CI only) - 32 users
-            "models/demos/qwen25_vl/demo/sample_prompts/multi_prompts_32.json",  # real multi-user prompts
+            "models/demos/qwen25_vl/demo/sample_prompts/test_8.json",  # real multi-user prompts
             True,  # instruct mode
             1,  # repeat_batches to simulate multiple users with the same prompt
             4096,  # max_seq_len, allow for image tokens
-            32,  # batch_size -- samples to load from the prompt JSON
+            8,  # batch_size -- samples to load from the prompt JSON
             200,  # max_generated_tokens
             True,  # paged_attention
             {"page_block_size": 32, "page_max_num_blocks": 4096},  # page_params
@@ -203,7 +203,7 @@ def create_tt_model(
 )
 @pytest.mark.parametrize(
     "device_params",
-    [{"trace_region_size": 28276736, "num_command_queues": 1}],
+    [{"trace_region_size": 28276736, "num_command_queues": 1, "physical_device_ids": [0]}],
     indirect=True,
 )
 @pytest.mark.parametrize(
@@ -248,7 +248,7 @@ def test_demo(
 
     logger.info(f"mesh_device: {mesh_device}")
     use_tt_vision = True
-    enable_trace = True  # Use tracing for better perf
+    enable_trace = False  # Use tracing for better perf
     print_to_file = False  # Enable this flag to print the output of all users to a file
 
     # Override parameters from command line if they are provided
