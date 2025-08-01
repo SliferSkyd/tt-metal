@@ -1,0 +1,52 @@
+diff --git a/tt_metal/hw/ckernels/blackhole/metal/llk_io/llk_io_pack.h b/tt_metal/hw/ckernels/blackhole/metal/llk_io/llk_io_pack.h
+index 700b4937c5..0a8be6bebe 100644
+--- a/tt_metal/hw/ckernels/blackhole/metal/llk_io/llk_io_pack.h
++++ b/tt_metal/hw/ckernels/blackhole/metal/llk_io/llk_io_pack.h
+@@ -18,7 +18,7 @@ using namespace ckernel;
+ template <bool skip_sync = false, bool wait_for_blocks = false, bool brisc_pack = false>
+ inline void llk_wait_for_free_tiles(const std::int32_t operand, const std::int32_t num_tiles) {
+     // TODO(MO): Manually uncomment until issue #6619 is resolved
+-    // DeviceZoneScopedSumN2("CB-COMPUTE-RESERVE-BACK");
++    DeviceZoneScopedSumN2("CB-COMPUTE-RESERVE-BACK");
+     std::uint32_t output = operand;
+
+     volatile tt_reg_ptr std::uint32_t* tiles_acked_ptr = get_cb_tiles_acked_ptr(operand);
+diff --git a/tt_metal/hw/ckernels/blackhole/metal/llk_io/llk_io_unpack.h b/tt_metal/hw/ckernels/blackhole/metal/llk_io/llk_io_unpack.h
+index df31e6f049..3f2b264d68 100644
+--- a/tt_metal/hw/ckernels/blackhole/metal/llk_io/llk_io_unpack.h
++++ b/tt_metal/hw/ckernels/blackhole/metal/llk_io/llk_io_unpack.h
+@@ -16,7 +16,7 @@ using namespace ckernel;
+ // Wait for N tiles available in the incoming stream
+ inline void llk_wait_tiles(int operand, std::int32_t num_tiles) {
+     // TODO(MO): Manually uncomment until issue #6619 is resolved
+-    // DeviceZoneScopedSumN1("CB-COMPUTE-WAIT-FRONT");
++    DeviceZoneScopedSumN1("CB-COMPUTE-WAIT-FRONT");
+     std::uint32_t input = operand;
+     volatile tt_l1_ptr std::uint32_t* tiles_received_ptr = get_cb_tiles_received_ptr(operand);
+     std::uint16_t num_tiles_u = (std::uint16_t)num_tiles;
+diff --git a/tt_metal/hw/ckernels/wormhole_b0/metal/llk_io/llk_io_pack.h b/tt_metal/hw/ckernels/wormhole_b0/metal/llk_io/llk_io_pack.h
+index 5b2109c0bf..9e21b3a7b0 100644
+--- a/tt_metal/hw/ckernels/wormhole_b0/metal/llk_io/llk_io_pack.h
++++ b/tt_metal/hw/ckernels/wormhole_b0/metal/llk_io/llk_io_pack.h
+@@ -18,7 +18,7 @@ using namespace ckernel;
+ template <bool skip_sync = false, bool wait_for_blocks = false, bool brisc_pack = false>
+ inline void llk_wait_for_free_tiles(const std::int32_t operand, const std::int32_t num_tiles) {
+     // TODO(MO): Manually uncomment until issue #6619 is resolved
+-    // DeviceZoneScopedSumN2("CB-COMPUTE-RESERVE-BACK");
++    DeviceZoneScopedSumN2("CB-COMPUTE-RESERVE-BACK");
+     std::uint32_t output = operand;
+
+     volatile tt_reg_ptr std::uint32_t* tiles_acked_ptr = get_cb_tiles_acked_ptr(operand);
+diff --git a/tt_metal/hw/ckernels/wormhole_b0/metal/llk_io/llk_io_unpack.h b/tt_metal/hw/ckernels/wormhole_b0/metal/llk_io/llk_io_unpack.h
+index 6b4eea296e..a0a9072c95 100644
+--- a/tt_metal/hw/ckernels/wormhole_b0/metal/llk_io/llk_io_unpack.h
++++ b/tt_metal/hw/ckernels/wormhole_b0/metal/llk_io/llk_io_unpack.h
+@@ -65,7 +65,7 @@ inline __attribute__((__always_inline__)) void apply_mm_stagger(int operand) {
+ // Wait for N tiles available in the incoming stream
+ inline void llk_wait_tiles(int operand, std::int32_t num_tiles) {
+     // TODO(MO): Manually uncomment until issue #6619 is resolved
+-    // DeviceZoneScopedSumN1("CB-COMPUTE-WAIT-FRONT");
++    DeviceZoneScopedSumN1("CB-COMPUTE-WAIT-FRONT");
+     std::uint32_t input = operand;
+     volatile tt_l1_ptr std::uint32_t* tiles_received_ptr = get_cb_tiles_received_ptr(operand);
+     std::uint16_t num_tiles_u = (std::uint16_t)num_tiles;
