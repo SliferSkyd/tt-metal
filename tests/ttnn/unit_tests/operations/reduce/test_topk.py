@@ -20,20 +20,21 @@ def run_topk_test(N, C, H, W, k, dtype, dim, sorted, largest, device, sub_core_g
         indices_tensor_torch = torch.zeros(shape, dtype=torch.int32)
         for i in range(W):
             indices_tensor_torch[:, :, :, i] = i
-        indices_tensor = ttnn.from_torch(indices_tensor_torch, ttnn.uint32, layout=ttnn.Layout.TILE, device=device)
+        indices_tensor = ttnn.from_torch(indices_tensor_torch, ttnn.uint16, layout=ttnn.Layout.TILE, device=device)
     else:
         indices_tensor = None
 
     try:
-        ttnn_topk_values, ttnn_topk_indices = ttnn.topk(
-            ttnn_input,
-            k,
-            dim=dim,
-            largest=largest,
-            sorted=sorted,
-            sub_core_grids=sub_core_grids,
-            indices_tensor=indices_tensor,
-        )
+        for _ in range(20):
+            ttnn_topk_values, ttnn_topk_indices = ttnn.topk(
+                ttnn_input,
+                k,
+                dim=dim,
+                largest=largest,
+                sorted=sorted,
+                sub_core_grids=sub_core_grids,
+                indices_tensor=indices_tensor,
+            )
     except Exception as e:
         raise e
 
@@ -147,7 +148,7 @@ def test_topk(N, C, H, W, dim, k, dtype, sorted, largest, device, sub_core_grids
 @pytest.mark.parametrize(
     "pass_indices_tensor",
     [
-        False,
+        True,
     ],
 )
 @pytest.mark.parametrize(
@@ -162,13 +163,34 @@ def test_topk(N, C, H, W, dim, k, dtype, sorted, largest, device, sub_core_grids
         ),
     ],
 )
-def test_topk_sub_core_grids(N, C, H, W, dim, k, dtype, sorted, largest, device, sub_core_grids, pass_indices_tensor):
+@pytest.mark.parametrize(  # Worker size is selected to give 120kB ringbuffer size
+    "device_params",
+    [
+        {
+            "dispatch_core_axis": ttnn.DispatchCoreAxis.COL,
+        }
+    ],
+    indirect=True,
+)
+def test_topk_sub_core_grids(
+    N, C, H, W, dim, k, dtype, sorted, largest, device, sub_core_grids, pass_indices_tensor, galaxy_type
+):
     if dim == 0 or dim == 1:
         # As of now, when we try to get top-k for dim = 0 or 1, we get following error from transpose_op.cpp's validate():
         # input_tensor.get_dtype() == DataType::BFLOAT16 || input_tensor.get_dtype() == DataType::FLOAT32
         # this is because, transpose.cpp always typecasts bf8 to bf16
         # and when dim = 0 or 1, transpose converts it into TransposeOpDim::HC & this dim doesnt support bf16 or fp32
         pytest.skip()
+    # if galaxy_type == "6U" change coreCoord to (1, 0) to (3, 9)
+    if galaxy_type == "6U":
+        sub_core_grids = ttnn.CoreRangeSet(
+            [
+                ttnn.CoreRange(
+                    ttnn.CoreCoord(1, 0), ttnn.CoreCoord(3, 9)
+                )  # Note: for TG llama we use 1,0 to 3,9 but this requires TGs (non-harvested) and "dispatch_core_axis": ttnn.DispatchCoreAxis.COL
+            ]
+        )
+        print("Using sub_core_grids for 6U galaxy type:", sub_core_grids)
     run_topk_test(N, C, H, W, k, dtype, dim, sorted, largest, device, sub_core_grids, pass_indices_tensor)
 
 
