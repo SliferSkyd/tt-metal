@@ -6,7 +6,7 @@
 #include <cstdint>
 #include "dataflow_api.h"
 
-#define ENABLE_DEBUG_PRINT 0
+#define ENABLE_DEBUG_PRINT 1
 
 #if ENABLE_DEBUG_PRINT == 1
 #include "debug/dprint.h"
@@ -100,7 +100,7 @@ ALWI void read_window_with_top_left_index(uint32_t ind, uint32_t in_l1_read_base
         }
         uint32_t in_l1_write_addr = get_write_ptr(in_cb_id);
         uint32_t processed_sticks = 0;
-        cb_reserve_back(in_cb_id, 1);
+        cb_reserve_back(in_cb_id, in_ntiles_c);  // br zabo
         for (uint32_t h = 0; h < window_h; ++h) {
             auto process_h = [&](uint32_t w_offset, uint32_t w_multiple) __attribute__((always_inline)) {
                 const uint32_t stick_offset = ind + w_offset + h * in_w_padded;
@@ -156,7 +156,9 @@ ALWI void read_window_with_top_left_index(uint32_t ind, uint32_t in_l1_read_base
         }
         if constexpr (!is_large_kernel) {
             noc_async_read_barrier();
-            cb_push_back(in_cb_id, 1);
+            cb_push_back(in_cb_id, in_ntiles_c);
+            // DPRINT << "send:" << ENDL();
+            // tt::data_movement::common::print_bf16_pages(get_read_ptr(in_cb_id), 128, 32);
         }
     }
 }
@@ -233,6 +235,7 @@ void kernel_main() {
     constexpr uint32_t config_cb_id = get_compile_time_arg_val(24);
     constexpr uint32_t multi_buffering_factor = get_compile_time_arg_val(25);
     constexpr uint32_t stride_w = get_compile_time_arg_val(26);
+    constexpr uint32_t weight_cb_id = get_compile_time_arg_val(27);
 
     constexpr uint32_t in_scalar_cb_id =
         split_reader && reader_id == 1 && !one_scalar_per_core ? in_scalar_cb_id_1 : in_scalar_cb_id_0;
@@ -277,6 +280,13 @@ void kernel_main() {
     if constexpr (reader_id == 0 && one_scalar_per_core) {
         fill_with_val(get_write_ptr(in_scalar_cb_id_0), TILE_WIDTH, bf16_scalar >> 16);
         cb_push_back(in_scalar_cb_id_0, 1);
+    }
+
+    if constexpr (reader_id == 0) {
+        fill_with_val(get_write_ptr(weight_cb_id), TILE_HEIGHT * TILE_WIDTH, 0x3f80);
+    } else {
+        // fill_with_val(
+        //     get_write_ptr(weight_cb_id) + (TILE_HEIGHT * TILE_WIDTH) / 4, TILE_HEIGHT * TILE_WIDTH / 4, 0x4000);
     }
 
     const uint32_t in_l1_read_base_addr = get_read_ptr(in_shard_cb_id);

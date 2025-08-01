@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "pool_utils.hpp"
+#include <cstdint>
 #include <limits>
+#include <tt-logger/tt-logger.hpp>
 #include <tt-metalium/bfloat16.hpp>
 #include <tt-metalium/assert.hpp>
 
@@ -216,8 +218,8 @@ uint32_t calculate_L1_usage(
     }
 
     uint32_t in_cb_page_padded = tt::round_up(in_cb_sz, tt::constants::TILE_HW);
-    uint32_t in_cb_pagesize = params.nbytes * in_cb_page_padded;
-    uint32_t in_cb_npages = params.multi_buffering_factor;
+    uint32_t in_cb_pagesize = params.multi_buffering_factor * 8;
+    uint32_t in_cb_npages = params.nbytes * tt::constants::TILE_HW;
     uint32_t in_cb_config_0_size = in_cb_npages * in_cb_pagesize;
     uint32_t in_cb_config_1_size = 0;
 
@@ -237,8 +239,26 @@ uint32_t calculate_L1_usage(
         return factor * alignment_bytes;
     };
 
-    return in_scalar_cb_size_0 + in_scalar_cb_size_1 + clear_value_cb_size + in_cb_config_0_size + in_cb_config_1_size +
-           align(out_cb_config_size) /* global, involved */;
+    uint32_t num_pages_to_8 = 8 / params.in_ntiles_c;
+
+    uint32_t mul_cb_size = 2 * num_pages_to_8 * params.in_ntiles_c * tt::constants::TILE_HW * params.nbytes;
+
+    uint32_t weight_cb_size = tt::constants::TILE_HW * params.nbytes;
+
+    log_info(
+        tt::LogOp,
+        "L1 usage for Pool2D: in_scalar_cb_size_0 = {}, in_scalar_cb_size_1 = {}, clear_value_cb_size = {}, "
+        "in_cb_config_0_size = {}, mul_cb_size = {}, in_cb_config_1_size = {}, out_cb_config_size = {}",
+        in_scalar_cb_size_0,
+        in_scalar_cb_size_1,
+        clear_value_cb_size,
+        in_cb_config_0_size,
+        mul_cb_size,
+        in_cb_config_1_size,
+        out_cb_config_size);
+
+    return in_scalar_cb_size_0 + in_scalar_cb_size_1 + clear_value_cb_size + in_cb_config_0_size + mul_cb_size +
+           weight_cb_size + in_cb_config_1_size + align(out_cb_config_size) /* global, involved */;
 }
 
 std::optional<ParallelConfig> determine_pool_config_for_auto_shard(

@@ -4,6 +4,7 @@
 #include "pool_op.hpp"
 #include "tt-metalium/circular_buffer.hpp"
 #include "tt-metalium/circular_buffer_config.hpp"
+#include "tt-metalium/constants.hpp"
 #include "ttnn/operations/cb_utils.hpp"
 #include "ttnn/operations/pool/pool_utils.hpp"
 #include "tt-metalium/host_buffer.hpp"
@@ -345,10 +346,12 @@ Pool2D::MultiCore::cached_program_t pool2d_multi_core_sharded_with_halo_v2_impl_
     const uint32_t in_cb_page_padded = tt::round_up(
         in_cb_sz,
         tt::constants::TILE_HW);  // NOTE: ceil to tile size since triscs work with tilesize instead of pagesize
-    const uint32_t in_cb_pagesize = params.nbytes * in_cb_page_padded;
-    const uint32_t in_cb_npages = params.multi_buffering_factor;
+    const uint32_t in_cb_pagesize = params.nbytes * tt::constants::TILE_HW;  // in_cb_sz * nbytes
+    const uint32_t in_cb_npages = params.multi_buffering_factor * 8;
+    const uint32_t mul_cb_pagesize = params.nbytes * tt::constants::TILE_HW;
 
     tt::tt_metal::create_cb(in_cb_id_0, program, all_cores, in_cb_pagesize, in_cb_npages, params.data_format);
+    log_info(tt::LogOp, "in_cb_pagesize = {}, in_cb_npages = {}", in_cb_pagesize, in_cb_npages);
     log_debug(tt::LogOp, "CB {} :: PS = {}, NP = {}", in_cb_id_0, in_cb_pagesize, in_cb_npages);
 
     if (params.split_reader) {
@@ -356,6 +359,26 @@ Pool2D::MultiCore::cached_program_t pool2d_multi_core_sharded_with_halo_v2_impl_
         tt::tt_metal::create_cb(in_cb_id_1, program, all_cores, in_cb_pagesize, in_cb_npages, params.data_format);
         log_debug(tt::LogOp, "CB {} :: PS = {}, NP = {}", in_cb_id_1, in_cb_pagesize, in_cb_npages);
     }
+
+    auto [weight_cb_id, cb_weight] = tt::tt_metal::create_cb(
+        next_cb_index++, program, all_cores, tt::constants::TILE_HW * params.nbytes, 1, params.data_format);
+
+    uint32_t num_pages_to_8 = 8 / params.in_ntiles_c;
+
+    auto [mul_cb_id, cb_mul] = tt::tt_metal::create_cb(
+        next_cb_index++,
+        program,
+        all_cores,
+        mul_cb_pagesize,
+        params.multi_buffering_factor * params.in_ntiles_c * num_pages_to_8,
+        params.data_format);
+
+    log_info(
+        tt::LogOp,
+        "mul cb size: {}",
+        mul_cb_pagesize * params.multi_buffering_factor * params.in_ntiles_c * num_pages_to_8);
+
+    log_info(tt::LogOp, "weight: Page size = {}, Num pages = {}", in_cb_pagesize, in_cb_npages);
 
     // output of reduce == writer to write
     // output rows in RM
@@ -443,7 +466,9 @@ Pool2D::MultiCore::cached_program_t pool2d_multi_core_sharded_with_halo_v2_impl_
         one_scalar_per_core,
         config_cb_id,
         params.multi_buffering_factor,
-        stride_w};
+        stride_w,
+        weight_cb_id};
+
     std::vector<uint32_t> reader1_ct_args = reader0_ct_args;
     reader1_ct_args[8] = 1;  // split reader id for reader1
 
@@ -481,10 +506,12 @@ Pool2D::MultiCore::cached_program_t pool2d_multi_core_sharded_with_halo_v2_impl_
         in_scalar_cb_id_0,
         in_scalar_cb_id_1,
         out_cb_id,
-        one_scalar_per_core};
+        one_scalar_per_core,
+        weight_cb_id,
+        mul_cb_id};
 
     auto compute_config = tt::tt_metal::ComputeConfig{
-        .math_fidelity = MathFidelity::HiFi4,
+        .math_fidelity = MathFidelity::LoFi,
         .fp32_dest_acc_en =
             params.is_avg_pool && params.is_large_kernel,  // for average pool requires fp32 accumulation to avoid
                                                            // precision error buildup over multiuple reduction stages
