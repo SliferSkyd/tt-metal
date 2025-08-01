@@ -7,6 +7,7 @@ from tests.ttnn.nightly.unit_tests.operations.conv.test_conv2d import run_conv, 
 import ttnn
 import torch
 from models.utility_functions import skip_for_blackhole
+from tests.ttnn.utils_for_testing import assert_with_pcc
 
 
 @pytest.mark.parametrize("device_params", [{"l1_small_size": 16384}], indirect=True)
@@ -190,3 +191,50 @@ def test_conv_dram(
             num_slices=num_slices,
         ),
     )
+
+
+def test_conv2d_my_case(device):
+    input_tensor = torch.load("conv2d_input_0.pt")
+    weight_tensor = torch.load("weight_tensor.pt")
+
+    # Convert from [N, C, H, W] → [N, H, W, C]
+    input_tensor_nhwc = input_tensor.permute(0, 2, 3, 1).contiguous()
+
+    input_tt = ttnn.from_torch(input_tensor_nhwc, layout=ttnn.TILE_LAYOUT, device=device)
+    weight_tt = ttnn.from_torch(weight_tensor, layout=ttnn.ROW_MAJOR_LAYOUT, device=device)
+
+    batch_size, input_height, input_width, in_channels = input_tensor_nhwc.shape
+    out_channels, _, kernel_height, kernel_width = weight_tensor.shape
+
+    output_tt = ttnn.conv2d(
+        input_tensor=input_tt,
+        weight_tensor=weight_tt,
+        device=device,
+        in_channels=in_channels,
+        out_channels=out_channels,
+        batch_size=batch_size,
+        input_height=input_height,
+        input_width=input_width,
+        kernel_size=[kernel_height, kernel_width],
+        stride=[16, 16],
+        padding=[0, 0, 0, 0],  # top, bottom, left, right
+        dilation=[1, 1],
+        groups=1,
+    )
+
+    # Convert output back to torch
+    output_torch = ttnn.to_torch(output_tt)
+
+    # Run PyTorch conv2d for reference
+    conv_ref = torch.nn.functional.conv2d(
+        input_tensor,
+        weight_tensor,
+        bias=None,
+        stride=(16, 16),
+        padding=0,
+        dilation=1,
+        groups=1,
+    )
+
+    # Compare with PCC
+    assert_with_pcc(conv_ref, output_torch.permute(0, 3, 1, 2).contiguous())

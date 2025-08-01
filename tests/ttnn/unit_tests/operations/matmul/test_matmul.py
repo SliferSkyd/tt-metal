@@ -99,6 +99,21 @@ def test_pytorch_2_0_failed_cases(device, m, k, n):
     assert_with_pcc(z_t, z)
 
 
+@pytest.mark.parametrize("input_prefix", ["c1", "c2", "c3"])
+def test_matmul_my_cases(input_prefix, device):
+    x = torch.load(f"{input_prefix}_matmul_input_0.pt")
+    y = torch.load(f"{input_prefix}_matmul_input_1.pt")
+
+    x_tt = ttnn.from_torch(x, layout=ttnn.TILE_LAYOUT, device=device)
+    y_tt = ttnn.from_torch(y, layout=ttnn.TILE_LAYOUT, device=device)
+
+    z_tt = ttnn.matmul(x_tt, y_tt)
+    z = ttnn.to_torch(z_tt)
+
+    z_t = torch.matmul(x, y)
+    assert_with_pcc(z_t, z)
+
+
 @pytest.mark.parametrize("device_params", [{"dispatch_core_axis": ttnn.DispatchCoreAxis.COL}], indirect=True)
 @pytest.mark.parametrize("m", [256])
 @pytest.mark.parametrize("k", [256])
