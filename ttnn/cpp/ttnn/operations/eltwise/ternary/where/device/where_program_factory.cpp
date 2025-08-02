@@ -269,22 +269,29 @@ WhereDeviceOperation::WhereProgramFactory::cached_program_t WhereDeviceOperation
         num_tiles_per_cb,
         output_data_format);  // output
 
-    // READER KERNEL - Use TensorAccessorArgs (CBs now use fixed indices)
+    // READER KERNEL - Use TensorAccessorArgs with CB IDs first (like repeat pattern)
     std::vector<uint32_t> reader_compile_time_args;
 
-    // All variants need predicate tensor
-    TensorAccessorArgs(*predicate_tensor.buffer()).append_to(reader_compile_time_args);
+    // First, add all CB IDs at the beginning
+    reader_compile_time_args.push_back(predicate_tensor_cb);  // pos 0
 
     if (variant == WhereVariant::TTS) {
-        // TTS: predicate + value_true tensor
-        TensorAccessorArgs(*value_true_tensor.value().buffer()).append_to(reader_compile_time_args);
+        // TTS: predicate_cb(0), value_true_cb(1), then TensorAccessors(2+)
+        reader_compile_time_args.push_back(value_true_tensor_cb);                                     // pos 1
+        TensorAccessorArgs(*predicate_tensor.buffer()).append_to(reader_compile_time_args);           // pos 2+
+        TensorAccessorArgs(*value_true_tensor.value().buffer()).append_to(reader_compile_time_args);  // pos 2+N
     } else if (variant == WhereVariant::TST) {
-        // TST: predicate + value_false tensor
-        TensorAccessorArgs(*value_false_tensor.value().buffer()).append_to(reader_compile_time_args);
+        // TST: predicate_cb(0), value_false_cb(1), then TensorAccessors(2+)
+        reader_compile_time_args.push_back(value_false_tensor_cb);                                     // pos 1
+        TensorAccessorArgs(*predicate_tensor.buffer()).append_to(reader_compile_time_args);            // pos 2+
+        TensorAccessorArgs(*value_false_tensor.value().buffer()).append_to(reader_compile_time_args);  // pos 2+N
     } else {
-        // TTT: predicate + value_true + value_false tensors
-        TensorAccessorArgs(*value_true_tensor.value().buffer()).append_to(reader_compile_time_args);
-        TensorAccessorArgs(*value_false_tensor.value().buffer()).append_to(reader_compile_time_args);
+        // TTT: predicate_cb(0), value_true_cb(1), value_false_cb(2), then TensorAccessors(3+)
+        reader_compile_time_args.push_back(value_true_tensor_cb);                                      // pos 1
+        reader_compile_time_args.push_back(value_false_tensor_cb);                                     // pos 2
+        TensorAccessorArgs(*predicate_tensor.buffer()).append_to(reader_compile_time_args);            // pos 3+
+        TensorAccessorArgs(*value_true_tensor.value().buffer()).append_to(reader_compile_time_args);   // pos 3+N
+        TensorAccessorArgs(*value_false_tensor.value().buffer()).append_to(reader_compile_time_args);  // pos 3+N+M
     }
 
     tt_metal::ReaderDataMovementConfig reader_config(reader_compile_time_args);

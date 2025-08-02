@@ -13,10 +13,10 @@ void kernel_main() {
     uint32_t num_tiles = get_arg_val<uint32_t>(3);
     uint32_t start_id = get_arg_val<uint32_t>(4);
 
-    constexpr uint32_t cb_id_in0 = 0;
-    constexpr uint32_t cb_id_in1 = 1;
+    constexpr uint32_t cb_id_in0 = get_compile_time_arg_val(0);
+    constexpr uint32_t cb_id_in1 = get_compile_time_arg_val(1);
 
-    constexpr auto src0_args = TensorAccessorArgs<0>();
+    constexpr auto src0_args = TensorAccessorArgs<2>();
     constexpr auto src1_args = TensorAccessorArgs<src0_args.next_compile_time_args_offset()>();
 
     uint32_t l1_write_addr_in0;
