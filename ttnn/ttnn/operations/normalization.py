@@ -236,6 +236,38 @@ def create_group_norm_input_mask(num_channel, num_groups, num_cores_across_chann
     return input_mask_tensor
 
 
+def create_group_norm_input_negative_mask(num_channel, num_groups, num_cores_across_channel):
+    import torch
+
+    block_wt = find_max_tile_span(num_channel, num_channel // num_groups, 32)
+    input_mask_tensor = torch.ones((1, num_groups, 32, int(32 * block_wt)), dtype=torch.bfloat16)
+
+    num_groups_per_core = num_groups // num_cores_across_channel
+    num_cols_per_group = num_channel // num_groups
+
+    start_strides = []
+    for _ in range(num_cores_across_channel):
+        row_offset = 0
+        start_strides.append(0)
+        for _ in range(num_groups_per_core - 1):
+            if row_offset + (num_cols_per_group % 32) == 32:
+                row_offset = 0
+            elif row_offset + (num_cols_per_group % 32) > 32:
+                row_offset = (num_cols_per_group % 32) + row_offset - 32
+            else:
+                row_offset += num_cols_per_group % 32
+            start_strides.append(row_offset)
+        end_strides = [i + num_cols_per_group for i in start_strides]
+
+    for group in range(num_groups):
+        start_stride = start_strides[group]
+        end_stride = end_strides[group]
+        end_stride = min(end_stride, input_mask_tensor.shape[3])
+        input_mask_tensor[:, group, :, start_stride:end_stride] = 0
+
+    return input_mask_tensor
+
+
 def get_group_norm_cores_accross_channel(memory_layout, core_grid):
     if memory_layout == ttnn.types.TensorMemoryLayout.BLOCK_SHARDED:
         num_cores_across_channel = core_grid.y
