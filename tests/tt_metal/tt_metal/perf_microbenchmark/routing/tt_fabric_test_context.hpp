@@ -25,6 +25,7 @@
 #include "tt_fabric_test_traffic.hpp"
 #include "tt_fabric_test_allocator.hpp"
 #include "tt_fabric_test_memory_map.hpp"
+#include "tt_fabric_telemetry_reader.hpp"
 
 // Constants
 const std::string output_dir = "generated/fabric";
@@ -373,6 +374,14 @@ public:
         // validate perf with golden csv
         generate_comparison_csv(config);
         validate_against_golden();
+
+        // Read fabric telemetry data
+        const auto& mesh_device_view = fixture_->get_mesh_device_view();
+        auto telemetry_entries = read_fabric_telemetry_data(mesh_device_view);
+        get_bandwidth_table_as_csv_string(telemetry_entries);
+
+        // Print results to CSV
+        print_results_to_csv(fixture_->get_mesh_device_view(), telemetry_entries);
     }
 
     void initialize_csv_file() {
