@@ -11,7 +11,7 @@ from models.experimental.uniad.tt.ttnn_utils import (
     norm_points,
     pos2posemb2d,
     anchor_coordinate_transform,
-    bivariate_gaussian_activation,
+    bivariate_gaussian_activation_motion_head,
 )
 from models.experimental.uniad.tt.ttnn_motion_transformer_decoder import TtMotionTransformerDecoder
 
@@ -459,7 +459,7 @@ class TtMotionHead:
 
             temp = []
             for bs in range(tmp.shape[0]):
-                temp.append(ttnn.unsqueeze(bivariate_gaussian_activation(tmp[bs]), 0))
+                temp.append(ttnn.unsqueeze(bivariate_gaussian_activation_motion_head(tmp[bs]), 0))
             tmp = ttnn.concat(temp, dim=0)
 
             outputs_trajs.append(tmp)
