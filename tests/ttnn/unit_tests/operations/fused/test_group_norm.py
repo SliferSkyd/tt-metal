@@ -513,9 +513,14 @@ def test_sdxl_base_group_norm_1_core(device, input_shape):
 
     # Generate torch tensor
     torch_input_tensor = torch.rand(input_shape, dtype=torch.bfloat16)
+    torch_weight = torch.rand((C,), dtype=torch.bfloat16)
+    torch_bias = torch.rand((C,), dtype=torch.bfloat16)
 
     # Execute torch group_norm
-    torch_output_tensor = torch.nn.functional.group_norm(torch_input_tensor, num_groups)
+    # weight=torch_weight, bias=torch_bias
+    torch_output_tensor = torch.nn.functional.group_norm(
+        torch_input_tensor, num_groups, weight=torch_weight, bias=torch_bias
+    )
     torch_output_tensor = torch_output_tensor.permute(0, 2, 3, 1).view(N, 1, W * H, C)
 
     # Generate ttnn tensor
@@ -545,6 +550,24 @@ def test_sdxl_base_group_norm_1_core(device, input_shape):
         memory_config=ttnn.DRAM_MEMORY_CONFIG,
     )
 
+    gamma = ttnn.create_group_norm_weight_bias_rm(torch_weight, C, grid_size.x)
+    beta = ttnn.create_group_norm_weight_bias_rm(torch_bias, C, grid_size.x)
+
+    gamma_t = ttnn.from_torch(
+        gamma,
+        dtype=ttnn.DataType.BFLOAT16,
+        layout=ttnn.ROW_MAJOR_LAYOUT,
+        device=device,
+        memory_config=ttnn.DRAM_MEMORY_CONFIG,
+    )
+    beta_t = ttnn.from_torch(
+        beta,
+        dtype=ttnn.DataType.BFLOAT16,
+        layout=ttnn.ROW_MAJOR_LAYOUT,
+        device=device,
+        memory_config=ttnn.DRAM_MEMORY_CONFIG,
+    )
+
     print("GN mask is: ", input_mask_tensor)
     print("GN negative mask is: ", input_negative_mask_tensor)
 
@@ -569,6 +592,8 @@ def test_sdxl_base_group_norm_1_core(device, input_shape):
         negative_mask=input_negative_mask_tensor,
         memory_config=sharded_mem_config,
         core_grid=grid_size,
+        weight=gamma_t,
+        bias=beta_t,
     )
 
     tt_output_tensor = ttnn.from_device(tt_output_tensor)

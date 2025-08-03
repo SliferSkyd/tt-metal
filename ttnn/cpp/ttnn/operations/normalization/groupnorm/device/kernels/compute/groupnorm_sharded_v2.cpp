@@ -721,46 +721,90 @@ void MAIN {
 
     if constexpr (do_gamma) {
         index_h_offset = 0;
-        mul_bcast_rows_init_short(cb_out, cb_gamma);
-        cb_reserve_back(cb_outgamma, per_core_MN);
-        cb_wait_front(cb_gamma, per_core_N);
-        for (uint32_t i = 0; i < per_core_M; ++i) {
-            for (uint32_t j = 0; j < per_core_N; ++j) {
-                tile_regs_acquire();
-                uint32_t index = j + index_h_offset;
-                mul_tiles_bcast_rows(cb_out, cb_gamma, index, j, dst0);
-                tile_regs_commit();
-                tile_regs_wait();
-                pack_tile(dst0, cb_outgamma);
-                tile_regs_release();
+        if constexpr (use_negative_mask == false) {
+            mul_bcast_rows_init_short(cb_out, cb_gamma);
+            cb_reserve_back(cb_outgamma, per_core_MN);
+            cb_wait_front(cb_gamma, per_core_N);
+            for (uint32_t i = 0; i < per_core_M; ++i) {
+                for (uint32_t j = 0; j < per_core_N; ++j) {
+                    tile_regs_acquire();
+                    uint32_t index = j + index_h_offset;
+                    mul_tiles_bcast_rows(cb_out, cb_gamma, index, j, dst0);
+                    tile_regs_commit();
+                    tile_regs_wait();
+                    pack_tile(dst0, cb_outgamma);
+                    tile_regs_release();
+                }
+                index_h_offset += per_core_N;
             }
-            index_h_offset += per_core_N;
+            cb_push_back(cb_outgamma, per_core_MN);
+            cb_pop_front(cb_out, per_core_MN);
+            cb_wait_front(cb_outgamma, per_core_MN);
+        } else {
+            // cb in has data required for gamma, so we do it inplace
+            // DPRINT << "gamma new path" << ENDL();
+
+            mul_bcast_rows_init_short(cb_in, cb_gamma);
+            // cb_out_gamma is cb_in
+            cb_wait_front(cb_gamma, per_core_N);
+            cb_wait_front(cb_in, per_core_MN);
+            for (uint32_t i = 0; i < per_core_M; i++) {
+                for (uint32_t j = 0; j < per_core_N; j++) {
+                    tile_regs_acquire();
+                    mul_tiles_bcast_rows(cb_in, cb_gamma, 0, j, dst0);
+                    tile_regs_commit();
+                    cb_pop_front(cb_in, 1);
+                    cb_reserve_back(cb_in, 1);
+                    tile_regs_wait();
+                    pack_tile(dst0, cb_in);
+                    cb_push_back(cb_in, 1);
+                    tile_regs_release();
+                }
+            }
         }
-        cb_push_back(cb_outgamma, per_core_MN);
-        cb_pop_front(cb_out, per_core_MN);
-        cb_wait_front(cb_outgamma, per_core_MN);
     }
 
     if constexpr (do_beta) {
-        index_h_offset = 0;
-        add_bcast_rows_init_short(cb_inbeta, cb_beta);
-        cb_reserve_back(cb_outbeta, per_core_MN);
-        cb_wait_front(cb_beta, per_core_N);
-        for (uint32_t i = 0; i < per_core_M; ++i) {
-            for (uint32_t j = 0; j < per_core_N; ++j) {
-                tile_regs_acquire();
-                uint32_t index = j + index_h_offset;
-                add_tiles_bcast_rows(cb_inbeta, cb_beta, index, j, dst0);
-                tile_regs_commit();
-                tile_regs_wait();
-                pack_tile(dst0, cb_outbeta);
-                tile_regs_release();
+        if constexpr (use_negative_mask == false) {
+            index_h_offset = 0;
+            add_bcast_rows_init_short(cb_inbeta, cb_beta);
+            cb_reserve_back(cb_outbeta, per_core_MN);
+            cb_wait_front(cb_beta, per_core_N);
+            for (uint32_t i = 0; i < per_core_M; ++i) {
+                for (uint32_t j = 0; j < per_core_N; ++j) {
+                    tile_regs_acquire();
+                    uint32_t index = j + index_h_offset;
+                    add_tiles_bcast_rows(cb_inbeta, cb_beta, index, j, dst0);
+                    tile_regs_commit();
+                    tile_regs_wait();
+                    pack_tile(dst0, cb_outbeta);
+                    tile_regs_release();
+                }
+                index_h_offset += per_core_N;
             }
-            index_h_offset += per_core_N;
+            cb_push_back(cb_outbeta, per_core_MN);
+            cb_pop_front(cb_inbeta, per_core_MN);
+            cb_wait_front(cb_outbeta, per_core_MN);
+        } else {
+            // cb in has data required for beta, so we do it inplace
+            add_bcast_rows_init_short(cb_in, cb_beta);
+            cb_wait_front(cb_beta, per_core_N);
+            cb_wait_front(cb_in, per_core_MN);
+            // DPRINT << "betta new path" << ENDL();
+            for (uint32_t i = 0; i < per_core_M; i++) {
+                for (uint32_t j = 0; j < per_core_N; j++) {
+                    tile_regs_acquire();
+                    add_tiles_bcast_rows(cb_in, cb_beta, 0, j, dst0);
+                    tile_regs_commit();
+                    cb_pop_front(cb_in, 1);
+                    cb_reserve_back(cb_in, 1);
+                    tile_regs_wait();
+                    pack_tile(dst0, cb_in);
+                    cb_push_back(cb_in, 1);
+                    tile_regs_release();
+                }
+            }
         }
-        cb_push_back(cb_outbeta, per_core_MN);
-        cb_pop_front(cb_inbeta, per_core_MN);
-        cb_wait_front(cb_outbeta, per_core_MN);
     }
 
 #ifdef UNTILIZE_OUT
