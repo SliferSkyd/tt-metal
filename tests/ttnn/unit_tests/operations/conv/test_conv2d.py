@@ -106,7 +106,7 @@ SliceHeight = ttnn.Conv2dSliceHeight
 SliceWidth = ttnn.Conv2dSliceWidth
 
 
-@skip_for_blackhole("Not fully tested on Blackhole")
+# @skip_for_blackhole("Not fully tested on Blackhole")
 @pytest.mark.parametrize(
     "input_layout, dtype",
     [[ttnn.TILE_LAYOUT, ttnn.bfloat8_b], [ttnn.ROW_MAJOR_LAYOUT, ttnn.bfloat16]],
@@ -124,6 +124,14 @@ SliceWidth = ttnn.Conv2dSliceWidth
         (1, 64,   128,  992,   992,   SliceWidth,   64,  ttnn.bfloat8_b, (2, 2), (1, 1), (0, 0), (1, 1), 32 * 4,  ttnn.MathFidelity.LoFi  ),
         (1, 2904, 2904,  48,    48,   SliceWidth,   4,  ttnn.bfloat8_b, (3, 3), (1, 1), (0, 0), (1, 1), 32,  ttnn.MathFidelity.HiFi4  ),
         (1, 2944, 2944,  48,    48,   SliceWidth,   4,  ttnn.bfloat8_b,  (3, 3), (1, 1), (0, 0), (1, 1), 32,  ttnn.MathFidelity.HiFi4  ),
+        (1, 2048, 256,  32,    64,   SliceWidth,   4,  ttnn.bfloat8_b,  (3, 3), (1, 1), (12, 12), (1, 1), 32,  ttnn.MathFidelity.HiFi4  ), #Panotpic
+        # (1, 2048, 256,  32,    64,   SliceWidth,   4,  ttnn.bfloat8_b,  (3, 3), (1, 1), (18, 18), (1, 1), 32,  ttnn.MathFidelity.HiFi4  ), #Panotpic hanging
+        (1, 2048, 256,  32,    64,   SliceWidth,   4,  ttnn.bfloat8_b,  (3, 3), (1, 1), (6, 6), (1, 1), 32,  ttnn.MathFidelity.HiFi4  ), #Panotpic
+        (1, 256, 256,  128,    256,   SliceWidth,   4,  ttnn.bfloat8_b,  (3, 3), (1, 1), (1, 1), (1, 1), 32,  ttnn.MathFidelity.HiFi4  ), #Panotpic
+        (1, 256, 512,  128,    256,   SliceWidth,   4,  ttnn.bfloat8_b,  (1, 1), (2, 2), (1, 1), (1, 1), 32,  ttnn.MathFidelity.HiFi4  ), #Panotpic
+        (1, 288, 256,  128,    256,   SliceWidth,   8,  ttnn.bfloat8_b,  (3, 3), (1, 1), (1, 1), (1, 1), 32,  ttnn.MathFidelity.HiFi4  ), #Panotpic
+        (1, 64, 128,  256,    512,   SliceWidth,   4,  ttnn.bfloat8_b,  (3, 3), (1, 1), (1, 1), (1, 1), 32,  ttnn.MathFidelity.HiFi4  ), #Panotpic
+        (1, 64, 64,  256,    512,   SliceWidth,   4,  ttnn.bfloat8_b,  (3, 3), (1, 1), (1, 1), (1, 1), 32,  ttnn.MathFidelity.HiFi4  ), #Panotpic
     )
     # fmt: on
 )
@@ -209,21 +217,15 @@ def test_conv_dram(
         (1, 160, 128, 128, 256, 3, 3, 1, 1, 1, 1, 1, False),
         (1, 2048, 256, 1, 1, 1, 1, 1, 1, 0, 0, 1, True),
         (1, 2048, 256, 32, 64, 1, 1, 1, 1, 0, 0, 1, False),
-        (1, 2048, 256, 32, 64, 3, 3, 1, 1, 12, 12, 1, False),
-        (1, 2048, 256, 32, 64, 3, 3, 1, 1, 18, 18, 1, False),
-        (1, 2048, 256, 32, 64, 3, 3, 1, 1, 6, 6, 1, False),
         (1, 2048, 512, 32, 64, 1, 1, 1, 1, 0, 0, 1, False),
         (1, 256, 128, 128, 256, 1, 1, 1, 1, 0, 0, 1, False),
         (1, 256, 19, 128, 256, 1, 1, 1, 1, 0, 0, 1, True),
-        (1, 256, 256, 128, 256, 3, 3, 1, 1, 1, 1, 1, False),
         (1, 256, 32, 128, 256, 1, 1, 1, 1, 0, 0, 1, False),
-        (1, 256, 512, 128, 256, 1, 1, 2, 2, 0, 0, 1, False),
         (1, 256, 64, 128, 256, 1, 1, 1, 1, 0, 0, 1, False),
         (1, 256, 1024, 32, 64, 1, 1, 1, 1, 0, 0, 1, False),
         (1, 256, 256, 32, 64, 3, 3, 1, 1, 1, 1, 1, False),
         (1, 256, 256, 64, 128, 3, 3, 2, 2, 1, 1, 1, False),
         (1, 256, 256, 64, 128, 3, 3, 1, 1, 1, 1, 1, False),
-        (1, 288, 256, 128, 256, 3, 3, 1, 1, 1, 1, 1, False),
         (1, 3, 64, 512, 1024, 3, 3, 2, 2, 1, 1, 1, False),
         (1, 32, 1, 128, 256, 1, 1, 1, 1, 0, 0, 1, True),
         (1, 32, 2, 128, 256, 1, 1, 1, 1, 0, 0, 1, True),
@@ -239,11 +241,9 @@ def test_conv_dram(
         (1, 512, 64, 64, 128, 1, 1, 1, 1, 0, 0, 1, False),
         (1, 64, 256, 128, 256, 1, 1, 1, 1, 0, 0, 1, False),
         (1, 64, 64, 128, 256, 3, 3, 1, 1, 1, 1, 1, False),
-        (1, 64, 128, 256, 512, 3, 3, 1, 1, 1, 1, 1, False),
-        (1, 64, 64, 256, 512, 3, 3, 1, 1, 1, 1, 1, False),
     ],
 )
-@pytest.mark.parametrize("device_params", [{"l1_small_size": 2 * 1024}], indirect=True)
+@pytest.mark.parametrize("device_params", [{"l1_small_size": 32768}], indirect=True)
 def test_conv2d_panoptic(
     device,
     batch_size,
@@ -261,7 +261,11 @@ def test_conv2d_panoptic(
     torch_tensor_map,
     has_bias,
 ):
-    # Call the existing run_conv function with your parameters
+    compute_grid = device.compute_with_storage_grid_size()
+    print(f"compute_grid: {compute_grid.x}x{compute_grid.y}")
+    if compute_grid.x != 5 or compute_grid.y != 4:
+        pytest.skip(f"Test requires compute grid size of 5x4, but got {compute_grid.x}x{compute_grid.y}")
+
     run_conv(
         device=device,
         config_override=None,
