@@ -46,6 +46,8 @@ def test_resnetblock2d(
     is_ci_env,
     reset_seeds,
 ):
+    # uncomment this to make hangs appear
+    device.disable_and_clear_program_cache()
     unet = UNet2DConditionModel.from_pretrained(
         "stabilityai/stable-diffusion-xl-base-1.0",
         torch_dtype=torch.float32,

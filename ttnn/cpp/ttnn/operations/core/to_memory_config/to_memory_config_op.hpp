@@ -41,11 +41,12 @@ struct ToMemoryConfig {
                 const auto input_memory_config = ttnn::get_memory_config(tensor);
                 const auto input_shard_spec = input_memory_config.value().shard_spec().value();
                 const auto output_shard_spec = memory_config.shard_spec().value();
-                if (tensor.layout() == ttnn::TILE_LAYOUT || input_shard_spec.shape[1] == output_shard_spec.shape[1]) {
+                if (true) {
                     if (dtype.has_value()) {
                         throw std::runtime_error(
                             "dtype cannot be specified when converting sharded tensor to sharded tensor");
                     }
+                    log_info(tt::LogOp, "Resharding sharded tensor to sharded tensor");
                     return tt::tt_metal::operation::run(
                                data_movement::ReshardDeviceOperation{
                                    .output_mem_config = memory_config,
