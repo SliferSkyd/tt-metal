@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 #include <vector>
@@ -140,9 +141,10 @@ public:
 
         compute_kernel = CreateKernel(
             program,
-            "tt_metal/programming_examples/test-binary-llk/kernels/compute/compute.cpp",
+            "tt_metal/programming_examples/test-binary-llk/kernels/compute/compute_add.cpp",
             core,
-            ComputeConfig{.math_fidelity = MathFidelity::HiFi4, .compile_args = compute_compile_args});
+            ComputeConfig{
+                .math_fidelity = MathFidelity::HiFi4, .fp32_dest_acc_en = true, .compile_args = compute_compile_args});
     }
 
     void Execute(
@@ -156,7 +158,7 @@ public:
         // Set runtime arguments
         SetRuntimeArgs(program, reader_kernel, core, {input0_buffer->address(), input1_buffer->address()});
         SetRuntimeArgs(program, writer_kernel, core, {output_buffer->address()});
-        // No runtime args needed for compute kernel
+        SetRuntimeArgs(program, compute_kernel, core, {num_tiles});
 
         // Upload input data
         EnqueueWriteBuffer(*cq, input0_buffer, input0_data.data(), false);
@@ -188,12 +190,12 @@ int main() {
     std::vector<bfloat16> input0_data_bf16(num_tiles * elements_per_tile);
     std::vector<bfloat16> input1_data_bf16(num_tiles * elements_per_tile);
 
-    std::vector<float> data0 = {9.f, 100000.f, 5.f};
-    std::vector<float> data1 = {2.f, 1.7984f, 3.f};
+    std::vector<float> data0 = {0.5f, 9.f, 100000.f, 5.f};
+    std::vector<float> data1 = {0.45f, 2.f, 1.7984f, 3.f};
 
     for (size_t i = 0; i < num_tiles * elements_per_tile; i++) {
-        float val0_f32 = 9.f;
-        float val1_f32 = 2.f;
+        float val0_f32 = 0.f;
+        float val1_f32 = 0.f;
 
         if (i < data0.size()) {
             val0_f32 = data0[i];
@@ -214,6 +216,9 @@ int main() {
     std::vector<bfloat16> output_data_bf16(num_tiles * elements_per_tile);
     std::vector<float> output_data_f32(num_tiles * elements_per_tile);
 
+    std::fill(output_data_f32.begin(), output_data_f32.end(), 0.f);
+    std::fill(output_data_bf16.begin(), output_data_bf16.end(), bfloat16(0.f));
+
     constexpr int device_id = 0;
 
     // Create and setup kernel
@@ -227,57 +232,47 @@ int main() {
         CloseDevice(device);
     }
 
-    {
-        UnaryLLKKernel<DFormat_Bfloat16> kernel_bf16(num_tiles);
+    // {
+    //     UnaryLLKKernel<DFormat_Bfloat16> kernel_bf16(num_tiles);
 
-        IDevice* device = CreateDevice(device_id);
-        kernel_bf16.Setup(device);
-        kernel_bf16.Execute(device, input0_data_bf16, input1_data_bf16, output_data_bf16);
-        CloseDevice(device);
-    }
+    //     IDevice* device = CreateDevice(device_id);
+    //     kernel_bf16.Setup(device);
+    //     kernel_bf16.Execute(device, input0_data_bf16, input1_data_bf16, output_data_bf16);
+    //     CloseDevice(device);
+    // }
 
     // Print results
-    fmt::print("Test Binary LLK Example Results:\n");
-    fmt::print("Number of tiles processed: {}\n", num_tiles);
-    fmt::print("Elements per tile: {}\n", elements_per_tile);
-
     size_t elements_to_print = data0.size();
 
     // Print first few elements for verification
-    fmt::print("\nFirst {} elements:\n", elements_to_print);
+
+    fmt::print("\n----- [float32]:\n");
     for (int i = 0; i < elements_to_print && i < input0_data_f32.size(); i++) {
         fmt::print(
-            "[float32] Input[{}]: {:.6f}, {:6f} -> Output[{}]: {:.6f}\n",
-            i,
-            input0_data_f32[i],
-            input1_data_f32[i],
-            i,
-            output_data_f32[i]);
+            "Input[{}]: {:.9f}, {:9f} -> {:.9f}\n", i, input0_data_f32[i], input1_data_f32[i], output_data_f32[i]);
     }
-    fmt::print("-----");
-
+    fmt::print("\n----- [bfloat16]:\n");
     for (int i = 0; i < elements_to_print && i < input0_data_bf16.size(); i++) {
         fmt::print(
-            "[bfloat16] Input[{}]: {:.6f}, {:6f} -> Output[{}]: {:.6f}\n",
+            "Input[{}]: {:.6f}, {:6f} -> {:.6f}\n",
             i,
             input0_data_bf16[i].to_float(),
             input1_data_bf16[i].to_float(),
-            i,
             output_data_bf16[i].to_float());
     }
-    fmt::print("-----");
+    fmt::print("\n-----");
 
-    for (int i = 0; i < elements_to_print && i < input0_data_f32.size(); i++) {
-        float truth = powf(input0_data_f32[i], input1_data_f32[i]);
-        fmt::print(
-            "[float32 reference] Input[{}]: {:.6f}, {:6f} -> Output[{}]: {:.6f}, bf16 = {:6f}\n",
-            i,
-            input0_data_f32[i],
-            input1_data_f32[i],
-            i,
-            truth,
-            bfloat16(truth).to_float());
-    }
+    // for (int i = 0; i < elements_to_print && i < input0_data_f32.size(); i++) {
+    //     float truth = powf(input0_data_f32[i], input1_data_f32[i]);
+    //     fmt::print(
+    //         "[float32 reference] Input[{}]: {:.6f}, {:6f} -> Output[{}]: {:.6f}, bf16 = {:6f}\n",
+    //         i,
+    //         input0_data_f32[i],
+    //         input1_data_f32[i],
+    //         i,
+    //         truth,
+    //         bfloat16(truth).to_float());
+    // }
 
     return 0;
 }
