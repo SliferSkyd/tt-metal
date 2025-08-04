@@ -50,16 +50,18 @@ run_qwen25_vl_func() {
 }
 
 
-# run_segformer_func() {
+run_segformer_func() {
   #Segformer Segmentation Demo
-  # Commenting out Segformer Segmentation Demo. Raised issue to whitelist dataset- https://github.com/tenstorrent/tt-metal/issues/25866
-  # WH_ARCH_YAML=wormhole_b0_80_arch_eth_dispatch.yaml pytest --disable-warnings models/demos/segformer/demo/demo_for_semantic_segmentation.py --timeout 600; fail+=$?
 
-  ## Commenting out Segformer Classification Demo. Raised issue to whitelist dataset- https://github.com/tenstorrent/tt-metal/issues/25866
+  WH_ARCH_YAML=wormhole_b0_80_arch_eth_dispatch.yaml pytest --disable-warnings models/demos/segformer/demo/demo_for_semantic_segmentation.py::test_demo_semantic_segmentation_dp --timeout 600; fail+=$?
+
   #Segformer Classification Demo
-  # WH_ARCH_YAML=wormhole_b0_80_arch_eth_dispatch.yaml pytest --disable-warnings models/demos/segformer/demo/demo_for_image_classification.py --timeout 600; fail+=$?
+  WH_ARCH_YAML=wormhole_b0_80_arch_eth_dispatch.yaml pytest --disable-warnings models/demos/segformer/demo/demo_for_image_classification.py::test_segformer_classification_demo_dp --timeout 600; fail+=$?
 
-# }
+  #Segformer Segmentation Eval
+  WH_ARCH_YAML=wormhole_b0_80_arch_eth_dispatch.yaml pytest --disable-warnings models/experimental/segmentation_evaluation/test_segmentation_eval.py::test_segformer_eval_dp --timeout 600; fail+=$?
+
+}
 
 run_sentencebert_func() {
 
