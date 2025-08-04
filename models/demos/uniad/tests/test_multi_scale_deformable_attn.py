@@ -88,6 +88,11 @@ def multi_scale_deformable_attn_ttnn(
         len_l = h_l * w_l
         # Use ttnn slicing
         value_l = value_ttnn[:, start : start + len_l, :, :]
+        print("!!! value_l.shape", value_l.shape)
+        # Ensure sliced tensor is in L1 memory (slicing might not preserve memory config)
+        # ttnn.deallocate(spatial_shapes_ttnn)
+        if value_l.memory_config() != ttnn.L1_MEMORY_CONFIG:
+            value_l = ttnn.to_memory_config(value_l, memory_config=ttnn.L1_MEMORY_CONFIG)
         value_list.append(value_l)
         start += len_l
     # ttnn.deallocate(value_ttnn)
@@ -136,7 +141,9 @@ def multi_scale_deformable_attn_ttnn(
         grid = ttnn.to_torch(grid)
         grid[..., 0] = grid[..., 0] / w_l * 2 - 1
         grid[..., 1] = grid[..., 1] / h_l * 2 - 1
-        grid = ttnn.from_torch(grid, layout=ttnn.TILE_LAYOUT, device=device)
+        grid = ttnn.from_torch(grid, device=device)
+        print("!!! grid.shape", grid.shape)
+        grid = ttnn.to_memory_config(grid, memory_config=ttnn.L1_MEMORY_CONFIG)
         sampling_grids.append(grid)
     # ttnn.deallocate(sampling_locations_ttnn)
     # for grid in sampling_grids:
@@ -146,23 +153,35 @@ def multi_scale_deformable_attn_ttnn(
     # Create output tensor using ttnn
     output = ttnn.zeros(
         (bs, num_queries, num_heads, head_dim),
-        layout=ttnn.TILE_LAYOUT,
-        device=device,
-        memory_config=ttnn.DRAM_MEMORY_CONFIG,
+        dtype=ttnn.bfloat16,
     )
+    # output = ttnn.to_device(output, device, memory_config=ttnn.L1_MEMORY_CONFIG)
+    print("output.memory_config()", output.memory_config())
+    # Since value_list elements are slices of value_ttnn which is already in L1,
+    # and sampling_grids are now created with L1, we don't need these loops
+    # for i, val in enumerate(value_list):
+    #     value_list[i] = ttnn.to_device(val, device, memory_config=ttnn.L1_MEMORY_CONFIG)
+
+    # for i, grid in enumerate(sampling_grids):
+    #     sampling_grids[i] = ttnn.to_device(grid, device, memory_config=ttnn.L1_MEMORY_CONFIG)
     for lvl in range(num_levels):
         h_l, w_l = spatial_shapes_ttnn[lvl]
         h_l = int(h_l.item())
         w_l = int(w_l.item())
         value_l = ttnn.permute(value_list[lvl], (0, 2, 3, 1))
         value_l = ttnn.reshape(value_l, (bs * num_heads, head_dim, h_l, w_l))
+        ttnn.deallocate(value_list[lvl])
+
         grid = ttnn.permute(sampling_grids[lvl], (0, 2, 1, 3, 4))
         grid = ttnn.reshape(grid, (bs * num_heads, num_queries * num_points, 1, 2))
+        ttnn.deallocate(sampling_grids[lvl])
         value_l_torch = ttnn.to_torch(value_l)
         grid_torch = ttnn.to_torch(grid)
         sampled = F.grid_sample(value_l_torch, grid_torch, mode="bilinear", padding_mode="zeros", align_corners=False)
-        sampled_ttnn = ttnn.from_torch(sampled, layout=ttnn.TILE_LAYOUT, device=device)
+        print("sampled.shape", sampled.shape)
+        sampled_ttnn = ttnn.from_torch(sampled, device=device)
         sampled_view = ttnn.reshape(sampled_ttnn, (bs, num_heads, head_dim, num_queries, num_points))
+        print("sampled_view.shape", sampled_view.shape)
         sampled_permuted = ttnn.permute(sampled_view, (0, 3, 1, 4, 2))
         attn = attention_weights_ttnn[:, :, :, lvl, :]
         attn = ttnn.unsqueeze(attn, dim=-1)
@@ -181,7 +200,6 @@ def mcw_multi_scale_deformable_attn(
     attention_weights,
     im2col_step,
     device,
-    ttnn_list,
 ):
     bs, num_keys, num_heads, head_dim = value.shape
     num_levels = value_spatial_shapes.shape[0]
@@ -271,12 +289,21 @@ def test_multi_scale_deformable_attn_ttnn(device):
     )
 
     # Convert tensors to ttnn
-    value_ttnn = ttnn.from_torch(value, layout=ttnn.TILE_LAYOUT, device=device)
-    sampling_locations_ttnn = ttnn.from_torch(sampling_locations, layout=ttnn.TILE_LAYOUT, device=device)
-    attention_weights_ttnn = ttnn.from_torch(attention_weights, layout=ttnn.TILE_LAYOUT, device=device)
-    spatial_shapes_ttnn = ttnn.from_torch(spatial_shapes, layout=ttnn.TILE_LAYOUT)
-    level_start_index_ttnn = ttnn.from_torch(level_start_index, layout=ttnn.TILE_LAYOUT, device=device)
-    im2col_step_ttnn = ttnn.from_torch(im2col_step, layout=ttnn.TILE_LAYOUT, device=device)
+    # Instead of adding the device param in from_torch(), do the conversion on host and then move to device using ttnn.to_device()
+    # This is because, adding the device param first moves the tensor to the device, and then does the conversion to ttnn.
+    # More efficient to do the conversion on host and then move to device
+    value_ttnn = ttnn.from_torch(value, device=device, dtype=ttnn.bfloat16)
+    # value_ttnn = ttnn.to_device(value_ttnn, device, memory_config=ttnn.L1_MEMORY_CONFIG)
+    sampling_locations_ttnn = ttnn.from_torch(sampling_locations, device=device, dtype=ttnn.bfloat16)
+    # sampling_locations_ttnn = ttnn.to_device(sampling_locations_ttnn, device, memory_config=ttnn.L1_MEMORY_CONFIG)
+    attention_weights_ttnn = ttnn.from_torch(attention_weights, device=device, dtype=ttnn.bfloat16)
+    # attention_weights_ttnn = ttnn.to_device(attention_weights_ttnn, device, memory_config=ttnn.L1_MEMORY_CONFIG)
+    spatial_shapes_ttnn = ttnn.from_torch(spatial_shapes, device=device, dtype=ttnn.bfloat16)
+    # spatial_shapes_ttnn = ttnn.to_device(spatial_shapes_ttnn, device, memory_config=ttnn.L1_MEMORY_CONFIG)
+    level_start_index_ttnn = ttnn.from_torch(level_start_index, device=device, dtype=ttnn.bfloat16)
+    # level_start_index_ttnn = ttnn.to_device(level_start_index_ttnn, device, memory_config=ttnn.L1_MEMORY_CONFIG)
+    im2col_step_ttnn = ttnn.from_torch(im2col_step, device=device, dtype=ttnn.bfloat16)
+    # im2col_step_ttnn = ttnn.to_device(im2col_step_ttnn, device, memory_config=ttnn.L1_MEMORY_CONFIG)
 
     # Run ttnn implementation
     ttnn_output = multi_scale_deformable_attn_ttnn(
@@ -297,7 +324,6 @@ def test_multi_scale_deformable_attn_ttnn(device):
     #     attention_weights_ttnn,
     #     im2col_step_ttnn,
     #     device,
-    #     ttnn_list
     # )
 
     # Convert ttnn output back to torch for comparison
