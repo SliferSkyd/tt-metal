@@ -88,18 +88,6 @@ def main():
         print(f"-----")
         print(f"[bfloat16] Torch result:  {torch_result}")
         print(f"[bfloat16] TTNN result:   {ttnn_result}")
-        print(f"-----")
-        # print(f"[float32 ] Torch result:  {torch_result_f32}")
-        # print(f"[float32 ] TTNN result:   {ttnn_result_f32}")
-        print(f"")
-        print(f"Results match: {match_status}")
-        print(f"Expected value: 81.0")
-
-        # if match_status:
-        #     print(f"✓ Test PASSED: ttnn.pow matches torch.pow")
-        # else:
-        #     print(f"✗ Test FAILED: ttnn.pow does not match torch.pow")
-        #     print(f"Difference: {torch.abs(torch_result - ttnn_result)}")
 
     finally:
         # Clean up device
