@@ -101,11 +101,19 @@ static Tensor pool2d_invoke(
         // tt::log_debug(tt::LogOp, "auto sharding spec: {}", parallel_config.shard_scheme);
         num_cores_nhw = conv::get_num_cores_nhw_from_parallel_config(parallel_config);
         num_cores_c = conv::get_num_cores_channels_from_parallel_config(parallel_config);
+        log_info(
+            tt::LogOp,
+            "num_cores_nhw: {}, num_cores_c: {}, shard_layout: {}, shard_orientation: {}",
+            num_cores_nhw,
+            num_cores_c,
+            shard_layout,
+            parallel_config.shard_orientation);
         auto sharded_mem_config = conv::create_sharded_memory_config_from_parallel_config(
             input_tensor_sharded.padded_shape(), parallel_config, is_in_tiled ? tt::constants::TILE_HEIGHT : 1);
         input_tensor_sharded = ttnn::to_memory_config(
             input_tensor_sharded, sharded_mem_config, std::nullopt);  // this converts interleaved to sharded
         out_memory_config = input_tensor_sharded.memory_config();
+        log_info(tt::LogOp, "shard spec: {}", out_memory_config.shard_spec().value());
     } else {
         // input is already sharded, use it as is
         const auto shard_grid = out_memory_config.shard_spec().value().grid;

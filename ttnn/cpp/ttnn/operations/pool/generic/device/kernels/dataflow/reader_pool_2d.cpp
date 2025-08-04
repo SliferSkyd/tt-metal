@@ -100,7 +100,8 @@ ALWI void read_window_with_top_left_index(uint32_t ind, uint32_t in_l1_read_base
         }
         uint32_t in_l1_write_addr = get_write_ptr(in_cb_id);
         uint32_t processed_sticks = 0;
-        cb_reserve_back(in_cb_id, in_ntiles_c);  // br zabo
+        DPRINT << "hocu da saljem!!!" << in_ntiles_c << ENDL();
+        cb_reserve_back(in_cb_id, in_ntiles_c);
         for (uint32_t h = 0; h < window_h; ++h) {
             auto process_h = [&](uint32_t w_offset, uint32_t w_multiple) __attribute__((always_inline)) {
                 const uint32_t stick_offset = ind + w_offset + h * in_w_padded;
@@ -283,10 +284,9 @@ void kernel_main() {
     }
 
     if constexpr (reader_id == 0) {
-        fill_with_val(get_write_ptr(weight_cb_id), TILE_HEIGHT * TILE_WIDTH, 0x3f80);
+        fill_with_val(get_write_ptr(weight_cb_id), TILE_HEIGHT * TILE_WIDTH / 2, 0x3f80);
     } else {
-        // fill_with_val(
-        //     get_write_ptr(weight_cb_id) + (TILE_HEIGHT * TILE_WIDTH) / 4, TILE_HEIGHT * TILE_WIDTH / 4, 0x4000);
+        fill_with_val(get_write_ptr(weight_cb_id) + TILE_HEIGHT * TILE_WIDTH / 2, TILE_HEIGHT * TILE_WIDTH / 2, 0x3f80);
     }
 
     const uint32_t in_l1_read_base_addr = get_read_ptr(in_shard_cb_id);

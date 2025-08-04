@@ -217,8 +217,10 @@ uint32_t calculate_L1_usage(
         in_cb_sz = params.in_ntiles_c * tt::constants::TILE_HW;
     }
 
+    uint32_t num_pages_to_8 = 8 / params.in_ntiles_c;
+
     uint32_t in_cb_page_padded = tt::round_up(in_cb_sz, tt::constants::TILE_HW);
-    uint32_t in_cb_pagesize = params.multi_buffering_factor * 8;
+    uint32_t in_cb_pagesize = params.multi_buffering_factor * num_pages_to_8 * params.in_ntiles_c;
     uint32_t in_cb_npages = params.nbytes * tt::constants::TILE_HW;
     uint32_t in_cb_config_0_size = in_cb_npages * in_cb_pagesize;
     uint32_t in_cb_config_1_size = 0;
@@ -238,8 +240,6 @@ uint32_t calculate_L1_usage(
         uint32_t factor = (size + alignment_bytes - 1) / alignment_bytes;
         return factor * alignment_bytes;
     };
-
-    uint32_t num_pages_to_8 = 8 / params.in_ntiles_c;
 
     uint32_t mul_cb_size = 2 * num_pages_to_8 * params.in_ntiles_c * tt::constants::TILE_HW * params.nbytes;
 

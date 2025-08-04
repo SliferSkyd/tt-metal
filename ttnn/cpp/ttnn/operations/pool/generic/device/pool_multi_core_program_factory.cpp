@@ -333,6 +333,7 @@ Pool2D::MultiCore::cached_program_t pool2d_multi_core_sharded_with_halo_v2_impl_
         in_reader_indices_cb_npages);
     uint32_t in_cb_sz = 0;
     uint32_t in_nblocks_c = 1;
+    uint32_t num_pages_to_8 = 8 / params.in_ntiles_c;
     if (params.is_wide_reduction) {
         in_cb_sz = params.MAX_TILES_PER_REDUCTION * tt::constants::TILE_HW;
         in_nblocks_c = std::ceil((float)params.in_ntiles_c / params.MAX_TILES_PER_REDUCTION);
@@ -347,7 +348,7 @@ Pool2D::MultiCore::cached_program_t pool2d_multi_core_sharded_with_halo_v2_impl_
         in_cb_sz,
         tt::constants::TILE_HW);  // NOTE: ceil to tile size since triscs work with tilesize instead of pagesize
     const uint32_t in_cb_pagesize = params.nbytes * tt::constants::TILE_HW;  // in_cb_sz * nbytes
-    const uint32_t in_cb_npages = params.multi_buffering_factor * 8;
+    const uint32_t in_cb_npages = params.multi_buffering_factor * num_pages_to_8 * params.in_ntiles_c;
     const uint32_t mul_cb_pagesize = params.nbytes * tt::constants::TILE_HW;
 
     tt::tt_metal::create_cb(in_cb_id_0, program, all_cores, in_cb_pagesize, in_cb_npages, params.data_format);
@@ -362,8 +363,6 @@ Pool2D::MultiCore::cached_program_t pool2d_multi_core_sharded_with_halo_v2_impl_
 
     auto [weight_cb_id, cb_weight] = tt::tt_metal::create_cb(
         next_cb_index++, program, all_cores, tt::constants::TILE_HW * params.nbytes, 1, params.data_format);
-
-    uint32_t num_pages_to_8 = 8 / params.in_ntiles_c;
 
     auto [mul_cb_id, cb_mul] = tt::tt_metal::create_cb(
         next_cb_index++,
@@ -493,6 +492,8 @@ Pool2D::MultiCore::cached_program_t pool2d_multi_core_sharded_with_halo_v2_impl_
      * Compute Kernel: input cb -> tilize_block -> input tiles -> reduce_h max -> output tiles -> untilize_block ->
      * output cb
      */
+
+    log_info(tt::LogOp, "in_c: {}", input_shape[3] / num_shards_c);
     std::vector<uint32_t> compute_ct_args = {
         params.in_ntiles_c,
         kernel_h * kernel_w,

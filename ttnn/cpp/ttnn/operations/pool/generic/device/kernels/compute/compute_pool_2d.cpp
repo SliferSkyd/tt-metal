@@ -65,7 +65,7 @@ void MAIN {
     static_assert(REDUCE_OP == PoolType::MAX || REDUCE_OP == PoolType::SUM, "Only supports REDUCE_OP = MAX or Sum");
     constexpr bool neginf_srca_maxpool = (REDUCE_OP == PoolType::MAX) ? true : false;
     constexpr bool zero_srca_avgpool = (REDUCE_OP == PoolType::SUM) ? true : false;
-    constexpr uint32_t num_pages_to_8 = 8 / in_ntiles_c;
+    uint32_t num_pages_to_8 = 8 / in_ntiles_c;
 
     // tilize reconfiguration can be beneficial when we have a wide tensor with a non MAX_TILES_PER_REDUCTION number of
     // C tiles, but we only use it when the window size fits within a face such that the tilize can be done only on the
@@ -78,6 +78,7 @@ void MAIN {
     pack_untilize_dest_init<max_tiles_per_iter>(out_cb_id, num_out_sticks, num_faces_in_output_tile);
 
     constexpr uint32_t remaining_elems = window_size_hw % max_sticks_for_reduction;
+
     constexpr uint32_t interm_reduction_chunks =
         remaining_elems ? window_size_hw / max_sticks_for_reduction + 1 : window_size_hw / max_sticks_for_reduction;
 
@@ -86,18 +87,19 @@ void MAIN {
         cb_wait_front(in_scalar_cb_id_0, 1);
     }
 
-    // MATH (( DPRINT << "nsticks_per_core_by_nblocks: " << nsticks_per_core_by_nblocks << ENDL() ));
+    uint32_t iters = (nsticks_per_core_by_nblocks + num_pages_to_8 - 1) / num_pages_to_8;
 
-    for (uint32_t n = 0; n < nsticks_per_core_by_nblocks / num_pages_to_8; ++n) {
-        const bool reader0 = !(split_reader && (n & 0x1));
-        const uint32_t curr_scalar_cb_id = (!reader0 && !one_scalar_per_core) ? in_scalar_cb_id_1 : in_scalar_cb_id_0;
-        const uint32_t curr_in_cb_id = !reader0 ? in_cb_id_1 : in_cb_id_0;
+    uint32_t sticks_left = nsticks_per_core_by_nblocks;
+    uint32_t curr_in_cb_id = in_cb_id_0;
+
+    while (sticks_left) {
+        DeviceZoneScopedN("iteration");
+        const uint32_t curr_scalar_cb_id = in_scalar_cb_id_0;
         if constexpr (!one_scalar_per_core) {
             cb_wait_front(curr_scalar_cb_id, 1);
         }
 
         for (uint32_t c_i = 0; c_i < in_nblocks_c; c_i++) {
-            // DPRINT << "Processing C block: " << c_i << ENDL();
             const bool last_c_block = c_i == in_nblocks_c - 1;
             const bool first_c_block = c_i == 0;
             const uint32_t tiles_to_reduce =
@@ -109,7 +111,6 @@ void MAIN {
                 }
             }
             for (uint32_t chunk = 0; chunk < interm_reduction_chunks; chunk++) {
-                // DPRINT << "Processing chunk: " << chunk << ENDL();
                 UNPACK((llk_unpack_tilize_uninit(curr_in_cb_id)));
                 // UNPACK((llk_unpack_AB_init<BroadcastType::NONE>(curr_in_cb_id, weight_cb_id)));
                 PACK((pack_untilize_uninit(mul_cb_id)));
@@ -117,44 +118,38 @@ void MAIN {
 
                 tile_regs_acquire();
 
-                for (uint32_t j = 0; j < num_pages_to_8; j++) {
-                    cb_wait_front(curr_in_cb_id, tiles_to_reduce);
+                while (num_pages_to_8 > sticks_left) {
+                    num_pages_to_8--;
+                }
 
-                    // for (uint32_t i = 0; i < tiles_to_reduce; ++i) {
-                    //     UNPACK((DPRINT << "Processing input tile: " << j * tiles_to_reduce + i << ENDL()));
-                    //     UNPACK((tt::compute::common::print_full_tile(curr_in_cb_id, i)));
-                    // }
+                DPRINT << "hajde " << num_pages_to_8 << ENDL();
+
+                for (uint32_t j = 0; j < num_pages_to_8; j++) {
+                    DeviceZoneScopedN("wait and mul tiles");
+                    cb_wait_front(curr_in_cb_id, tiles_to_reduce);
 
                     for (uint32_t i = 0; i < tiles_to_reduce; ++i) {
                         mul_tiles(curr_in_cb_id, weight_cb_id, i, 0, j * tiles_to_reduce + i);
                     }
                     cb_pop_front(curr_in_cb_id, tiles_to_reduce);
-                }
 
-                // tensix_sync();
-                // dprint_tensix_dest_reg(0);
-                // dprint_tensix_dest_reg(1);
-                // dprint_tensix_dest_reg(2);
-                // dprint_tensix_dest_reg(3);
-                // dprint_tensix_dest_reg(4);
-                // dprint_tensix_dest_reg(5);
-                // dprint_tensix_dest_reg(6);
-                // dprint_tensix_dest_reg(7);
+                    sticks_left--;
+                    curr_in_cb_id = (curr_in_cb_id == in_cb_id_0) ? in_cb_id_1 : in_cb_id_0;
+                    tensix_sync();
+                }
 
                 tile_regs_commit();
 
                 tile_regs_wait();
+                cb_reserve_back(mul_cb_id, tiles_to_reduce * num_pages_to_8);
                 for (uint32_t j = 0; j < num_pages_to_8; j++) {
-                    cb_reserve_back(mul_cb_id, tiles_to_reduce);
+                    DeviceZoneScopedN("pack tiles");
                     for (uint32_t i = 0; i < tiles_to_reduce; ++i) {
                         pack_tile(j * tiles_to_reduce + i, mul_cb_id, i);
                     }
-                    for (uint32_t i = 0; i < tiles_to_reduce; ++i) {
-                        // PACK((DPRINT << "Processing pack tile: " << i << ENDL()));
-                        // PACK((tt::compute::common::print_full_tile(mul_cb_id, j * tiles_to_reduce + i)));
-                    }
-                    cb_push_back(mul_cb_id, tiles_to_reduce);
+                    tensix_sync();
                 }
+                cb_push_back(mul_cb_id, tiles_to_reduce * num_pages_to_8);  // TR2 zabo
 
                 tile_regs_release();
 
@@ -165,45 +160,25 @@ void MAIN {
                     out_cb_id, 1, num_faces_in_output_tile)));
                 PACK((llk_init_packer_dest_offset_registers<true, false>()));
 
-                cb_wait_front(mul_cb_id, num_pages_to_8 * tiles_to_reduce);
-
-                for (uint32_t i = 0; i < 8; ++i) {
-                    // UNPACK(( DPRINT << "Processing tile: " << i << ENDL() )) ;
-                    // UNPACK(( tt::compute::common::print_full_tile(mul_cb_id, i) ));
-                }
-                // UNPACK(( DPRINT << "Processing tile: " << j * tiles_to_reduce + i << ENDL() )) ;
-                // UNPACK(( tt::compute::common::print_full_tile(curr_in_cb_id, j * tiles_to_reduce + i) ));
-
-                // *****************************
-
                 tile_regs_acquire();
 
                 for (uint32_t j = 0; j < num_pages_to_8; j++) {
+                    DeviceZoneScopedN("unpack and reduce tiles");
+                    cb_wait_front(mul_cb_id, tiles_to_reduce);
                     unpack_tilizeA_B_block<neginf_srca_maxpool, true, false, zero_srca_avgpool>(
                         mul_cb_id, curr_scalar_cb_id, tiles_to_reduce, 0, num_faces_in_input_tile, face_r_dim);
                     for (uint32_t math_tile_idx = 0; math_tile_idx < tiles_to_reduce; ++math_tile_idx) {
                         reduce_tile_math(j * tiles_to_reduce + math_tile_idx, num_faces_in_input_tile);
                     }
                     cb_pop_front(mul_cb_id, tiles_to_reduce);
+                    tensix_sync();
                 }
-                // dprint_tensix_dest_reg(0);
-                // dprint_tensix_dest_reg(1);
-                // dprint_tensix_dest_reg(2);
-                // dprint_tensix_dest_reg(3);
-                // dprint_tensix_dest_reg(4);
-                // dprint_tensix_dest_reg(5);
-                // dprint_tensix_dest_reg(6);
-                // dprint_tensix_dest_reg(7);
                 tile_regs_commit();
 
-                // tiles_to_reduce takodje govori koja je sirina tensora
                 tile_regs_wait();
 
-                // jedan page je velicine 64, sto su 32 podatka. imam 64 page-a. znaci ako radim 8 velikih iteracija, u
-                // svakoj popunjavam 8 page-a znaci 1 tile kanala je 1 page, a kada uradim pack_untilize_dest, ja sam
-                // zapravo popunio 2 page-a
-
                 for (uint32_t i = 0; i < num_pages_to_8; i++) {
+                    DeviceZoneScopedN("pack output tiles");
                     cb_reserve_back(out_cb_id, tiles_to_reduce);
                     pack_untilize_dest<partial_iter_output_tiles>(
                         out_cb_id,
@@ -213,6 +188,7 @@ void MAIN {
                         num_faces_in_output_tile,
                         i * tiles_to_reduce); /* pack 1 row (1x16 or 1x32) */
                     cb_push_back(out_cb_id, tiles_to_reduce);
+                    tensix_sync();
                 }
 
                 tile_regs_release();
@@ -229,6 +205,7 @@ void MAIN {
         if constexpr (!one_scalar_per_core) {
             cb_pop_front(curr_scalar_cb_id, 1);
         }
+        tensix_sync();
     }
 }
 
