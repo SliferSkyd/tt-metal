@@ -6,6 +6,7 @@
 #include "compute_kernel_api/eltwise_unary/sfpu_split_includes.h"
 #include "compute_kernel_api/eltwise_binary.h"
 #include "compute_kernel_api/eltwise_unary/trigonometry.h"
+#include "compute_kernel_api/eltwise_unary/where.h"
 
 #include "eltwise_utils_common.hpp"
 #include "eltwise_utils.hpp"
@@ -48,7 +49,8 @@ ALWI void process_tile(
         binary_tiles_init<true, BINARY_OP_TYPE>(cb_post_lhs, cb_post_rhs);
 #endif
         tile_regs_acquire();
-        BINARY_OP(cb_post_lhs, cb_post_rhs, 0, 0, 0);
+        // BINARY_OP(cb_post_lhs, cb_post_rhs, 0, 0, 0);
+        where_tiles(cb_post_lhs, cb_post_rhs, cb_post_rhs);
         PROCESS_POST_ACTIVATIONS(0);
         tile_regs_commit();
 

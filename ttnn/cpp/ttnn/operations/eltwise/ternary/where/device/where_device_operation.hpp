@@ -11,10 +11,11 @@
 namespace ttnn::operations::ternary {
 
 enum class WhereVariant {
-    TTT,  // tensor-tensor-tensor
-    TTS,  // tensor-tensor-scalar
-    TST,  // tensor-scalar-tensor
-    TSS,  // tensor-scalar-scalar
+    TTT,      // tensor-tensor-tensor
+    TTS,      // tensor-tensor-scalar
+    TST,      // tensor-scalar-tensor
+    TSS,      // tensor-scalar-scalar
+    TTT_COL,  // tensor-tensor-tensor with column broadcasting
 };
 
 struct WhereDeviceOperation {
@@ -102,6 +103,9 @@ struct WhereDeviceOperation {
         const std::optional<const DataType>& output_dtype,
         const std::optional<MemoryConfig>& memory_config,
         const std::optional<Tensor>& optional_output_tensor);
+
+    // Helper function for column broadcast detection
+    static bool needs_column_broadcasting(const Tensor& predicate, const Tensor& value_true, const Tensor& value_false);
 };
 
 }  // namespace ttnn::operations::ternary

@@ -35,6 +35,12 @@ WhereKernelConfig::WhereKernelConfig(WhereVariant where_variant) {
             compute_kernel = KernelName::ComputeNoBcastTSS;
             writer_kernel = KernelName::WriterNoBcastTSS;
             break;
+
+        case WhereVariant::TTT_COL:
+            reader_kernel = KernelName::ReaderColBcastTTT;
+            compute_kernel = KernelName::ComputeColBcastTTT;
+            writer_kernel = KernelName::WriterColBcastTTT;
+            break;
     }
 }
 
@@ -48,6 +54,7 @@ std::string get_kernel_file_path(KernelName kernel_name) {
         case KernelName::ReaderNoBcastTST: return fmt::format(dataflow, root, "ternary_reader_nobcast_tst.cpp");
         case KernelName::ReaderNoBcastTTS: return fmt::format(dataflow, root, "ternary_reader_nobcast_tts.cpp");
         case KernelName::ReaderNoBcastTSS: return fmt::format(dataflow, root, "ternary_reader_nobcast_tss.cpp");
+        case KernelName::ReaderColBcastTTT: return fmt::format(dataflow, root, "ternary_reader_colbcast_ttt.cpp");
 
         case KernelName::WriterNoBcastTTT:
             return "ttnn/cpp/ttnn/operations/eltwise/unary/device/kernels/dataflow/"
@@ -61,11 +68,13 @@ std::string get_kernel_file_path(KernelName kernel_name) {
         case KernelName::WriterNoBcastTSS:
             return "ttnn/cpp/ttnn/operations/eltwise/unary/device/kernels/dataflow/"
                    "writer_unary_interleaved_start_id.cpp";
+        case KernelName::WriterColBcastTTT: return fmt::format(dataflow, root, "writer_ternary_colbcast_ttt.cpp");
 
         case KernelName::ComputeNoBcastTTT: return fmt::format(compute, root, "where_sfpu_no_bcast_ttt.cpp");
         case KernelName::ComputeNoBcastTST: return fmt::format(compute, root, "where_sfpu_no_bcast_tst.cpp");
         case KernelName::ComputeNoBcastTTS: return fmt::format(compute, root, "where_sfpu_no_bcast_tts.cpp");
         case KernelName::ComputeNoBcastTSS: return fmt::format(compute, root, "where_sfpu_no_bcast_tss.cpp");
+        case KernelName::ComputeColBcastTTT: return fmt::format(compute, root, "where_sfpu_no_bcast_ttt.cpp");
         default: __builtin_unreachable();  // GCC 12 doesn't compile even though we exhaustively match
     }
 }

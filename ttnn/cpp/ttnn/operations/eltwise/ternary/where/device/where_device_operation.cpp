@@ -6,8 +6,54 @@
 #include "ttnn/operations/cb_utils.hpp"
 #include "ttnn/operations/eltwise/unary/common/unary_op_utils.hpp"
 #include <tt-metalium/work_split.hpp>
+#include <vector>
+#include <algorithm>
 
 namespace ttnn::operations::ternary {
+
+// Helper function to detect if column broadcasting is needed
+bool WhereDeviceOperation::needs_column_broadcasting(
+    const Tensor& predicate, const Tensor& value_true, const Tensor& value_false) {
+    const auto& pred_shape = predicate.logical_shape();
+    const auto& true_shape = value_true.logical_shape();
+    const auto& false_shape = value_false.logical_shape();
+
+    // Check if any tensor has different width (last dimension) but same other dimensions
+    bool different_widths = (pred_shape[-1] != true_shape[-1]) || (pred_shape[-1] != false_shape[-1]) ||
+                            (true_shape[-1] != false_shape[-1]);
+
+    if (!different_widths) {
+        return false;  // All widths are the same, no broadcasting needed
+    }
+
+    // All tensors must have the same rank
+    if (pred_shape.rank() != true_shape.rank() || pred_shape.rank() != false_shape.rank()) {
+        return false;
+    }
+
+    // All dimensions except the last must match exactly
+    for (int i = 0; i < static_cast<int>(pred_shape.rank()) - 1; ++i) {
+        if (pred_shape[i] != true_shape[i] || pred_shape[i] != false_shape[i]) {
+            return false;
+        }
+    }
+
+    // For column broadcasting, at least one tensor should have width=1,
+    // and the others should have compatible widths
+    std::vector<uint32_t> widths = {pred_shape[-1], true_shape[-1], false_shape[-1]};
+
+    // Find the maximum width (target broadcast width)
+    uint32_t max_width = *std::max_element(widths.begin(), widths.end());
+
+    // Check that all widths are either 1 (broadcast) or equal to max_width
+    for (uint32_t width : widths) {
+        if (width != 1 && width != max_width) {
+            return false;  // Invalid broadcast pattern
+        }
+    }
+
+    return true;  // Valid column broadcast pattern
+}
 
 DataType WhereDeviceOperation::operation_attributes_t::get_dtype() const { return dtype.value_or(input_dtype); }
 
@@ -56,15 +102,34 @@ void WhereDeviceOperation::validate_on_program_cache_miss(
 
     // Validate tensor shapes based on variant
     if (args.where_variant == WhereVariant::TTT) {
+        // Allow either exact same shapes OR broadcast-compatible shapes
+        bool pred_true_compatible =
+            (predicate_tensor.logical_shape() == value_true_tensor.value().logical_shape()) ||
+            (predicate_tensor.logical_shape().rank() == value_true_tensor.value().logical_shape().rank());
+        bool pred_false_compatible =
+            (predicate_tensor.logical_shape() == value_false_tensor.value().logical_shape()) ||
+            (predicate_tensor.logical_shape().rank() == value_false_tensor.value().logical_shape().rank());
+
         TT_FATAL(
-            predicate_tensor.logical_shape() == value_true_tensor.value().logical_shape(),
-            "Where TTT operation requires predicate and value_true to have same shape. Predicate: {}, Value true: {}",
+            pred_true_compatible,
+            "Where TTT operation requires predicate and value_true to be broadcast-compatible. Predicate: {}, Value "
+            "true: {}",
             predicate_tensor.logical_shape(),
             value_true_tensor.value().logical_shape());
         TT_FATAL(
-            predicate_tensor.logical_shape() == value_false_tensor.value().logical_shape(),
-            "Where TTT operation requires predicate and value_false to have same shape. Predicate: {}, Value false: {}",
+            pred_false_compatible,
+            "Where TTT operation requires predicate and value_false to be broadcast-compatible. Predicate: {}, Value "
+            "false: {}",
             predicate_tensor.logical_shape(),
+            value_false_tensor.value().logical_shape());
+    } else if (args.where_variant == WhereVariant::TTT_COL) {
+        // For column broadcasting, validate that tensors are broadcast-compatible
+        TT_FATAL(
+            needs_column_broadcasting(predicate_tensor, value_true_tensor.value(), value_false_tensor.value()),
+            "Where TTT_COL operation requires tensors to be column-broadcast compatible. Predicate: {}, Value true: "
+            "{}, Value false: {}",
+            predicate_tensor.logical_shape(),
+            value_true_tensor.value().logical_shape(),
             value_false_tensor.value().logical_shape());
     } else if (args.where_variant == WhereVariant::TTS) {
         TT_FATAL(
@@ -158,7 +223,7 @@ tt::stl::hash::hash_t WhereDeviceOperation::compute_program_hash(
         predicate_tensor.memory_config(),
         predicate_shape.volume());
 
-    if (variant == WhereVariant::TTT) {
+    if (variant == WhereVariant::TTT || variant == WhereVariant::TTT_COL) {
         hash = tt::tt_metal::operation::hash_operation<WhereDeviceOperation>(
             args,
             program_factory.index(),
@@ -209,8 +274,14 @@ WhereDeviceOperation::invoke(
     const std::optional<const DataType>& output_dtype,
     const std::optional<MemoryConfig>& memory_config,
     const std::optional<Tensor>& optional_output_tensor) {
+    // Detect if column broadcasting is needed
+    WhereVariant variant = WhereVariant::TTT;
+    if (needs_column_broadcasting(predicate, value_true, value_false)) {
+        variant = WhereVariant::TTT_COL;
+    }
+
     operation_attributes_t attributes{
-        .where_variant = WhereVariant::TTT,
+        .where_variant = variant,
         .memory_config = memory_config.value_or(predicate.memory_config()),
         .input_dtype = predicate.dtype(),
         .dtype = output_dtype.value_or(value_true.dtype()),

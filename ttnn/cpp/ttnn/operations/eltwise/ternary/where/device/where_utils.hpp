@@ -17,14 +17,17 @@ enum class KernelName {
     ReaderNoBcastTST,
     ReaderNoBcastTTS,
     ReaderNoBcastTSS,
+    ReaderColBcastTTT,
     WriterNoBcastTTT,
     WriterNoBcastTST,
     WriterNoBcastTTS,
     WriterNoBcastTSS,
+    WriterColBcastTTT,
     ComputeNoBcastTTT,
     ComputeNoBcastTST,
     ComputeNoBcastTTS,
     ComputeNoBcastTSS,
+    ComputeColBcastTTT,
 };
 
 struct WhereKernelConfig {

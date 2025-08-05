@@ -85,9 +85,19 @@ Tensor WhereOperation::invoke(
             // TTT case: tensor-tensor-tensor
             const auto& t_true = std::get<Tensor>(value_true);
             const auto& t_false = std::get<Tensor>(value_false);
-            if (ternary_utils::have_same_shape(t_true, predicate) &&
-                ternary_utils::have_same_shape(predicate, t_false)) {
-                log_info(tt::LogOp, "Where LLK - TTT");
+            // Check for same shapes OR any form of broadcast compatibility
+            // Allow LLK path for cases where broadcasting might be needed
+            bool shapes_compatible = (ternary_utils::have_same_shape(t_true, predicate) &&
+                                      ternary_utils::have_same_shape(predicate, t_false)) ||
+                                     WhereDeviceOperation::needs_column_broadcasting(predicate, t_true, t_false) ||
+                                     (predicate.logical_shape().rank() == t_true.logical_shape().rank() &&
+                                      predicate.logical_shape().rank() == t_false.logical_shape().rank());
+            if (shapes_compatible) {
+                if (WhereDeviceOperation::needs_column_broadcasting(predicate, t_true, t_false)) {
+                    log_info(tt::LogOp, "Where LLK - TTT_COL");
+                } else {
+                    log_info(tt::LogOp, "Where LLK - TTT");
+                }
                 std::optional<DataType> output_dtype = output.has_value() ? std::optional<DataType>(output->dtype())
                                                                           : std::optional<DataType>(predicate.dtype());
                 return ttnn::prim::where(

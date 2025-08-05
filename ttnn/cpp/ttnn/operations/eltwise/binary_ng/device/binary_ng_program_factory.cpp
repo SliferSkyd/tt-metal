@@ -387,6 +387,28 @@ void set_or_update_runtime_arguments(
 
         // for the specific case of subtile no_bcast type, reader also needs b's information
         // number of parameters are still small so negligible dispatch cost
+
+        std::cout << "a.buffer()->address() --> " << a.buffer()->address() << "\n";
+        std::cout << "c_start_id --> " << c_start_id << "\n";
+        std::cout << "a_num_tiles --> " << a_num_tiles << "\n";
+        std::cout << "c_num_tiles --> " << c_num_tiles << "\n";
+        std::cout << "c_current_shard_width --> " << c_current_shard_width << "\n";
+        std::cout << "aHt * aWt * aC * aN * aD * (aND > 1) --> " << (aHt * aWt * aC * aN * aD * (aND > 1)) << "\n";
+        std::cout << "aHt * aWt * aC * aN * (aD > 1) --> " << (aHt * aWt * aC * aN * (aD > 1)) << "\n";
+        std::cout << "aHt * aWt * aC * (aN > 1) --> " << (aHt * aWt * aC * (aN > 1)) << "\n";
+        std::cout << "aHt * aWt * (aC > 1) --> " << (aHt * aWt * (aC > 1)) << "\n";
+        std::cout << "cD --> " << cD << "\n";
+        std::cout << "cN --> " << cN << "\n";
+        std::cout << "cC --> " << cC << "\n";
+        std::cout << "cHt --> " << cHt << "\n";
+        std::cout << "cWt --> " << cWt << "\n";
+        std::cout << "cND --> " << cND << "\n";
+        std::cout << "b.buffer()->address() --> " << (b.has_value() ? b->buffer()->address() : 0u) << "\n";
+        std::cout << "bHt * bWt * bC * bN * bD * (bND > 1) --> " << (bHt * bWt * bC * bN * bD * (bND > 1)) << "\n";
+        std::cout << "bHt * bWt * bC * bN * (bD > 1) --> " << (bHt * bWt * bC * bN * (bD > 1)) << "\n";
+        std::cout << "bHt * bWt * bC * (bN > 1) --> " << (bHt * bWt * bC * (bN > 1)) << "\n";
+        std::cout << "bHt * bWt * (bC > 1) --> " << (bHt * bWt * (bC > 1)) << "\n";
+        std::cout << "b_num_tiles --> " << b_num_tiles << "\n";
         std::array reader_runtime_args = {
             a.buffer()->address(),
             c_start_id,

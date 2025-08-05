@@ -5,9 +5,10 @@
 #include "where_device_operation.hpp"
 #include "where_utils.hpp"
 #include <tt-metalium/work_split.hpp>
-#include <tt-metalium/tensor_accessor_args.hpp>
 #include "ttnn/operations/cb_utils.hpp"
+#include "tt-metalium/core_coord.hpp"
 #include <cmath>
+#include <algorithm>
 
 namespace {
 namespace CMAKE_UNIQUE_NAMESPACE {
@@ -32,19 +33,35 @@ void set_or_update_runtime_arguments(
     uint32_t num_output_tiles = output.physical_volume() / output.tensor_spec().tile().get_tile_hw();
 
     constexpr bool row_major = true;
+    // Adopt binary_ng work distribution strategy for better large tensor support
     uint32_t num_cores_x = compute_with_storage_grid_size.x;
     uint32_t num_cores_y = compute_with_storage_grid_size.y;
     uint32_t num_cores_total = num_cores_x * num_cores_y;
     auto all_device_cores = CoreRange({0, 0}, {num_cores_x - 1, num_cores_y - 1});
-    auto [num_cores, all_cores, core_group_1, core_group_2, num_tiles_per_core_group_1, num_tiles_per_core_group_2] =
-        tt::tt_metal::split_work_to_cores(compute_with_storage_grid_size, num_output_tiles, row_major);
 
-    auto cores = grid_to_cores(num_cores_total, num_cores_x, num_cores_y, row_major);
+    // Use the same logic as binary_ng for better scalability
+    uint32_t num_cores, num_tiles_per_core_group_1, num_tiles_per_core_group_2;
+    CoreRangeSet all_cores, core_group_1, core_group_2;
+    std::vector<CoreCoord> cores;
+
+    // For large tensors, use compute_with_storage_grid; for small ones, use all_device_cores
+    if (num_output_tiles <= num_cores_total) {
+        std::tie(
+            num_cores, all_cores, core_group_1, core_group_2, num_tiles_per_core_group_1, num_tiles_per_core_group_2) =
+            tt::tt_metal::split_work_to_cores(compute_with_storage_grid_size, num_output_tiles, row_major);
+        cores = grid_to_cores(num_cores_total, num_cores_x, num_cores_y, row_major);
+    } else {
+        std::tie(
+            num_cores, all_cores, core_group_1, core_group_2, num_tiles_per_core_group_1, num_tiles_per_core_group_2) =
+            tt::tt_metal::split_work_to_cores(all_device_cores, num_output_tiles, row_major);
+        cores = corerange_to_cores(all_device_cores, {}, row_major);
+    }
     constexpr size_t num_writer_args = 3;
     constexpr size_t num_kernel_args = 1;
 
     // Reader args count depends on variant
-    constexpr size_t num_reader_args = 5;
+    constexpr size_t num_reader_args_basic = 5;
+    constexpr size_t num_reader_args_colbcast = 27;
     uint32_t dummy_arg = 0;
 
     for (uint32_t i = 0, start_tile_id = 0; i < num_cores_total; i++) {
@@ -56,7 +73,12 @@ void set_or_update_runtime_arguments(
         } else if (core_group_2.contains(core)) {
             num_tiles_per_core = num_tiles_per_core_group_2;
         } else {
-            handle_args(program, reader_kernel_id, core, std::array<uint32_t, num_reader_args>{0});
+            // Use correct number of reader args based on variant
+            if (variant == WhereVariant::TTT_COL) {
+                handle_args(program, reader_kernel_id, core, std::array<uint32_t, num_reader_args_colbcast>{0});
+            } else {
+                handle_args(program, reader_kernel_id, core, std::array<uint32_t, num_reader_args_basic>{0});
+            }
             handle_args(program, writer_kernel_id, core, std::array<uint32_t, num_writer_args>{0});
             handle_args(program, compute_kernel_id, core, std::array<uint32_t, num_kernel_args>{0});
             continue;
@@ -83,6 +105,124 @@ void set_or_update_runtime_arguments(
                 start_tile_id,
             };
             handle_args(program, reader_kernel_id, core, reader_runtime_args);
+        }
+
+        // For TTT_COL, declare variables outside the if blocks so they can be used by both reader and writer
+        uint32_t Wt = 0, Ht = 0, HtWt = 0, C = 0, N = 0, D = 0, cND = 0;
+        uint32_t nD_stride_0 = 0, d_stride_0 = 0, n_stride_0 = 0, c_stride_0 = 0;
+        uint32_t nD_stride_1 = 0, d_stride_1 = 0, n_stride_1 = 0, c_stride_1 = 0;
+        uint32_t nD_stride_2 = 0, d_stride_2 = 0, n_stride_2 = 0, c_stride_2 = 0;
+
+        if (variant == WhereVariant::TTT_COL) {
+            // TTT_COL: Column broadcast variant with complex stride arguments
+            const auto& pred_shape = predicate_tensor.logical_shape();
+            const auto& true_shape = value_true_tensor.value().logical_shape();
+            const auto& false_shape = value_false_tensor.value().logical_shape();
+
+            // Use the largest tensor's shape for output dimensions
+            auto output_shape = pred_shape;
+            if (true_shape.volume() > output_shape.volume()) {
+                output_shape = true_shape;
+            }
+            if (false_shape.volume() > output_shape.volume()) {
+                output_shape = false_shape;
+            }
+
+            // Calculate tile dimensions using binary_ng pattern (padded_shape + tile division)
+            const auto& padded_shape = output.padded_shape();
+            const auto& tile = output.tensor_spec().tile();
+            Wt = padded_shape[-1] / tile.get_width();   // Width in tiles
+            Ht = padded_shape[-2] / tile.get_height();  // Height in tiles
+            HtWt = Ht * Wt;
+
+            // Use binary_ng pattern for all dimensions
+            C = padded_shape.rank() >= 3 ? padded_shape[-3] : 1;
+            N = padded_shape.rank() >= 4 ? padded_shape[-4] : 1;
+            D = padded_shape.rank() >= 5 ? padded_shape[-5] : 1;
+            cND = D;
+
+            // Calculate strides for tensor memory layout (binary_ng pattern)
+            auto calc_strides = [&HtWt](
+                                    const auto& shape,
+                                    uint32_t target_Wt,
+                                    uint32_t target_Ht,
+                                    uint32_t target_C,
+                                    uint32_t target_N,
+                                    uint32_t target_D) {
+                // For non-broadcast tensors, we need proper strides for spatial traversal
+                // Only check for broadcast if the dimension is 1 AND we're doing column broadcast
+                bool tensor_Wt_is_broadcast = (shape[-1] == 1) && (target_Wt > 1);
+                bool tensor_Ht_is_broadcast = (shape.rank() >= 2 && shape[-2] == 1) && (target_Ht > 1);
+                bool tensor_C_is_broadcast = (shape.rank() >= 3 && shape[-3] == 1) && (target_C > 1);
+                bool tensor_N_is_broadcast = (shape.rank() >= 4 && shape[-4] == 1) && (target_N > 1);
+
+                // For stride calculation, use actual tensor tile dimensions
+                uint32_t tensor_Wt = tensor_Wt_is_broadcast ? 1 : target_Wt;
+                uint32_t tensor_Ht = tensor_Ht_is_broadcast ? 1 : target_Ht;
+                uint32_t tensor_HtWt = tensor_Ht * tensor_Wt;
+
+                // For non-broadcast tensors, strides are the normal memory layout offsets
+                // For broadcast tensors, strides are 0 (no advancement in that dimension)
+                uint32_t c_stride = tensor_C_is_broadcast ? 0 : tensor_HtWt;
+                uint32_t n_stride = tensor_N_is_broadcast ? 0 : (tensor_HtWt * target_C);
+                uint32_t d_stride = (target_D > 1) ? (tensor_HtWt * target_C * target_N) : 0;
+                uint32_t nD_stride = (target_D > 1) ? (tensor_HtWt * target_C * target_N * target_D) : 0;
+
+                return std::tuple{nD_stride, d_stride, n_stride, c_stride};
+            };
+
+            // Calculate strides for all tensors using same logic
+            auto [nD_stride, d_stride, n_stride, c_stride] = calc_strides(pred_shape, Wt, Ht, C, N, D);
+            nD_stride_0 = nD_stride;
+            d_stride_0 = d_stride;
+            n_stride_0 = n_stride;
+            c_stride_0 = c_stride;
+
+            auto [temp_nD_stride_1, temp_d_stride_1, temp_n_stride_1, temp_c_stride_1] =
+                calc_strides(true_shape, Wt, Ht, C, N, D);
+            nD_stride_1 = temp_nD_stride_1;
+            d_stride_1 = temp_d_stride_1;
+            n_stride_1 = temp_n_stride_1;
+            c_stride_1 = temp_c_stride_1;
+
+            auto [temp_nD_stride_2, temp_d_stride_2, temp_n_stride_2, temp_c_stride_2] =
+                calc_strides(false_shape, Wt, Ht, C, N, D);
+            nD_stride_2 = temp_nD_stride_2;
+            d_stride_2 = temp_d_stride_2;
+            n_stride_2 = temp_n_stride_2;
+            c_stride_2 = temp_c_stride_2;
+
+            // Extended runtime args for column broadcast (27 arguments)
+            std::array reader_runtime_args = {
+                predicate_tensor.buffer()->address(),                              // 0: src0_addr
+                start_tile_id,                                                     // 1: start_tile_id
+                static_cast<uint32_t>(predicate_tensor.physical_volume() / 1024),  // 2: src0_num_tiles
+                num_tiles_per_core,                                                // 3: dst_num_tiles
+                Wt,                                             // 4: dst_shard_width (full width for non-sharded)
+                nD_stride_0,                                    // 5: nD_stride
+                d_stride_0,                                     // 6: d_stride
+                n_stride_0,                                     // 7: n_stride
+                c_stride_0,                                     // 8: c_stride
+                D,                                              // 9: D
+                N,                                              // 10: N
+                C,                                              // 11: C
+                Ht,                                             // 12: Ht
+                Wt,                                             // 13: Wt
+                cND,                                            // 14: cND
+                value_true_tensor.value().buffer()->address(),  // 15: src1_addr
+                nD_stride_1,                                    // 16: nD_stride_1
+                d_stride_1,                                     // 17: d_stride_1
+                n_stride_1,                                     // 18: n_stride_1
+                c_stride_1,                                     // 19: c_stride_1
+                static_cast<uint32_t>(value_true_tensor.value().physical_volume() / 1024),   // 20: src1_num_tiles
+                value_false_tensor.value().buffer()->address(),                              // 21: src2_addr
+                nD_stride_2,                                                                 // 22: nD_stride_2
+                d_stride_2,                                                                  // 23: d_stride_2
+                n_stride_2,                                                                  // 24: n_stride_2
+                c_stride_2,                                                                  // 25: c_stride_2
+                static_cast<uint32_t>(value_false_tensor.value().physical_volume() / 1024),  // 26: src2_num_tiles
+            };
+            handle_args(program, reader_kernel_id, core, reader_runtime_args);
         } else {
             // TTT: predicate (arg 0) + value_true (arg 1) + value_false (arg 2)
             std::array reader_runtime_args = {
@@ -95,12 +235,34 @@ void set_or_update_runtime_arguments(
             handle_args(program, reader_kernel_id, core, reader_runtime_args);
         }
 
-        std::array writer_runtime_args = {
-            output.buffer()->address(),
-            num_tiles_per_core,
-            start_tile_id,
-        };
-        handle_args(program, writer_kernel_id, core, writer_runtime_args);
+        if (variant == WhereVariant::TTT_COL) {
+            // TTT_COL writer needs binary_ng pattern args
+            std::array writer_runtime_args = {
+                output.buffer()->address(),  // 0: dst_addr
+                start_tile_id,               // 1: start_tile_id
+                num_tiles_per_core,          // 2: dst_num_tiles
+                Wt,                          // 3: dst_shard_width (full width for non-sharded)
+                nD_stride_0,                 // 4: nD_stride (using output strides)
+                d_stride_0,                  // 5: d_stride
+                n_stride_0,                  // 6: n_stride
+                c_stride_0,                  // 7: c_stride
+                D,                           // 8: D
+                N,                           // 9: N
+                C,                           // 10: C
+                Ht,                          // 11: Ht
+                Wt,                          // 12: Wt
+                cND,                         // 13: cND
+            };
+            handle_args(program, writer_kernel_id, core, writer_runtime_args);
+        } else {
+            // Regular TTT writer args
+            std::array writer_runtime_args = {
+                output.buffer()->address(),
+                num_tiles_per_core,
+                start_tile_id,
+            };
+            handle_args(program, writer_kernel_id, core, writer_runtime_args);
+        }
 
         // All variants use same compute runtime args now
         if (variant == WhereVariant::TTS) {
@@ -114,6 +276,7 @@ void set_or_update_runtime_arguments(
             std::array compute_runtime_args = {num_tiles_per_core, bit_cast_scalar};
             handle_args(program, compute_kernel_id, core, compute_runtime_args);
         } else {
+            // TTT and TTT_COL use same compute arguments (no scalars)
             std::array compute_runtime_args = {num_tiles_per_core};
             handle_args(program, compute_kernel_id, core, compute_runtime_args);
         }
@@ -171,7 +334,7 @@ WhereDeviceOperation::WhereProgramFactory::cached_program_t WhereDeviceOperation
         // Use predicate format as fallback for value_true
         value_true_data_format = predicate_data_format;
     } else {
-        // TTT: both tensors exist
+        // TTT and TTT_COL: both tensors exist
         value_true_data_format = datatype_to_dataformat_converter(value_true_tensor.value().dtype());
         // (value_true_tensor.value().dtype() == DataType::BFLOAT16) ? DataType::UINT16
         //                                                           : value_true_tensor.value().dtype());
@@ -238,7 +401,7 @@ WhereDeviceOperation::WhereProgramFactory::cached_program_t WhereDeviceOperation
         value_false_tensor_cb = cb;
         value_false_tensor_cb_handle = cb_handle;
     } else {
-        // TTT: c_1 = value_true tensor, c_2 = value_false tensor
+        // TTT and TTT_COL: c_1 = value_true tensor, c_2 = value_false tensor
         auto [cb1, cb1_handle] = create_cb(
             tt::CBIndex::c_1,
             program,
@@ -281,6 +444,7 @@ WhereDeviceOperation::WhereProgramFactory::cached_program_t WhereDeviceOperation
         value_false_is_dram =
             static_cast<uint32_t>(value_false_tensor.value().buffer()->buffer_type() == tt_metal::BufferType::DRAM);
     } else {
+        // TTT and TTT_COL: both tensors exist
         value_true_is_dram =
             static_cast<uint32_t>(value_true_tensor.value().buffer()->buffer_type() == tt_metal::BufferType::DRAM);
         value_false_is_dram =
@@ -299,6 +463,75 @@ WhereDeviceOperation::WhereProgramFactory::cached_program_t WhereDeviceOperation
         // TST: c_0 = predicate, c_1 = value_false tensor
         reader_config = tt_metal::ReaderDataMovementConfig(
             {predicate_is_dram, predicate_tensor_cb, value_false_is_dram, value_false_tensor_cb});
+    } else if (variant == WhereVariant::TTT_COL) {
+        // TTT_COL: c_0 = predicate, c_1 = value_true, c_2 = value_false with column broadcasting
+        // Additional compile-time args for broadcasting
+        const auto& pred_shape = predicate_tensor.logical_shape();
+        const auto& true_shape = value_true_tensor.value().logical_shape();
+        const auto& false_shape = value_false_tensor.value().logical_shape();
+
+        // Determine which tensors need column broadcasting at ELEMENT level
+        // Column broadcasting is needed when tensors have different element widths
+        uint32_t pred_elem_width = pred_shape[-1];  // Actual element width
+        uint32_t true_elem_width = true_shape[-1];
+        uint32_t false_elem_width = false_shape[-1];
+
+        // Find the maximum element width (output element width)
+        uint32_t max_elem_width = std::max({pred_elem_width, true_elem_width, false_elem_width});
+
+        // A tensor needs broadcasting if its element width is less than the output element width
+        bool src0_bcast = pred_elem_width < max_elem_width;   // predicate element broadcast
+        bool src1_bcast = true_elem_width < max_elem_width;   // value_true element broadcast
+        bool src2_bcast = false_elem_width < max_elem_width;  // value_false element broadcast
+
+        // Set up defines for column broadcasting
+        std::map<std::string, std::string> reader_defines;
+
+        // Add broadcast flags as defines
+        if (src0_bcast) {
+            reader_defines["SRC0_BCAST"] = "1";
+        }
+        if (src1_bcast) {
+            reader_defines["SRC1_BCAST"] = "1";
+        }
+        if (src2_bcast) {
+            reader_defines["SRC2_BCAST"] = "1";
+        }
+
+        // Set up column fill macros based on data formats
+        if (src0_bcast) {
+            if (predicate_data_format == tt::DataFormat::Float16_b) {
+                reader_defines["FILL_TILE_WITH_FIRST_COLUMN"] = "fill_tile_with_first_column_bfloat16";
+            } else {
+                reader_defines["FILL_TILE_WITH_FIRST_COLUMN"] = "fill_tile_with_first_column";
+            }
+        }
+
+        if (src1_bcast) {
+            if (value_true_data_format == tt::DataFormat::Float16_b) {
+                reader_defines["FILL_TILE_WITH_FIRST_COLUMN_B"] = "fill_tile_with_first_column_bfloat16";
+            } else {
+                reader_defines["FILL_TILE_WITH_FIRST_COLUMN_B"] = "fill_tile_with_first_column";
+            }
+        }
+
+        if (src2_bcast) {
+            if (value_false_data_format == tt::DataFormat::Float16_b) {
+                reader_defines["FILL_TILE_WITH_FIRST_COLUMN_C"] = "fill_tile_with_first_column_bfloat16";
+            } else {
+                reader_defines["FILL_TILE_WITH_FIRST_COLUMN_C"] = "fill_tile_with_first_column";
+            }
+        }
+
+        reader_config = tt_metal::ReaderDataMovementConfig(
+            {predicate_is_dram,
+             predicate_tensor_cb,
+             static_cast<uint32_t>(false),  // has_sharding - set to false for now
+             value_true_is_dram,
+             value_true_tensor_cb,
+             value_false_is_dram,
+             value_false_tensor_cb},
+            reader_defines);
     } else {
         // TTT: c_0 = predicate, c_1 = value_true, c_2 = value_false
         reader_config = tt_metal::ReaderDataMovementConfig(
@@ -314,13 +547,20 @@ WhereDeviceOperation::WhereProgramFactory::cached_program_t WhereDeviceOperation
         program, get_kernel_file_path(kernel_config.reader_kernel), all_device_cores, reader_config);
 
     // WRITER KERNEL - Use kernel path from utils
-    std::vector<uint32_t> writer_compile_time_args = {(std::uint32_t)output_tensor_cb};
-    tt_metal::TensorAccessorArgs(*output.buffer()).append_to(writer_compile_time_args);
+    tt_metal::WriterDataMovementConfig writer_config;
+    if (variant == WhereVariant::TTT_COL) {
+        // TTT_COL uses binary_ng pattern with 3 compile-time args
+        writer_config = tt_metal::WriterDataMovementConfig({
+            output_tensor_cb,
+            output_is_dram,
+            static_cast<uint32_t>(false)  // has_sharding - set to false for now
+        });
+    } else {
+        writer_config = tt_metal::WriterDataMovementConfig({output_tensor_cb, output_is_dram});
+    }
+
     auto writer_kernel_id = tt_metal::CreateKernel(
-        program,
-        get_kernel_file_path(kernel_config.writer_kernel),
-        all_device_cores,
-        tt_metal::WriterDataMovementConfig(writer_compile_time_args));
+        program, get_kernel_file_path(kernel_config.writer_kernel), all_device_cores, writer_config);
 
     // COMPUTE KERNEL - Use kernel path from utils
     bool fp32_dest_acc_en = output_data_format == tt::DataFormat::UInt32 ||
@@ -346,7 +586,7 @@ WhereDeviceOperation::WhereProgramFactory::cached_program_t WhereDeviceOperation
                                                     ? UnpackToDestMode::UnpackToDestFp32
                                                     : UnpackToDestMode::Default;
     } else {
-        // TTT: c_1 = value_true tensor, c_2 = value_false tensor
+        // TTT and TTT_COL: c_1 = value_true tensor, c_2 = value_false tensor
         unpack_to_dest_mode[tt::CBIndex::c_1] = (value_true_tensor.value().dtype() == DataType::FLOAT32)
                                                     ? UnpackToDestMode::UnpackToDestFp32
                                                     : UnpackToDestMode::Default;
@@ -370,6 +610,7 @@ WhereDeviceOperation::WhereProgramFactory::cached_program_t WhereDeviceOperation
         auto bit_cast_scalar = pack_scalar_runtime_arg(operation_attributes.value_true_scalar.value(), output.dtype());
         compute_kernel_args = {num_tiles_per_cycle, bit_cast_scalar};
     } else {
+        // TTT and TTT_COL use same compute args
         compute_kernel_args = {num_tiles_per_cycle};
     }
 
@@ -428,7 +669,7 @@ void WhereDeviceOperation::WhereProgramFactory::override_runtime_arguments(
             std::copy(args.begin(), args.end(), core_args.data());
         };
 
-    CMAKE_UNIQUE_NAMESPACE::set_or_update_runtime_arguments(
+    unity_677ecc7cff58e96986f480c485e0b631::set_or_update_runtime_arguments(
         cached_program.program,
         cached_program.shared_variables.reader_kernel_id,
         cached_program.shared_variables.writer_kernel_id,
