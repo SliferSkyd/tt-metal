@@ -27,6 +27,12 @@ uint32_t math_sync_tile_dst_index = 0;
 uint32_t gl_alu_format_spec_reg = 0;
 uint32_t op_info_offset = 0;
 
+uint32_t noc_reads_num_issued[NUM_NOCS];
+uint32_t noc_nonposted_writes_num_issued[NUM_NOCS];
+uint32_t noc_nonposted_writes_acked[NUM_NOCS];
+uint32_t noc_nonposted_atomics_acked[NUM_NOCS];
+uint32_t noc_posted_writes_num_issued[NUM_NOCS];
+
 namespace ckernel
 {
 volatile tt_reg_ptr uint * regfile = reinterpret_cast<volatile uint *>(REGFILE_BASE);
@@ -51,6 +57,12 @@ uint32_t kernel_launch(uint32_t kernel_base_addr) {
   extern uint32_t __fw_export_text_end[];
   do_crt1((
       uint32_t tt_l1_ptr *)(kernel_base_addr + (uint32_t)__kernel_init_local_l1_base - (uint32_t)__fw_export_text_end));
+
+    if constexpr (NOC_MODE == DM_DEDICATED_NOC) {
+	// The initialization happens in local memory
+        noc_local_state_init(0);
+        noc_local_state_init(1);
+    }
 
 #if defined(UCK_CHLKC_UNPACK)
     // Make sure DBG_FEATURE_DISABLE register is cleared before every kernel is executed

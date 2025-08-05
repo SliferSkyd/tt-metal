@@ -9,7 +9,7 @@
 #include "dev_msgs.h"
 #include "noc_overlay_parameters.h"
 #include "debug/assert.h"
-
+#include "debug/dprint.h"
 #if defined(COMPILE_FOR_BRISC)
 constexpr std::underlying_type_t<TensixProcessorTypes> proc_type =
     static_cast<std::underlying_type_t<TensixProcessorTypes>>(TensixProcessorTypes::DM0);
@@ -471,6 +471,7 @@ inline __attribute__((always_inline)) void dynamic_noc_init() {
 
 // set noc local memory state for a single kernel from the global state
 inline __attribute__((always_inline)) void noc_local_state_init(int noc) {
+    DPRINT << "Local state init called " << ENDL();
     // Hide latency of NOC reg reads by reading first, writing second
     uint32_t reads_num_issued = NOC_STATUS_READ_REG(noc, NIU_MST_RD_RESP_RECEIVED);
     uint32_t nonposted_writes_num_issued = NOC_STATUS_READ_REG(noc, NIU_MST_NONPOSTED_WR_REQ_SENT);
@@ -478,6 +479,7 @@ inline __attribute__((always_inline)) void noc_local_state_init(int noc) {
     uint32_t nonposted_atomics_acked = NOC_STATUS_READ_REG(noc, NIU_MST_ATOMIC_RESP_RECEIVED);
     uint32_t posted_writes_num_issued = NOC_STATUS_READ_REG(noc, NIU_MST_POSTED_WR_REQ_SENT);
 
+    DPRINT << "reads " << reads_num_issued << ENDL();
     noc_reads_num_issued[noc] = reads_num_issued;
     noc_nonposted_writes_num_issued[noc] = nonposted_writes_num_issued;
     noc_nonposted_writes_acked[noc] = nonposted_writes_acked;
