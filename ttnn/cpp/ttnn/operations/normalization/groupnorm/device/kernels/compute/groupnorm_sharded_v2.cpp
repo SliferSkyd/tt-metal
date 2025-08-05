@@ -242,6 +242,7 @@ void MAIN {
             // Partial-E[x]
             index_h_offset = 0;
             // binary_dest_reuse_tiles_init(cb_x);
+            mul_tiles_init(cb_x, cb_ones);
             cb_reserve_back(cb_ex2pe, 1);
             tile_regs_acquire();
             cb_wait_front(cb_x, block_hw);
