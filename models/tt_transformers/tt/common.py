@@ -8,6 +8,7 @@ from enum import Enum
 from typing import Optional
 
 import torch
+from codetiming import Timer
 from loguru import logger
 from pydantic import BaseModel, Field
 
@@ -384,6 +385,7 @@ def num_to_core_range_set(x):
     )
 
 
+@Timer(name="copy_host_to_device", text="Copying host tensors to device took {milliseconds:8f} milliseconds")
 def copy_host_to_device(host_tensors, device_tensors=None, mesh_device=None):
     """
     Helper function which copies host tensors to device tensors.

@@ -5,6 +5,7 @@
 from dataclasses import dataclass
 
 import torch
+from codetiming import Timer
 from llama_models.llama3.api.datatypes import InterleavedTextMedia, StopReason
 from llama_models.llama3.reference_impl.generation import (
     ChatPrediction,
@@ -198,6 +199,7 @@ class Generator:
             return tt_logits
 
     # Note: This function is called by vLLM
+    @Timer(name="decode_forward", text="Decoding took {milliseconds:.8f} milliseconds")
     def decode_forward_text(
         self,
         tokens,

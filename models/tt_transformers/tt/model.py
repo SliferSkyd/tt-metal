@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import torch
+from codetiming import Timer
 from tqdm import tqdm
 
 import ttnn
@@ -258,6 +259,7 @@ class Transformer(LightweightModule):
         """
         return self.concat_device_output(tt_out)[0, 0, last_token_idx, : self.vocab_size]
 
+    @Timer(name="process_output_decode", text="Processing output decode took {milliseconds:.8f} milliseconds")
     def process_output_decode(self, tt_out, B, S=1, is_tokens=False):
         """
         Input is ttnn device tensor of logits if is_tokens=False, otherwise tokens. Output is the corresponding torch tensor.
