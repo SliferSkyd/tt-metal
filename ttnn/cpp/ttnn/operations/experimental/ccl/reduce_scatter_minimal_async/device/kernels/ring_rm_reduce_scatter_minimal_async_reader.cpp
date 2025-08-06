@@ -26,9 +26,10 @@ constexpr uint32_t cb_intermediate_id = get_compile_time_arg_val(4);
 constexpr uint32_t cb_reader_output_id = get_compile_time_arg_val(5);
 constexpr uint32_t input_tensor_num_pages = get_compile_time_arg_val(6);
 constexpr uint32_t input_tensor_page_size = get_compile_time_arg_val(7);
-constexpr uint32_t slice_width_row_size = get_compile_time_arg_val(8);
-constexpr uint32_t ring_size = get_compile_time_arg_val(9);
-constexpr bool direction = get_compile_time_arg_val(10);
+constexpr uint32_t intermediate_tensor_page_size = get_compile_time_arg_val(8);
+constexpr uint32_t slice_width_row_size = get_compile_time_arg_val(9);
+constexpr uint32_t ring_size = get_compile_time_arg_val(10);
+constexpr bool direction = get_compile_time_arg_val(11);
 
 void kernel_main() {
     ///////////////////////////////////////////////////
@@ -46,7 +47,7 @@ void kernel_main() {
         .bank_base_address = input_tensor_address, .page_size = input_tensor_page_size};
     constexpr bool intermediate_tensor_is_dram = intermediate_buffer_type == tt::tt_metal::BufferType::DRAM;
     auto intermediate_tensor_addrgen = InterleavedAddrGen<intermediate_tensor_is_dram>{
-        .bank_base_address = intermediate_tensor_address, .page_size = input_tensor_page_size};
+        .bank_base_address = intermediate_tensor_address, .page_size = intermediate_tensor_page_size};
 
     int slice_idx = direction ? my_chip_id - 1 : my_chip_id + 1;
     for (uint32_t i = 0; i < ring_size; ++i) {

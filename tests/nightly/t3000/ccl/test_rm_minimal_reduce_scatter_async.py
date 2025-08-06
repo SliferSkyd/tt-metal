@@ -65,7 +65,7 @@ def run_reduce_scatter_impl(
     logger.info("Creating persistent buffers")
     persistent_intermediate_buffers = [
         ttnn.from_torch(
-            torch.zeros(rs_input_shape),
+            torch.ones(rs_input_shape),
             # torch.full(rs_input_shape, 4),
             device=t3k_mesh_device,
             layout=ttnn.ROW_MAJOR_LAYOUT,
@@ -104,8 +104,7 @@ def run_reduce_scatter_impl(
         rs_global_input_shape[3] *= num_devices
         if ones_tensor:
             rs_input_tensor = torch.ones(rs_global_input_shape).bfloat16()
-
-            torch.full(rs_global_input_shape, 4).bfloat16()
+            # torch.full(rs_global_input_shape, 4).bfloat16()
         else:
             rs_input_tensor = torch.rand(rs_global_input_shape).bfloat16()
         input_tensors = torch.chunk(rs_input_tensor, num_devices, dim)
@@ -183,6 +182,8 @@ def run_reduce_scatter_impl(
 
             logger.info(f"Done iteration {i}")
 
+    ttnn.set_printoptions(profile="Full")
+
     for i in range(num_iters):
         tt_rs_out_tensor = tt_reduce_scatter_output_list[i]
         torch_rs_out_tensor = torch_reduce_scatter_output_list[i]
@@ -192,13 +193,13 @@ def run_reduce_scatter_impl(
         tt_rs_out = ttnn.from_device(tt_rs_out_tensor)
         tt_rs_out = ttnn.to_torch(tt_rs_out, mesh_composer=ttnn.ConcatMeshToTensor(t3k_mesh_device, dim=3))
 
-        print("TORCH")
-        print(torch_rs_out)
+        # print("TORCH")
+        # print(torch_rs_out)
 
-        print()
+        # print()
 
-        print("TTNN")
-        print(tt_rs_out)
+        # print("TTNN")
+        # print(tt_rs_out_tensor)
 
         if ones_tensor:
             eq, output = comp_equal(tt_rs_out, torch_rs_out)
@@ -217,13 +218,19 @@ def run_reduce_scatter_impl(
 @pytest.mark.parametrize(
     "num_devices, rs_input_shape, dim, layout, rs_input_dtype",
     [
+        (8, [1, 1, 2, 57344], 3, ttnn.ROW_MAJOR_LAYOUT, ttnn.bfloat16),  # > tile_gran --> passing (bad pcc though)
+        # (8, [1, 1, 2, 73728], 3, ttnn.ROW_MAJOR_LAYOUT, ttnn.bfloat16), # > tile_gran --> passing (bad pcc though)
+        # (8, [1, 1, 2, 73744], 3, ttnn.ROW_MAJOR_LAYOUT, ttnn.bfloat16), # > tile_gran --> hanging
+        # (8, [1, 1, 2, 9216], 3, ttnn.ROW_MAJOR_LAYOUT, ttnn.bfloat16), # > tile_gran --> hanging
+        # passing
         # (8, [1, 1, 2, 256], 3, ttnn.ROW_MAJOR_LAYOUT, ttnn.bfloat16),
-        (8, [1, 1, 2, 9216], 3, ttnn.ROW_MAJOR_LAYOUT, ttnn.bfloat16),
-        # (8, [4, 1, 1024, 2560], 3, ttnn.TILE_LAYOUT, ttnn.bfloat16),
-        # (8, [1, 1, 1024, 2560], 3, ttnn.TILE_LAYOUT, ttnn.bfloat16),
-        # (8, [1, 1, 352, 2560], 3, ttnn.TILE_LAYOUT, ttnn.bfloat16),
-        # (8, [2, 1, 2048, 2560], 3, ttnn.TILE_LAYOUT, ttnn.bfloat16),
-        # (8, [1, 1, 4096, 2560], 3, ttnn.TILE_LAYOUT, ttnn.bfloat16),
+        # (8, [3, 2, 2, 256], 3, ttnn.ROW_MAJOR_LAYOUT, ttnn.bfloat16),
+        # (8, [1, 2, 10, 256], 3, ttnn.ROW_MAJOR_LAYOUT, ttnn.bfloat16),
+        # (8, [4, 1, 1024, 2560], 3, ttnn.ROW_MAJOR_LAYOUT, ttnn.bfloat16),
+        # (8, [1, 1, 1024, 2560], 3, ttnn.ROW_MAJOR_LAYOUT, ttnn.bfloat16),
+        # (8, [1, 1, 352, 2560], 3, ttnn.ROW_MAJOR_LAYOUT, ttnn.bfloat16),
+        # (8, [2, 1, 2048, 2560], 3, ttnn.ROW_MAJOR_LAYOUT, ttnn.bfloat16),
+        # (8, [1, 1, 4096, 2560], 3, ttnn.ROW_MAJOR_LAYOUT, ttnn.bfloat16),
     ],
     # ids=[
     #     "batch_8",

@@ -538,7 +538,7 @@ tt::tt_metal::operation::ProgramWithCallbacks ring_rm_reduce_scatter_minimal_asy
 
     uint32_t tiles_per_slice_row = tt::round_up(slice_width_elements, tile_volume_elements) / tile_volume_elements;
     uint32_t cb_page_size = tile_volume_elements * input_tensor.element_size() * tiles_per_slice_row;
-    uint32_t cb_num_pages = 3;
+    uint32_t cb_num_pages = 2;
 
     tt::DataFormat df = tt::tt_metal::datatype_to_dataformat_converter(input_tensor.dtype());
 
@@ -596,6 +596,7 @@ tt::tt_metal::operation::ProgramWithCallbacks ring_rm_reduce_scatter_minimal_asy
             reader_output_cb_index,                                  // cb_reader_output_id
             input_tensor_num_pages,                                  // input_tensor_num_pages
             op_config.get_page_size(),                               // input_tensor_page_size
+            intermediate_tensor.buffer()->page_size(),               // intermediate_tensor_page_size
             slice_width_elements * input_tensor.element_size(),      // slice_width_row_size
             ring_size,                                               // ring_size
             core_idx % num_senders_per_link,                         // direction
@@ -619,7 +620,8 @@ tt::tt_metal::operation::ProgramWithCallbacks ring_rm_reduce_scatter_minimal_asy
             compute_output_cb_index,                                 // cb_compute_output_id
             reader_output_cb_index,                                  // cb_reader_output_id
             input_tensor_num_pages,                                  // input_tensor_num_pages
-            op_config.get_page_size(),                               // input_tensor_page_size
+            intermediate_tensor.buffer()->page_size(),               // intermediate_tensor_page_size
+            output_tensor.buffer()->page_size(),                     // output_tensor_page_size
             slice_width_row_size,                                    // slice_width_row_size
             packet_size_bytes,                                       // packet_size_bytes
             tt::div_up(slice_width_row_size, packet_size_bytes),     // packets_to_send_per_row

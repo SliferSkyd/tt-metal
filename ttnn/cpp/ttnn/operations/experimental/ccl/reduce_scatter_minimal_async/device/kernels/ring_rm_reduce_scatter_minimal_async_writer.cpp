@@ -30,12 +30,13 @@ constexpr BufferType output_type = static_cast<BufferType>(get_compile_time_arg_
 constexpr uint32_t cb_compute_output_id = get_compile_time_arg_val(4);
 constexpr uint32_t cb_reader_output_id = get_compile_time_arg_val(5);
 constexpr uint32_t input_tensor_num_pages = get_compile_time_arg_val(6);
-constexpr uint32_t input_tensor_page_size = get_compile_time_arg_val(7);
-constexpr uint32_t slice_width_row_size = get_compile_time_arg_val(8);
-constexpr uint32_t packet_size_bytes = get_compile_time_arg_val(9);
-constexpr uint32_t packets_to_send_per_row = get_compile_time_arg_val(10);
-constexpr uint32_t ring_size = get_compile_time_arg_val(11);
-constexpr bool direction = get_compile_time_arg_val(12);
+constexpr uint32_t intermediate_tensor_page_size = get_compile_time_arg_val(7);
+constexpr uint32_t output_tensor_page_size = get_compile_time_arg_val(8);
+constexpr uint32_t slice_width_row_size = get_compile_time_arg_val(9);
+constexpr uint32_t packet_size_bytes = get_compile_time_arg_val(10);
+constexpr uint32_t packets_to_send_per_row = get_compile_time_arg_val(11);
+constexpr uint32_t ring_size = get_compile_time_arg_val(12);
+constexpr bool direction = get_compile_time_arg_val(13);
 
 void kernel_main() {
     ///////////////////////////////////////////////////
@@ -70,10 +71,10 @@ void kernel_main() {
     // interleaved addrgen
     constexpr bool intermediate_is_dram = intermediate_type == tt::tt_metal::BufferType::DRAM;
     auto intermediate_addrgen = InterleavedAddrGen<intermediate_is_dram>{
-        .bank_base_address = intermediate_address, .page_size = input_tensor_page_size};
+        .bank_base_address = intermediate_address, .page_size = intermediate_tensor_page_size};
     constexpr bool output_is_dram = output_type == tt::tt_metal::BufferType::DRAM;
     auto output_addrgen =
-        InterleavedAddrGen<output_is_dram>{.bank_base_address = output_address, .page_size = input_tensor_page_size};
+        InterleavedAddrGen<output_is_dram>{.bank_base_address = output_address, .page_size = output_tensor_page_size};
 
     if (fabric_connection.is_logically_connected()) {
         fabric_connection.open();
