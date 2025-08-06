@@ -340,7 +340,7 @@ struct WorkerToFabricEdmSenderImpl {
         } else {
             noc_addr = get_noc_addr(this->edm_noc_x, this->edm_noc_y, this->edm_buffer_addr + offset, noc);
         }
-        noc_inline_dw_write(noc_addr, data, 0xf, noc);
+        noc_inline_dw_write<InlineWriteDst::L1>(noc_addr, data, 0xf, noc);
         if constexpr (inc_pointers) {
             post_send_payload_increment_pointers(noc);
         }
@@ -390,13 +390,13 @@ struct WorkerToFabricEdmSenderImpl {
                 offsetof(tt::tt_fabric::EDMChannelWorkerLocationInfo, worker_semaphore_address));
         // write the address of our local copy of read counter (that EDM is supposed to update)
         if constexpr (!I_USE_STREAM_REG_FOR_CREDIT_RECEIVE) {
-            noc_inline_dw_write<InlineWriteDst::DEFAULT, posted>(
+            noc_inline_dw_write<InlineWriteDst::L1, posted>(
                 dest_edm_location_info_addr,
                 reinterpret_cast<size_t>(from_remote_buffer_free_slots_ptr),
                 0xf,
                 WORKER_HANDSHAKE_NOC);
         } else {
-            noc_inline_dw_write<InlineWriteDst::DEFAULT, posted>(
+            noc_inline_dw_write<InlineWriteDst::L1, posted>(
                 dest_edm_location_info_addr,
                 reinterpret_cast<size_t>(edm_buffer_local_free_slots_update_ptr),
                 0xf,
@@ -406,7 +406,7 @@ struct WorkerToFabricEdmSenderImpl {
             dest_noc_addr_coord_only |
             reinterpret_cast<uint64_t>(&(worker_location_info_ptr->worker_teardown_semaphore_address));
         // Write our local teardown ack address to EDM
-        noc_inline_dw_write<InlineWriteDst::DEFAULT, posted>(
+        noc_inline_dw_write<InlineWriteDst::L1, posted>(
             edm_teardown_semaphore_address_address,
             reinterpret_cast<size_t>(worker_teardown_addr),
             0xf,
@@ -414,7 +414,7 @@ struct WorkerToFabricEdmSenderImpl {
         // Write out core noc-xy coord to EDM
         const uint64_t connection_worker_xy_address =
             dest_noc_addr_coord_only | reinterpret_cast<uint64_t>(&(worker_location_info_ptr->worker_xy));
-        noc_inline_dw_write<InlineWriteDst::DEFAULT, posted>(
+        noc_inline_dw_write<InlineWriteDst::L1, posted>(
             connection_worker_xy_address, WorkerXY(my_x[0], my_y[0]).to_uint32(), 0xf, WORKER_HANDSHAKE_NOC);
     }
 
@@ -443,7 +443,7 @@ struct WorkerToFabricEdmSenderImpl {
         tt::tt_fabric::EDMChannelWorkerLocationInfo* worker_location_info_ptr =
             reinterpret_cast<tt::tt_fabric::EDMChannelWorkerLocationInfo*>(edm_worker_location_info_addr);
 
-        noc_inline_dw_write<InlineWriteDst::DEFAULT, posted>(
+        noc_inline_dw_write<InlineWriteDst::L1, posted>(
             edm_connection_handshake_noc_addr, open_connection_value, 0xf, WORKER_HANDSHAKE_NOC);
         *this->worker_teardown_addr = 0;
         if constexpr (!USER_DEFINED_NUM_BUFFER_SLOTS) {
@@ -472,13 +472,13 @@ struct WorkerToFabricEdmSenderImpl {
         // buffer index stored at location after handshake addr
         if (!I_USE_STREAM_REG_FOR_CREDIT_RECEIVE) {
             const uint64_t remote_buffer_index_addr = dest_noc_addr_coord_only | edm_copy_of_wr_counter_addr;
-            noc_inline_dw_write(remote_buffer_index_addr, this->buffer_slot_write_counter.counter);
+            noc_inline_dw_write<InlineWriteDst::L1>(remote_buffer_index_addr, this->buffer_slot_write_counter.counter);
         } else {
             const uint64_t remote_buffer_index_addr = dest_noc_addr_coord_only | edm_copy_of_wr_counter_addr;
-            noc_inline_dw_write(remote_buffer_index_addr, this->get_buffer_slot_index());
+            noc_inline_dw_write<InlineWriteDst::L1>(remote_buffer_index_addr, this->get_buffer_slot_index());
         }
         const uint64_t dest_edm_connection_state_addr = dest_noc_addr_coord_only | edm_connection_handshake_l1_addr;
-        noc_inline_dw_write(dest_edm_connection_state_addr, close_connection_request_value);
+        noc_inline_dw_write<InlineWriteDst::L1>(dest_edm_connection_state_addr, close_connection_request_value);
     }
 
     // Advanced usage API:
