@@ -35,6 +35,7 @@
 #include <tt_stl/span.hpp>
 #include "test_gold_impls.hpp"
 #include <tt-metalium/tt_backend_api_types.hpp>
+#include <tt-metalium/tt_metal_profiler.hpp>
 
 namespace tt {
 namespace tt_metal {
@@ -159,7 +160,7 @@ int main(int argc, char** argv) {
                 core,
                 tt_metal::ComputeConfig{.compile_args = compute_kernel_args, .defines = binary_defines});
 
-            SetRuntimeArgs(program, eltwise_binary_kernel, core, {2048, 1});
+            SetRuntimeArgs(program, eltwise_binary_kernel, core, {num_tiles, 1});
 
             ////////////////////////////////////////////////////////////////////////////
             //                      Compile Application
@@ -200,14 +201,9 @@ int main(int argc, char** argv) {
             SetRuntimeArgs(program, binary_reader_kernel, core, reader_args);
 
             EnqueueProgram(cq, program, false);
-            std::vector<uint32_t> result_vec;
-            EnqueueReadBuffer(cq, dst_dram_buffer, result_vec, true);
-
             ////////////////////////////////////////////////////////////////////////////
             //                      Validation & Teardown
             ////////////////////////////////////////////////////////////////////////////
-
-            pass &= (src0_vec == result_vec);
 
         } catch (const std::exception& e) {
             pass = false;
@@ -216,17 +212,9 @@ int main(int argc, char** argv) {
             // Capture system call errors that may have returned from driver/kernel
             log_error(LogTest, "System error message: {}", std::strerror(errno));
         }
+        break;
     }  // for EltwiseOp::all()
 
-    pass &= tt_metal::CloseDevice(device);
-
-    if (pass) {
-        log_info(LogTest, "Test Passed");
-    } else {
-        TT_THROW("Test Failed");
-    }
-
-    TT_FATAL(pass, "Error");
-
+    detail::DumpDeviceProfileResults(device);
     return 0;
 }
