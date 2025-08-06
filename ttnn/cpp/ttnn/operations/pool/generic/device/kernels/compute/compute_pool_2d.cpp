@@ -116,6 +116,7 @@ void MAIN {
                     UNPACK((llk_unpack_tilize_uninit(curr_in_cb_id)));
                     // UNPACK((llk_unpack_AB_init<BroadcastType::NONE>(curr_in_cb_id, weight_cb_id)));
                     PACK((pack_untilize_uninit(mul_cb_id)));
+                    reconfig_data_format(mul_cb_id, curr_in_cb_id, curr_scalar_cb_id, weight_cb_id);
                     mul_tiles_init(curr_in_cb_id, weight_cb_id);
                 }
 
@@ -185,6 +186,7 @@ void MAIN {
 
                 {
                     // DeviceZoneScopedN("init 2");
+                    reconfig_data_format(curr_in_cb_id, mul_cb_id, weight_cb_id, curr_scalar_cb_id);
                     UNPACK((llk_unpack_tilizeA_B_init<neginf_srca_maxpool, true, false, zero_srca_avgpool>(
                         mul_cb_id, curr_scalar_cb_id, tiles_to_reduce, num_faces_in_output_tile, face_r_dim, 1)));
                     MATH((llk_math_reduce_init<REDUCE_OP, REDUCE_DIM, MATH_FIDELITY>()));
