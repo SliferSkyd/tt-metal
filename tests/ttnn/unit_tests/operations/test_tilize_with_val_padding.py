@@ -11,11 +11,26 @@ from tests.tt_eager.python_api_testing.sweep_tests import comparison_funcs, gene
 from tests.tt_eager.python_api_testing.sweep_tests.run_pytorch_ci_tests import run_single_pytorch_test
 import ttnn
 
+
+def random_torch_tensor(dtype, shape):
+    if dtype == ttnn.uint16:
+        return torch.randint(0, 100, shape).to(torch.int16)
+    if dtype == ttnn.int32:
+        return torch.randint(-(2**31), 2**31, shape, dtype=torch.int32)
+    if dtype == ttnn.uint32:
+        return torch.randint(0, 2**31, shape, dtype=torch.int32)
+    return torch.rand(shape).bfloat16().float()
+
+
+def random_uint16_tensor(shape):
+    return torch.randint(0, 100, shape).to(torch.int16)
+
+
 params = [
     pytest.param(
         [[1, 1, 50, 50]],
         {
-            "dtype": [ttnn.bfloat16],
+            "dtype": [ttnn.uint16],
             "layout": [ttnn.ROW_MAJOR_LAYOUT],
             "input_mem_config": [ttnn.MemoryConfig(ttnn.TensorMemoryLayout.INTERLEAVED, ttnn.BufferType.DRAM)],
             "output_mem_config": ttnn.MemoryConfig(ttnn.TensorMemoryLayout.INTERLEAVED, ttnn.BufferType.DRAM),
@@ -29,7 +44,7 @@ params += [
     pytest.param(
         [[1, 1, 50, 50]],
         {
-            "dtype": [ttnn.bfloat16],
+            "dtype": [ttnn.uint16],
             "layout": [ttnn.ROW_MAJOR_LAYOUT],
             "input_mem_config": [ttnn.MemoryConfig(ttnn.TensorMemoryLayout.INTERLEAVED, ttnn.BufferType.L1)],
             "output_mem_config": ttnn.MemoryConfig(ttnn.TensorMemoryLayout.INTERLEAVED, ttnn.BufferType.DRAM),
@@ -43,7 +58,7 @@ params += [
     pytest.param(
         [[1, 1, 50, 50]],
         {
-            "dtype": [ttnn.bfloat16],
+            "dtype": [ttnn.uint16],
             "layout": [ttnn.ROW_MAJOR_LAYOUT],
             "input_mem_config": [ttnn.MemoryConfig(ttnn.TensorMemoryLayout.INTERLEAVED, ttnn.BufferType.DRAM)],
             "output_mem_config": ttnn.MemoryConfig(ttnn.TensorMemoryLayout.INTERLEAVED, ttnn.BufferType.L1),
@@ -57,7 +72,7 @@ params += [
     pytest.param(
         [[1, 1, 50, 50]],
         {
-            "dtype": [ttnn.bfloat16],
+            "dtype": [ttnn.uint16],
             "layout": [ttnn.ROW_MAJOR_LAYOUT],
             "input_mem_config": [ttnn.MemoryConfig(ttnn.TensorMemoryLayout.INTERLEAVED, ttnn.BufferType.L1)],
             "output_mem_config": ttnn.MemoryConfig(ttnn.TensorMemoryLayout.INTERLEAVED, ttnn.BufferType.L1),
@@ -69,10 +84,19 @@ params += [
 
 
 @pytest.mark.parametrize("input_shapes, tilize_with_val_padding_args", params)
-def test_run_tilize_with_val_padding_test(input_shapes, tilize_with_val_padding_args, device, function_level_defaults):
-    datagen_func = [
-        generation_funcs.gen_func_with_cast(partial(generation_funcs.gen_rand, low=-100, high=100), torch.bfloat16)
-    ]
+@pytest.mark.parametrize("dtype", [ttnn.uint16])
+def test_run_tilize_with_val_padding_test(
+    input_shapes, dtype, tilize_with_val_padding_args, device, function_level_defaults
+):
+    datagen_func = []
+    if dtype == ttnn.bfloat16:
+        datagen_func.append(
+            generation_funcs.gen_func_with_cast(partial(generation_funcs.gen_rand, low=-100, high=100), torch.bfloat16)
+        )
+    elif dtype == ttnn.uint16:
+        datagen_func.append(
+            generation_funcs.gen_func_with_cast(partial(generation_funcs.gen_rand, low=-100, high=100), torch.int16)
+        )
     comparison_func = comparison_funcs.comp_equal
     run_single_pytorch_test(
         "tilize_with_val_padding",
