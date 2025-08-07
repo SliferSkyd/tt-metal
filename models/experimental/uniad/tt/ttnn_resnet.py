@@ -4,6 +4,8 @@
 
 import torch
 import ttnn
+import logging
+import sys
 
 import torch.nn as nn
 from typing import Tuple, Union, Optional
@@ -15,6 +17,38 @@ from models.experimental.uniad.tt.common import TtnnConv2D
 from mmcv.utils import ext_loader
 
 ext_module = ext_loader.load_ext("_ext", ["modulated_deform_conv_forward"])
+
+
+# Configure logging to write to both console and file
+def setup_logging(log_file_path="ttnn_resnet.log"):
+    """Setup logging to write to both console and file"""
+    # Create a logger
+    logger = logging.getLogger("ttnn_resnet")
+    logger.setLevel(logging.INFO)
+
+    # Clear any existing handlers
+    logger.handlers.clear()
+
+    # Create formatters
+    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+
+    # Console handler
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+
+    # File handler
+    file_handler = logging.FileHandler(log_file_path, mode="w")
+    file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+
+    return logger
+
+
+# Initialize logger
+logger = setup_logging()
 
 
 class ModulatedDeformConv2dFunction(Function):
@@ -134,10 +168,7 @@ class TtModulatedDeformConv2dPack:
         out = ttnn.sharded_to_interleaved(out)
         out = ttnn.reshape(out, (6, out_h, out_w, out.shape[3]))
         o1, o2, mask = ttnn.chunk(out, 3, dim=3)
-        ttnn.deallocate(out)
         offset = ttnn.concat((o1, o2), dim=3)
-        ttnn.deallocate(o1)
-        ttnn.deallocate(o2)
         mask = ttnn.to_torch(mask).to(dtype=torch.float)
         mask = torch.sigmoid(mask)  # low pcc if we use ttnn sigmoid for mask
         mask = mask.permute(0, 3, 1, 2)
@@ -276,9 +307,7 @@ class TtBottleneck:
         self.conv1 = TtnnConv2D(conv_args.conv1, conv_pth.conv1, device=device, activation="relu")
 
         if not self.with_dcn:
-            self.conv2 = TtnnConv2D(
-                conv_args.conv2, conv_pth.conv2, device=device, activation="relu", act_block_h=32, dealloc_act=True
-            )
+            self.conv2 = TtnnConv2D(conv_args.conv2, conv_pth.conv2, device=device, activation="relu", act_block_h=32)
         else:
             assert self.conv_cfg is None, "conv_cfg must be None for DCN"
             self.conv2 = TtModulatedDeformConv2dPack(
@@ -295,9 +324,7 @@ class TtBottleneck:
             )
             self.bn_parameters = conv_pth.bn2
 
-        self.conv3 = TtnnConv2D(
-            conv_args.conv3, conv_pth.conv3, device=device, activation="", is_blk=conv3_blk_sharded, dealloc_act=True
-        )
+        self.conv3 = TtnnConv2D(conv_args.conv3, conv_pth.conv3, device=device, activation="", is_blk=conv3_blk_sharded)
 
         if is_downsample:
             self.downsample = TtnnConv2D(
@@ -420,7 +447,6 @@ class TtResNet:
             activation="relu",
             activation_dtype=ttnn.bfloat16,
             act_block_h=64,
-            dealloc_act=True,
         )
 
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
@@ -456,6 +482,12 @@ class TtResNet:
     def __call__(self, x):
         """Forward function."""
         x, _, _ = self.conv1(x)
+        # print("x.memory_config: ", x.memory_config())
+        # print("x.layout: ", x.layout)
+        # print("x.dtype: ", x.dtype)
+        # # x.memory_config:  MemoryConfig(memory_layout=TensorMemoryLayout::HEIGHT_SHARDED,buffer_type=BufferType::L1,shard_spec=ShardSpec(grid={[(x=0,y=0) - (x=7,y=7)]},shape={5408, 64},orientation=ShardOrientation::ROW_MAJOR,mode=ShardMode::PHYSICAL,physical_shard_shape=std::nullopt),nd_shard_spec=NdShardSpec(shard_shape=Shape([5408, 64]),grid={[(x=0,y=0) - (x=7,y=7)]},orientation=ShardOrientation::ROW_MAJOR,shard_distribution_strategy=ShardDistributionStrategy::ROUND_ROBIN_1D),created_with_nd_shard_spec=0)
+        # # x.layout:  Layout.TILE
+        # # x.dtype:  DataType.BFLOAT16
 
         x = ttnn.to_torch(x)
         x = x.reshape(6, 320, 180, 64).to(torch.float32)
@@ -466,10 +498,56 @@ class TtResNet:
         x = x.permute(0, 2, 3, 1).to(torch.float32)
         x = x.reshape(1, 1, x.shape[0] * x.shape[1] * x.shape[2], x.shape[3])
         x = ttnn.from_torch(x, device=self.device, dtype=ttnn.bfloat16)
+        print("x.memory_config: ", x.memory_config())
+        print("x.layout: ", x.layout)
+        print("x.dtype: ", x.dtype)
+        # x.memory_config:  MemoryConfig(memory_layout=TensorMemoryLayout::INTERLEAVED,buffer_type=BufferType::DRAM,shard_spec=std::nullopt,nd_shard_spec=std::nullopt,created_with_nd_shard_spec=0)
+        # x.layout:  Layout.ROW_MAJOR
+        # x.dtype:  DataType.BFLOAT16
+
+        # MaxPool2d using ttnn.max_pool2d
+        # x = ttnn.to_memory_config(x, memory_config=ttnn.DRAM_MEMORY_CONFIG)
+        # x = ttnn.from_device(x)
+        # x = ttnn.to_dtype(x, dtype=ttnn.bfloat8_b)
+        # x = ttnn.to_device(x, device=self.device)
+        # x = ttnn.reshape(x, (6, 320, 180, 64))
+        # in_c_padded = 64
+
+        # act_shape = (1, 1, 6 * 320 * 180, in_c_padded)
+        # x = ttnn.permute(x, (0, 2, 3, 1))
+        # x = x.reshape(act_shape)
+
+        # logger.info("x.shape: %s", x.shape)
+        # # x.shape: Shape([1, 1, 345600, 64])
+        # x = ttnn.to_layout(x, layout=ttnn.TILE_LAYOUT)
+        # x = ttnn.max_pool2d(
+        #     input_tensor=x,
+        #     batch_size=6,
+        #     input_h=320,
+        #     input_w=180,
+        #     channels=64,
+        #     kernel_size=[3, 3],
+        #     stride=[2, 2],
+        #     padding=[1, 1],
+        #     dilation=[1, 1],
+        #     memory_config=ttnn.DRAM_MEMORY_CONFIG
+        # )
+        # x = ttnn.permute(x, (0, 2, 3, 1))
+        # x = ttnn.reshape(x, (1, 1, x.shape[0] * x.shape[1] * x.shape[2], x.shape[3]))
+        # print("x.memory_config: ", x.memory_config())
+        # print("x.layout: ", x.layout)
+        # print("x.dtype: ", x.dtype)
+        # x = ttnn.to_layout(x, layout=ttnn.TILE_LAYOUT)
+        # x = ttnn.from_device(x)
+        # x = ttnn.to_dtype(x, dtype=ttnn.bfloat8_b)
+        # x = ttnn.to_device(x, device=self.device)
 
         outs = []
+        print("x.dtype: ", x.dtype)
+        print("x.layout: ", x.layout)
         for i, layer_name in enumerate(self.res_layers):
             x = layer_name(x)
+            print("Completed layer: ", i)
             if i == 0:
                 x = ttnn.from_device(x)
                 x = ttnn.to_dtype(x, dtype=ttnn.bfloat8_b)
