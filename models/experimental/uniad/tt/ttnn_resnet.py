@@ -498,9 +498,9 @@ class TtResNet:
         x = x.permute(0, 2, 3, 1).to(torch.float32)
         x = x.reshape(1, 1, x.shape[0] * x.shape[1] * x.shape[2], x.shape[3])
         x = ttnn.from_torch(x, device=self.device, dtype=ttnn.bfloat16)
-        print("x.memory_config: ", x.memory_config())
-        print("x.layout: ", x.layout)
-        print("x.dtype: ", x.dtype)
+        # print("x.memory_config: ", x.memory_config())
+        # print("x.layout: ", x.layout)
+        # print("x.dtype: ", x.dtype)
         # x.memory_config:  MemoryConfig(memory_layout=TensorMemoryLayout::INTERLEAVED,buffer_type=BufferType::DRAM,shard_spec=std::nullopt,nd_shard_spec=std::nullopt,created_with_nd_shard_spec=0)
         # x.layout:  Layout.ROW_MAJOR
         # x.dtype:  DataType.BFLOAT16
@@ -510,12 +510,6 @@ class TtResNet:
         # x = ttnn.from_device(x)
         # x = ttnn.to_dtype(x, dtype=ttnn.bfloat8_b)
         # x = ttnn.to_device(x, device=self.device)
-        # x = ttnn.reshape(x, (6, 320, 180, 64))
-        # in_c_padded = 64
-
-        # act_shape = (1, 1, 6 * 320 * 180, in_c_padded)
-        # x = ttnn.permute(x, (0, 2, 3, 1))
-        # x = x.reshape(act_shape)
 
         # logger.info("x.shape: %s", x.shape)
         # # x.shape: Shape([1, 1, 345600, 64])
@@ -534,9 +528,9 @@ class TtResNet:
         # )
         # x = ttnn.permute(x, (0, 2, 3, 1))
         # x = ttnn.reshape(x, (1, 1, x.shape[0] * x.shape[1] * x.shape[2], x.shape[3]))
-        # print("x.memory_config: ", x.memory_config())
-        # print("x.layout: ", x.layout)
-        # print("x.dtype: ", x.dtype)
+        # # print("x.memory_config: ", x.memory_config())
+        # # print("x.layout: ", x.layout)
+        # # print("x.dtype: ", x.dtype)
         # x = ttnn.to_layout(x, layout=ttnn.TILE_LAYOUT)
         # x = ttnn.from_device(x)
         # x = ttnn.to_dtype(x, dtype=ttnn.bfloat8_b)
