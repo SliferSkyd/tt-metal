@@ -24,6 +24,4 @@ export BIN_DIR="$TT_METAL_HOME/tt-train/build/sources/examples/nano_gpt"
 export RUN_FLAG=""
 
 # # Run the MPI job
-mpirun -np "${WORKER_COUNT}" "${BIN_DIR}/nano_gpt" -c "${CONFIG}" \
-       : -np "${AGG_COUNT}" "${BIN_DIR}/nano_gpt_aggregator" -c "${CONFIG}" \
-       : -np "${OPT_COUNT}" "${BIN_DIR}/nano_gpt_optimizer" -c "${CONFIG}"
+mpirun -np 3 ./launch.sh
