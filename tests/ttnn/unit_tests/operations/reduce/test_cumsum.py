@@ -7,7 +7,9 @@ import pytest
 
 import ttnn
 from tests.ttnn.utils_for_testing import assert_allclose, assert_with_ulp
-from models.utility_functions import comp_allclose_and_pcc
+from models.utility_functions import comp_allclose_and_pcc, comp_pcc
+
+from loguru import logger
 
 
 def get_backward_tensors(output_grad_shape, input_grad_shape, device):
@@ -146,11 +148,11 @@ def test_cumsum(size, dim, dtypes, device):
 
 
 @pytest.mark.parametrize(
-    "size",
+    "size_nchw",
     [
-        ([1, 12, 40, 256]),
-        ([1, 24, 80, 256]),
-        # ([1, 48, 160, 256]),
+        ([1, 256, 12, 40]),
+        ([1, 256, 24, 80]),
+        ([1, 256, 48, 160]),
     ],
 )
 @pytest.mark.parametrize(
@@ -163,55 +165,57 @@ def test_cumsum(size, dim, dtypes, device):
     "memory_config",
     [
         ttnn.L1_MEMORY_CONFIG,
-        # ttnn.DRAM_MEMORY_CONFIG,
+        ttnn.DRAM_MEMORY_CONFIG,
     ],
 )
-def test_integral_image(size, dtypes, memory_config, device):
+def test_integral_image(size_nchw, dtypes, memory_config, device):
     torch.manual_seed(29112024)
 
-    def integral_image(features):
-        return torch.cumsum(torch.cumsum(features, dim=-1), dim=-2)
+    if size_nchw == [1, 256, 48, 160] and memory_config == ttnn.L1_MEMORY_CONFIG:
+        pytest.skip("Integral image for [1, 256, 48, 160] with L1 memory config is not supported")
 
-    def integral_image_channel_last(features):
-        assert len(features.shape) == 4, "Input tensor must be 4D"
-        assert features.shape[0] == 1, "Batch size must be 1"
-        tmp = ttnn.cumsum(features, dim=1, dtype=features.dtype)
-        ttnn.deallocate(features)
+    def torch_integral_image_channel_first(features_nchw):
+        return torch.cumsum(torch.cumsum(features_nchw, dim=-1), dim=-2)
+
+    def ttnn_integral_image_channel_last(features_nhwc):
+        assert len(features_nhwc.shape) == 4, "Input tensor must be 4D"
+        assert features_nhwc.shape[0] == 1, "Batch size must be 1"
+        tmp = ttnn.cumsum(features_nhwc, dim=1, dtype=features_nhwc.dtype)
+        ttnn.deallocate(features_nhwc)
         ttnn.move(tmp)
-        return ttnn.cumsum(tmp, dim=2, dtype=features.dtype)
+        return ttnn.cumsum(tmp, dim=2, dtype=features_nhwc.dtype)
 
+    try:
+        from tracy import signpost
+    except ModuleNotFoundError:
+
+        def signpost(*args, **kwargs):
+            pass
+
+    signpost(header="integral_image_start")
     (torch_dtype, ttnn_dtype) = dtypes
 
-    # Generate integer input on [-2; 2];
-    # by generating around 0, this avoids FP-related issues when adding large sums with small inputs
-    # which are not handled yet
-    # torch_input_tensor = torch.randint(-2, 3, size=size, dtype=torch_dtype)
-    torch_input_tensor = torch.rand(size=size, dtype=torch_dtype)
-    # input_tensor = ttnn.from_torch(torch_input_tensor, device=device, layout=ttnn.Layout.TILE, memory_config=ttnn.L1_MEMORY_CONFIG)
+    torch_input_tensor_nchw = torch.rand(size=size_nchw, dtype=torch_dtype)
+    torch_input_tensor_nhwc = torch.permute(torch_input_tensor_nchw, (0, 2, 3, 1))
+
     input_tensor = ttnn.from_torch(
-        torch_input_tensor, device=device, layout=ttnn.Layout.TILE, memory_config=memory_config
+        torch_input_tensor_nhwc, device=device, layout=ttnn.Layout.TILE, memory_config=memory_config
     )
 
     expected_output_dtype = ttnn_dtype if ttnn_dtype is not None else input_tensor.dtype
 
-    # For now, int32 version only supports >3-D tensors and `dim` outher than x and y axes
-    # if not is_supported(size, dim, expected_output_dtype):
-    #     pytest.skip("Unsupported configuration by ttnn.cumsum")
-
-    output_tensor = integral_image_channel_last(input_tensor)
+    output_tensor = ttnn_integral_image_channel_last(input_tensor)
 
     assert output_tensor.dtype == expected_output_dtype
-    assert output_tensor.shape == (size)
 
-    torch_output = ttnn.to_torch(output_tensor, dtype=torch_dtype)
+    tt_output_nhwc = ttnn.to_torch(output_tensor, dtype=torch_dtype)
+    tt_output_nchw = torch.permute(tt_output_nhwc, (0, 3, 1, 2))
 
-    torch_input_channel_first = torch.permute(torch_input_tensor, (0, 3, 1, 2))
-    expected_output = integral_image(torch_input_channel_first)
-    expected_output = torch.permute(expected_output, (0, 2, 3, 1))
-
-    comp_allclose_and_pcc(expected_output, torch_output)
-    # if torch_output.numel() > 0:
-    # assert_allclose(expected_output, torch_output, atol=4.0, rtol=1e-3)
+    expected_output_nchw = torch_integral_image_channel_first(torch_input_tensor_nchw)
+    assert tt_output_nchw.shape == expected_output_nchw.shape
+    signpost(header="integral_image_end")
+    passing, output = comp_pcc(expected_output_nchw, tt_output_nchw, 0.998)
+    logger.info(f"Integral image test {passing} {output}")
 
 
 @pytest.mark.parametrize(
