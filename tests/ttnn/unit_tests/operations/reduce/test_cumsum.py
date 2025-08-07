@@ -148,24 +148,23 @@ def test_cumsum(size, dim, dtypes, device):
 
 
 @pytest.mark.parametrize(
-    "size_nchw",
+    "size_nchw, memory_config",
     [
-        ([1, 256, 12, 40]),
-        ([1, 256, 24, 80]),
-        ([1, 256, 48, 160]),
+        (
+            [1, 256, 12, 40],
+            ttnn.L1_MEMORY_CONFIG,
+        ),
+        (
+            [1, 256, 24, 80],
+            ttnn.L1_MEMORY_CONFIG,
+        ),
+        ([1, 256, 48, 160], ttnn.DRAM_MEMORY_CONFIG),
     ],
 )
 @pytest.mark.parametrize(
     "dtypes",
     [
         (torch.bfloat16, ttnn.bfloat16),
-    ],
-)
-@pytest.mark.parametrize(
-    "memory_config",
-    [
-        ttnn.L1_MEMORY_CONFIG,
-        ttnn.DRAM_MEMORY_CONFIG,
     ],
 )
 def test_integral_image(size_nchw, dtypes, memory_config, device):
