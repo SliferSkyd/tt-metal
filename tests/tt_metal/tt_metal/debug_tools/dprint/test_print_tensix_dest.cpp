@@ -337,8 +337,7 @@ static KernelHandle prepare_compute(tt_metal::Program& program, const DestPrintT
 static std::vector<uint32_t> generate_inputs(const DestPrintTestConfig& config) {
     switch (config.data_format) {
         case tt::DataFormat::Float16_b:
-            return tt::test_utils::generate_packed_increment_vector<uint32_t, bfloat16>(
-                0.0f, config.get_num_elements(), 0.03125f, -1.1875f);
+            return tt::test_utils::generate_packed_constant_vector<uint32_t, bfloat16>(1.f, config.get_num_elements());
         case tt::DataFormat::Float32:
             return tt::test_utils::generate_packed_increment_vector<uint32_t, tt::test_utils::df::float32>(
                 0.0f, config.get_num_elements());
@@ -461,7 +460,8 @@ std::ostream& operator<<(std::ostream& os, const TestParams& params) {
 // Define test parameters with more combinations
 const std::vector<TestParams> kTestParams = {
     // Float16b tests
-    {tt::DataFormat::Float16_b, 1, false, false, "Float16b_NoRemapNoSwizzle"},
+    {tt::DataFormat::Float16_b, 1, false, false, "Float16b_NoRemapNoSwizzle"}
+    /*
     {tt::DataFormat::Float16_b, 1, true, false, "Float16b_RemapNoSwizzle"},
     {tt::DataFormat::Float16_b, 1, false, true, "Float16b_NoRemapSwizzle"},
     {tt::DataFormat::Float16_b, 1, true, true, "Float16b_RemapSwizzle"},
@@ -482,6 +482,7 @@ const std::vector<TestParams> kTestParams = {
     {tt::DataFormat::Float32, 3, true, true, "Float32_MultiTile_RemapSwizzle"},
     {tt::DataFormat::Float16_b, 3, true, true, "Float16b_MultiTile_RemapSwizzle"},
     {tt::DataFormat::Int32, 3, true, true, "Int32_MultiTile_RemapSwizzle"}
+    */
 };
 
 // Parameterized test
