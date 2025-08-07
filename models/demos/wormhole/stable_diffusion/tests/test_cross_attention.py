@@ -120,4 +120,4 @@ def test_cross_attention_512x512(
 
     passing, output = comp_pcc(torch_output, ttnn_output, pcc=0.99)
     print(output)
-    assert passing
+    assert passing, output

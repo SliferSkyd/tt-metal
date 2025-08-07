@@ -270,34 +270,14 @@ class transformer_2d_model:
             "conv_config": conv_config,
         }
 
-        if not ttnn.is_tensor_storage_on_device(self.proj_in_conv_weights):
-            self.proj_in_conv_weights = ttnn.prepare_conv_weights(
-                weight_tensor=self.proj_in_conv_weights,
-                weights_format="OIHW",
-                input_memory_config=hidden_states.memory_config(),
-                input_layout=hidden_states.get_layout(),
-                has_bias=True,
-                **conv_kwargs,
-                input_dtype=ttnn.bfloat8_b,
-            )
-            self.proj_in_conv_bias = ttnn.prepare_conv_bias(
-                bias_tensor=self.proj_in_conv_bias,
-                input_memory_config=hidden_states.memory_config(),
-                input_layout=hidden_states.get_layout(),
-                **conv_kwargs,
-                input_dtype=ttnn.bfloat8_b,
-            )
-            self.proj_in_conv_weights = ttnn.to_device(self.proj_in_conv_weights, self.device)
-            self.proj_in_conv_bias = ttnn.to_device(self.proj_in_conv_bias, self.device)
-
-        hidden_states = ttnn.conv2d(
+        [hidden_states, [self.proj_in_conv_weights, self.proj_in_conv_bias]] = ttnn.conv2d(
             input_tensor=hidden_states,
             weight_tensor=self.proj_in_conv_weights,
             bias_tensor=self.proj_in_conv_bias,
             **conv_kwargs,
             compute_config=compute_config,
             return_output_dim=False,
-            return_weights_and_bias=False,
+            return_weights_and_bias=True,
             dtype=ttnn.bfloat8_b,
         )
 
@@ -353,37 +333,12 @@ class transformer_2d_model:
                     "conv_config": conv_config,
                 }
 
-                if not ttnn.is_tensor_storage_on_device(self.proj_out_conv_weights):
-                    self.proj_out_conv_weights = ttnn.prepare_conv_weights(
-                        weight_tensor=self.proj_out_conv_weights,
-                        weights_format="OIHW",
-                        input_memory_config=hidden_states.memory_config(),
-                        input_layout=hidden_states.get_layout(),
-                        has_bias=True,
-                        **conv_kwargs_1,
-                        input_dtype=ttnn.bfloat8_b,
-                    )
-                    self.proj_out_conv_bias = ttnn.prepare_conv_bias(
-                        bias_tensor=self.proj_out_conv_bias,
-                        input_memory_config=hidden_states.memory_config(),
-                        input_layout=hidden_states.get_layout(),
-                        **conv_kwargs_1,
-                        input_dtype=ttnn.bfloat8_b,
-                    )
-                    self.proj_out_conv_weights = ttnn.to_device(self.proj_out_conv_weights, self.device)
-                    self.proj_out_conv_bias = ttnn.to_device(self.proj_out_conv_bias, self.device)
-                # hidden_states = ttnn.to_memory_config(hidden_states, self.proj_out.conv.input_sharded_memory_config)
-                [
-                    hidden_states,
-                    [_out_height, _out_width],
-                    [self.proj_out_conv_weights, self.proj_out_conv_bias],
-                ] = ttnn.conv2d(
+                [hidden_states, [self.proj_out_conv_weights, self.proj_out_conv_bias]] = ttnn.conv2d(
                     input_tensor=hidden_states,
                     **conv_kwargs_1,
                     weight_tensor=self.proj_out_conv_weights,
                     bias_tensor=self.proj_out_conv_bias,
                     compute_config=compute_config,
-                    return_output_dim=True,
                     return_weights_and_bias=True,
                     dtype=ttnn.bfloat8_b,
                 )
@@ -397,6 +352,9 @@ class transformer_2d_model:
                         memory_config=hidden_states.memory_config(),
                     )
                 else:
+                    # hidden_states = ttnn.to_memory_config(hidden_states, ttnn.DRAM_MEMORY_CONFIG)
+                    # residual = ttnn.to_memory_config(residual, ttnn.DRAM_MEMORY_CONFIG)
+                    # hidden_states = ttnn.add(hidden_states, residual)
                     hidden_states = dealloc_input(
                         ttnn.add,
                         hidden_states,

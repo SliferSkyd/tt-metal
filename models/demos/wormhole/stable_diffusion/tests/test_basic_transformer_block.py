@@ -114,4 +114,4 @@ def test_basic_transformer_block_512x512(
     ttnn_output = ttnn.from_device(ttnn_output)
     ttnn_output = ttnn.to_torch(ttnn_output)
 
-    assert_with_pcc(torch_output.unsqueeze(0), ttnn_output, pcc=0.98)
+    assert_with_pcc(torch_output.unsqueeze(0), ttnn_output, pcc=0.99)

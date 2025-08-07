@@ -119,4 +119,4 @@ def test_upblock_512x512(
 
     op = post_process_output_and_move_to_host(op, N, H * 2, W * 2, in_channels)
 
-    assert_with_pcc(torch_output, op, 0.94)
+    assert_with_pcc(torch_output, op, 0.953)

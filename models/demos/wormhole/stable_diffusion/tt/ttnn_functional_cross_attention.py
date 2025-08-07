@@ -422,7 +422,7 @@ class cross_attention:
             ttnn.TensorMemoryLayout.HEIGHT_SHARDED,
             ttnn.ShardOrientation.ROW_MAJOR,
         )
-        return output
+        return self.output_tensor
 
     def sharded_attention(self, query, key, value, head_size, attn_type):
         grid_size = (2, 8)
@@ -514,13 +514,18 @@ class cross_attention:
                 is_causal_mask=False,
             )
         else:
-            attention_scores = ttnn.bcast(
+            attention_scores = ttnn.multiply(
                 attention_scores,
                 self.scale,
-                math_op=ttnn.BcastOpMath.MUL,
-                dim=ttnn.BcastOpDim.HW,
                 memory_config=attention_scores.memory_config(),
             )
+            # attention_scores = ttnn.bcast(
+            #     attention_scores,
+            #     self.scale,
+            #     math_op=ttnn.BcastOpMath.MUL,
+            #     dim=ttnn.BcastOpDim.HW,
+            #     memory_config=attention_scores.memory_config(),
+            # )
             attention_scores = ttnn.softmax_in_place(
                 attention_scores,
                 program_config=softmax_program_config,

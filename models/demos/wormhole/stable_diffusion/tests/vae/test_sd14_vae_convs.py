@@ -18,7 +18,7 @@ from models.demos.wormhole.stable_diffusion.tt.vae.ttnn_vae_utils import (
 from tests.ttnn.utils_for_testing import assert_with_pcc
 
 
-@pytest.mark.parametrize("device_params", [{"l1_small_size": 32768}], indirect=True)
+@pytest.mark.parametrize("device_params", [{"l1_small_size": 11 * 1024}], indirect=True)
 @pytest.mark.parametrize(
     "in_channels, input_height, input_width, out_channels, output_height, output_width, conv_in_channel_split_factor, conv_out_channel_split_factor",
     [

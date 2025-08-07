@@ -134,10 +134,11 @@ class geglu:
             hidden_states,
             self.parameters.proj.gate_weight,
             bias=self.parameters.proj.gate_bias,
-            program_config=program_config,
-            memory_config=self.l1_interleaved_memory_config if interleaved_output else self.block_sharded_memory_config,
+            # program_config=program_config,
+            memory_config=self.l1_interleaved_memory_config,
             dtype=ttnn.bfloat8_b,
             compute_kernel_config=self.compute_kernel_config,
+            activation="gelu",
         )
         if interleaved_output:
             gate = ttnn.interleaved_to_sharded(

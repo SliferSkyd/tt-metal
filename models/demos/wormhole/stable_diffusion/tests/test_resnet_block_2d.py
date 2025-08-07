@@ -174,19 +174,6 @@ def test_resnet_block_2d_512x512(
     temb = ttnn.to_layout(temb, ttnn.TILE_LAYOUT)
     temb = ttnn.to_device(temb, device, memory_config=ttnn.DRAM_MEMORY_CONFIG)
 
-    ttnn_output_ = resnet_block(
-        input,
-        temb=temb,
-        in_channels=in_channels,
-        out_channels=out_channels,
-        temb_channels=temb_channels,
-        use_in_shortcut=use_in_shortcut,
-        eps=1e-6,
-        groups=groups,
-        time_embedding_norm=time_embedding_norm,
-        non_linearity="silu",
-        output_scale_factor=output_scale_factor,
-    )
     ttnn_output = resnet_block(
         input,
         temb=temb,
@@ -200,6 +187,7 @@ def test_resnet_block_2d_512x512(
         non_linearity="silu",
         output_scale_factor=output_scale_factor,
     )
+
     ttnn_output = ttnn.to_memory_config(ttnn_output, ttnn.DRAM_MEMORY_CONFIG)
     ttnn_output = ttnn_to_torch(ttnn_output)
     ttnn_output = torch.reshape(
@@ -213,4 +201,4 @@ def test_resnet_block_2d_512x512(
     )
     ttnn_output = torch.permute(ttnn_output, (0, 3, 1, 2))
 
-    assert_with_pcc(torch_output, ttnn_output, pcc=0.98)
+    assert_with_pcc(torch_output, ttnn_output, pcc=0.992)

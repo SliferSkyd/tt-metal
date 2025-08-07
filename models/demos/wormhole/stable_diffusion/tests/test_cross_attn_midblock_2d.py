@@ -112,4 +112,4 @@ def test_cross_attention_midblock_512x512(
 
     # Compare outputs
     output = post_process_output_and_move_to_host(output, N, H, W, out_channels)
-    assert_with_pcc(torch_output, output, 0.97)
+    assert_with_pcc(torch_output, output, 0.983)

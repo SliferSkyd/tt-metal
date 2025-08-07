@@ -133,4 +133,4 @@ def test_unet_2d_condition_model_512x512(device, batch_size, in_channels, input_
         signpost(header="stop")
 
     ttnn_output = ttnn.to_torch(ttnn_output)
-    assert_with_pcc(torch_output, ttnn_output, 0.995)
+    assert_with_pcc(torch_output, ttnn_output, 0.996)

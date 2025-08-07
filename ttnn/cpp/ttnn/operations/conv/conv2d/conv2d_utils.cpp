@@ -593,6 +593,16 @@ static std::tuple<ttnn::Shape, ttnn::MemoryConfig, bool> get_conv_padded_input_s
                 needs_shard_or_reshard = true;
             }
 
+            if (shard_layout == TensorMemoryLayout::BLOCK_SHARDED) {
+                const uint32_t num_cores_c = get_num_cores_channels_from_parallel_config(input_tensor_parallel_config);
+                const uint32_t out_channels_ntiles = tt::div_up(out_channels, tt::constants::TILE_WIDTH);
+                const uint32_t out_channels_ntiles_padded = tt::round_up(out_channels_ntiles, num_cores_c);
+
+                if (out_channels_ntiles_padded - out_channels_ntiles >= out_channels_ntiles_padded / num_cores_c) {
+                    needs_shard_or_reshard = true;
+                }
+            }
+
             if (conv_config.override_sharding_config) {
                 TT_FATAL(
                     conv_config.core_grid.has_value(),

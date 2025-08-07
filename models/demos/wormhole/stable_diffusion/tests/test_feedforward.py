@@ -90,4 +90,4 @@ def test_feedforward_512x512(
     output = ttnn.to_torch(output)
     output = output.reshape(torch_output.shape)
 
-    assert_with_pcc(torch_output, output.to(torch_output.dtype), 0.98)
+    assert_with_pcc(torch_output, output.to(torch_output.dtype), 0.99)
