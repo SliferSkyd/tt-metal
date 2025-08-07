@@ -207,6 +207,41 @@ def test_sum_4d_tensor_dims(device, batch_size, c, h, w, dim, keepdim):
     assert_with_pcc(torch_output_tensor, output_tensor, pcc=0.99)
 
 
+@pytest.mark.parametrize("device_params", [{"l1_small_size": 32768}], indirect=True)
+def test_low_pcc_topk(device, reset_seeds):
+    cls_score = torch.load("cls_score.pt").view(-1)
+    torch_scores, torch_index = torch.topk(cls_score, 100)
+    cls_score = ttnn.from_torch(cls_score, device=device, layout=ttnn.TILE_LAYOUT, dtype=ttnn.bfloat16)
+    cls_score = ttnn.unsqueeze(cls_score, dim=0)
+    ttnn_scores, ttnn_index = ttnn.topk(cls_score, 100)
+    ttnn_index = ttnn.to_torch(ttnn_index).squeeze(0)
+    ttnn_scores = ttnn.to_torch(ttnn_scores).squeeze(0)
+    assert_with_pcc(torch_scores, ttnn_scores, 0.99)
+    print("torch_index", torch_index)
+    print("ttnn_index", ttnn_index)
+    assert_with_pcc(torch_index, ttnn_index)  # PCC = 0.18620104370068544
+
+
+# The values and indices returned by ttnn.topk are being altered which results in low PCC
+# torch_index tensor([179, 183, 456, 372, 759, 249, 641, 788, 105,  11, 864, 339, 411, 525,
+#     471, 122, 618, 414, 132,  58, 309, 681, 350, 278, 266, 432, 425,  29,
+#     776, 290, 656, 410, 504, 548, 749, 480, 211, 450, 134,  39,  27, 812,
+#     419, 267, 705, 201,  21, 117, 447, 275, 324, 462, 699, 648, 264, 312,
+#     376, 627, 755,  45, 512, 670, 566, 839, 282, 252, 894, 186, 363, 315,
+#     881, 540, 254, 248, 289, 416, 734, 549, 207, 860, 300, 675, 828, 897,
+#     341, 748,  60, 872, 423, 338,  66, 819, 371, 885, 528, 189, 219, 409,
+#     701, 552])
+
+# ttnn_index tensor([179, 183, 456, 372, 759, 249, 641, 105, 788,  11, 864, 339, 411, 525,
+#         471, 618, 122, 414, 132, 309,  58, 350, 278, 681, 432, 266, 425, 776,
+#          29, 290, 410, 656, 504, 749, 480, 548, 134, 211, 450,  39,  27, 812,
+#         267, 705, 419, 201,  21, 275, 324, 447, 117, 312, 699, 264, 648, 462,
+#         376, 755, 627, 566, 512, 252, 670,  45, 839, 894, 282, 186, 363, 881,
+#         315, 248, 254, 540, 289, 416, 734, 549, 207, 860, 828, 341, 675, 300,
+#         897, 748,  60, 872, 423,  66, 338, 189, 819, 219, 409, 528, 885, 371,
+#         348, 843], dtype=torch.int16)
+
+
 @pytest.mark.parametrize("dim1", [1])
 # This test picks the maximum dim2 that will pick the singlecore implementation.
 # TopK multicore uses 8 cores in blackhole, so we need to add support for bitonic sort with 8 cores
