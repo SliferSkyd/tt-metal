@@ -49,6 +49,7 @@ jobs:
       - ${{ inputs.topology }}
       - pipeline-functional
       - ${{ inputs.extra-tag }}
+      - pipeline-perf
     container:
       image: ${{ inputs.docker-image || 'docker-image-unresolved!' }}
       env:
