@@ -5,6 +5,7 @@ import ttnn
 from models.common.lightweightmodule import LightweightModule
 from models.common.rmsnorm import RMSNorm
 from models.tt_transformers.tt.attention import Attention as DefaultAttention
+from models.tt_transformers.tt.ccl import tt_all_reduce
 from models.tt_transformers.tt.distributed_norm import DistributedNorm
 from models.tt_transformers.tt.mlp import MLP
 from models.tt_transformers.tt.model_config import TensorGroup
@@ -43,6 +44,7 @@ class TransformerBlock(LightweightModule):
         self.model_config = args.get_model_config()
 
         self.layer_num = layer_num
+        self.state_dict_prefix = args.get_state_dict_prefix(self.__class__.__name__, layer_num)
 
         ActualAttentionClass = attention_class if attention_class is not None else DefaultAttention
 
@@ -68,48 +70,118 @@ class TransformerBlock(LightweightModule):
             dtype=dtype,
             model_config=self.model_config,
         )
-        self.attention_norm = DistributedNorm(
-            RMSNorm(
-                device=mesh_device,
-                dim=args.dim,
-                eps=args.norm_eps,
-                state_dict=state_dict,
-                state_dict_prefix=args.get_state_dict_prefix("", layer_num),
-                weight_cache_path=None if args.dummy_weights else weight_cache_path,
-                weight_dtype=ttnn.bfloat16,
-                weight_key="attention_norm",
-                is_distributed=self.args.is_distributed_norm,
-                add_unit_offset=self.args.rms_norm_add_unit_offset,
-                sharded_program_config=self.model_config["SHARDED_NORM_ATTN_PRGM_CFG"],
-                sharded_output_config=self.model_config["SHARDED_ATTN_INPUT_MEMCFG"],
-                ccl_topology=self.args.ccl_topology(),
-                tt_ccl=self.tt_ccl,
-            ),
-            args,
-            tt_ccl=self.tt_ccl,
-            TG=args.is_galaxy,
+
+        def pre_attention_norm(weight_key):
+            return DistributedNorm(
+                RMSNorm(
+                    device=mesh_device,
+                    dim=args.dim,
+                    eps=args.norm_eps,
+                    state_dict=self.state_dict,
+                    state_dict_prefix=None,
+                    weight_cache_path=None if args.dummy_weights else weight_cache_path,
+                    weight_dtype=ttnn.bfloat16,
+                    weight_key=weight_key,
+                    is_distributed=self.args.is_distributed_norm,
+                    add_unit_offset=self.args.rms_norm_add_unit_offset,
+                    sharded_program_config=self.model_config["SHARDED_NORM_ATTN_PRGM_CFG"],
+                    sharded_output_config=self.model_config["SHARDED_ATTN_INPUT_MEMCFG"],
+                    ccl_topology=self.args.ccl_topology(),
+                ),
+                args,
+                TG=args.is_galaxy,
+            )
+
+        def post_attention_norm(weight_key):
+            return DistributedNorm(
+                RMSNorm(
+                    device=mesh_device,
+                    dim=args.dim,
+                    eps=args.norm_eps,
+                    state_dict=state_dict,
+                    state_dict_prefix=None,
+                    weight_cache_path=None if args.dummy_weights else weight_cache_path,
+                    weight_dtype=ttnn.bfloat16,
+                    weight_key=weight_key,
+                    is_distributed=self.args.is_distributed_norm,
+                    add_unit_offset=self.args.rms_norm_add_unit_offset,
+                    sharded_program_config=self.model_config["SHARDED_NORM_MLP_PRGM_CFG"],
+                    sharded_output_config=self.model_config["SHARDED_MLP_INPUT_MEMCFG"],
+                ),
+                args,
+                TG=args.is_galaxy,
+            )
+
+        def norm_and_fracture(x, norm, mode):
+            skip_mem_cfg = self.model_config["DECODE_RESIDUAL_MEMCFG"] if mode == "decode" else ttnn.DRAM_MEMORY_CONFIG
+            normed = norm(x, mode)
+            reduced = tt_all_reduce(
+                normed,
+                self.mesh_device,
+                cluster_axis=0,
+                dim=0 if (self.args.is_galaxy and self.dim < 8192) else 3,
+                num_reduce_scatter_links=self.args.num_reduce_scatter_links,
+                num_all_gather_links=self.args.num_all_gather_links,
+                topology=self.args.ccl_topology(),
+                memory_config=skip_mem_cfg,
+                sharded=True if mode == "decode" else False,
+                use_composite=self.dim == 8192,
+            )
+            return reduced
+
+        # Check state_dict to see if we need to use norms around feedforward
+        pre_post_feedforward_norm_weight_keys = ["pre_feedforward_layernorm", "post_feedforward_layernorm"]
+        self.use_all_norms = all(
+            f"{self.state_dict_prefix}{norm_str}.weight" in self.state_dict
+            for norm_str in pre_post_feedforward_norm_weight_keys
         )
-        self.ff_norm = DistributedNorm(
-            RMSNorm(
-                device=mesh_device,
-                dim=args.dim,
-                eps=args.norm_eps,
-                state_dict=state_dict,
-                state_dict_prefix=args.get_state_dict_prefix("", layer_num),
-                weight_cache_path=None if args.dummy_weights else weight_cache_path,
-                weight_dtype=ttnn.bfloat16,
-                weight_key="ffn_norm",
-                is_distributed=self.args.is_distributed_norm,
-                add_unit_offset=self.args.rms_norm_add_unit_offset,
-                sharded_program_config=self.model_config["SHARDED_NORM_MLP_PRGM_CFG"],
-                sharded_output_config=self.model_config["SHARDED_MLP_INPUT_MEMCFG"],
-                ccl_topology=self.args.ccl_topology(),
-                tt_ccl=self.tt_ccl,
-            ),
-            args,
-            tt_ccl=self.tt_ccl,
-            TG=args.is_galaxy,
+
+        # Full flow:                            # Llama3 flow:
+        # pre_attention_norm                    # pre_attention_norm
+        # attention                             # attention
+        # post_attention_norm                   # ------------
+        # add residual                          # add residual
+        # pre_ff_norm                           # pre_ff_norm (uses post_attention_norm weight)
+        # feed_forward                          # feed_forward
+        # post_ff_norm                          # ------------
+        # add residual                          # add residual
+
+        pre_attention_norm_str = f"{self.state_dict_prefix}attention_norm"
+        post_attention_norm_str = f"{self.state_dict_prefix}ffn_norm" if self.use_all_norms else None
+        pre_ff_norm_str = (
+            f"{self.state_dict_prefix}pre_feedforward_layernorm"
+            if self.use_all_norms
+            else f"{self.state_dict_prefix}ffn_norm"
         )
+        post_ff_norm_str = f"{self.state_dict_prefix}post_feedforward_layernorm" if self.use_all_norms else None
+
+        # Set up norms based on weights in state_dict
+        if f"{pre_attention_norm_str}.weight" in self.state_dict:
+            self.pre_attention_norm = pre_attention_norm(pre_attention_norm_str)
+        else:
+            # ttnn.Tensor(x) only increases Tensor's internal refcount, used in deallocate()
+            self.pre_attention_norm = lambda x, mode: ttnn.Tensor(x)
+
+        # Tensor is fractured across devices before this norm. Keep the flow by fracturing it after norm.
+        if f"{post_attention_norm_str}.weight" in self.state_dict:
+            # Call post_attention_norm here to initialize weights
+            _post_attention_norm = post_attention_norm(post_attention_norm_str)
+            self.post_attention_norm = lambda x, mode: norm_and_fracture(x, _post_attention_norm, mode)
+        else:
+            self.post_attention_norm = lambda x, mode: ttnn.Tensor(x)
+
+        if f"{pre_ff_norm_str}.weight" in self.state_dict:
+            self.pre_ff_norm = post_attention_norm(pre_ff_norm_str)
+        else:
+            self.pre_ff_norm = lambda x, mode: ttnn.Tensor(x)
+
+        # Tensor is fractured across devices before this norm. Keep the flow by fracturing it after norm.
+        if f"{post_ff_norm_str}.weight" in self.state_dict:
+            # Call post_attention_norm here to initialize weights
+            _post_ff_norm = post_attention_norm(post_ff_norm_str)
+            self.post_ff_norm = lambda x, mode: norm_and_fracture(x, _post_ff_norm, mode)
+        else:
+            self.post_ff_norm = lambda x, mode: ttnn.Tensor(x)
 
     def forward(
         self,
@@ -125,6 +197,7 @@ class TransformerBlock(LightweightModule):
         kv_cache=None,
     ) -> ttnn.Tensor:
         TG = self.args.is_galaxy
+
         # x is fractured across devices and interleaved in DRAM (for prefill) and sharded in L1 (for decode)
         skip_mem_cfg = self.model_config["DECODE_RESIDUAL_MEMCFG"] if mode == "decode" else ttnn.DRAM_MEMORY_CONFIG
         assert (
@@ -137,7 +210,8 @@ class TransformerBlock(LightweightModule):
         )
 
         # Norms take fractured inputs and output replicated across devices
-        attn_in = self.attention_norm(x, mode)
+        attn_in = self.pre_attention_norm(x, mode)
+
         # Attention takes replicated inputs and produces fractured outputs
         attn_out = self.attention.forward(
             attn_in,
@@ -150,28 +224,49 @@ class TransformerBlock(LightweightModule):
             chunk_start_idx=chunk_start_idx,
             kv_cache=kv_cache,
         )
+        attn_in.deallocate()
         # Here x and attn_out are both fractured across devices
-        h = ttnn.add(x, attn_out, memory_config=skip_mem_cfg, dtype=ttnn.bfloat16 if TG else None)
-        ttnn.deallocate(attn_out)
-        if mode == "prefill":
-            x.deallocate(True)
+
+        # If triggered, post_attention_norm will produce fractured outputs
+        post_attn_out = self.post_attention_norm(attn_out, mode)
+        attn_out.deallocate()
+
+        add_out = ttnn.add(
+            x,
+            post_attn_out,
+            memory_config=skip_mem_cfg,
+            dtype=ttnn.bfloat16 if TG else None,
+        )
+        x.deallocate()
+        post_attn_out.deallocate()
 
         # Norms take fractured inputs and output replicated across devices
-        ff_in = self.ff_norm(h, mode)
         if TG and mode == "decode":
-            ff_in = ttnn.to_memory_config(ff_in, memory_config=self.model_config["MLP_ACT_MEMCFG"])
+            add_out = ttnn.to_memory_config(add_out, memory_config=self.model_config["MLP_ACT_MEMCFG"])
+
+        pre_ffn_out = self.pre_ff_norm(add_out, mode)
+
         # MLP takes replicated inputs and produces fractured outputs
-        ff_out = self.feed_forward.forward(ff_in, mode)
-        # ff_out and h are both fractured across devices
+        ff_out = self.feed_forward(pre_ffn_out, mode)
+        pre_ffn_out.deallocate()
+
+        # If triggered, post_ff_norm will produce fractured outputs
+        post_ffn_out = self.post_ff_norm(ff_out, mode)
+        ff_out.deallocate()
+
+        # post_ffn_out and add_out are both fractured across devices
         activation_dtype = self.model_config["DECODERS_OPTIMIZATIONS"].get_tensor_dtype(
             decoder_id=self.layer_num, tensor=TensorGroup.ACTIVATION
         )
         out = ttnn.add(
-            h,
-            ff_out,
+            add_out,
+            post_ffn_out,
             memory_config=skip_mem_cfg,
             dtype=self.args.ccl_dtype
             if TG and not self.args.is_distributed_norm(mode)
             else activation_dtype or ttnn.bfloat16,
         )
+        add_out.deallocate()
+        post_ffn_out.deallocate()
+
         return out  # fractured across devices

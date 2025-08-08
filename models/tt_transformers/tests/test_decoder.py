@@ -91,6 +91,16 @@ def test_decoder_inference(
     )
     transformation_mats = rope_setup.get_both_trans_mats()
 
+    #
+    #
+    #
+    #
+    # TODO: Add support for local RoPE
+    #
+    #
+    #
+    #
+
     # Prepare page table for paged attention
     page_table_tt = None
     paged_attention_config = None
