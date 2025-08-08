@@ -7,12 +7,17 @@
 #include "compute_kernel_api/common.h"
 #include "compute_kernel_api/tile_move_copy.h"
 #include "compute_kernel_api/eltwise_unary/eltwise_unary.h"
+#include "compute_kernel_api/eltwise_unary/typecast.h"
 
 namespace NAMESPACE {
 void MAIN {
     uint32_t per_core_tile_cnt = get_arg_val<uint32_t>(0);
 
     unary_op_init_common(tt::CBIndex::c_0, tt::CBIndex::c_16);
+// Initialize typecast if conversion is needed
+#ifdef SFPU_OP_TYPECAST_INCLUDE
+    typecast_tile_init();
+#endif
     for (uint32_t b = 0; b < per_core_tile_cnt; ++b) {
         acquire_dst();
 
@@ -20,6 +25,11 @@ void MAIN {
         cb_wait_front(tt::CBIndex::c_0, 1);
         cb_reserve_back(tt::CBIndex::c_16, 1);
         copy_tile(tt::CBIndex::c_0, 0, 0);
+
+// Apply typecast if needed, otherwise just pack
+#ifdef SFPU_OP_CHAIN_0
+        SFPU_OP_CHAIN_0
+#endif
 
         pack_tile(0, tt::CBIndex::c_16);
 

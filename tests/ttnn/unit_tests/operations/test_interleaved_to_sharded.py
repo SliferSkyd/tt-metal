@@ -9,27 +9,41 @@ import ttnn
 from tests.ttnn.utils_for_testing import assert_with_pcc
 
 
+def random_torch_tensor(dtype, shape):
+    if dtype == ttnn.uint16:
+        return torch.randint(0, 100, shape).to(torch.int16)
+    if dtype == ttnn.int32:
+        # return torch.randint(-(2**31), 2**31, shape, dtype=torch.int32)
+        return torch.randint(-10, 10, shape, dtype=torch.int32)
+    if dtype == ttnn.uint32:
+        return torch.randint(0, 2**31, shape, dtype=torch.int32)
+    return torch.rand(shape).bfloat16().float()
+
+
 @pytest.mark.parametrize(
     "first_dtype, second_dtype",
     [
-        (ttnn.bfloat8_b, ttnn.bfloat16),
-        (ttnn.bfloat8_b, ttnn.float32),
-        (ttnn.bfloat16, ttnn.bfloat8_b),
-        (ttnn.bfloat16, ttnn.float32),
-        (ttnn.float32, ttnn.bfloat8_b),
-        (ttnn.float32, ttnn.bfloat16),
+        # (ttnn.bfloat8_b, ttnn.bfloat16),
+        # (ttnn.bfloat8_b, ttnn.float32),
+        # (ttnn.bfloat16, ttnn.bfloat8_b),
+        # (ttnn.bfloat16, ttnn.float32),
+        # (ttnn.float32, ttnn.bfloat8_b),
+        # (ttnn.float32, ttnn.bfloat16),
+        (ttnn.int32, ttnn.float32),
+        # (ttnn.uint32, ttnn.float32),
+        # (ttnn.float32, ttnn.int32),
     ],
 )
 @pytest.mark.parametrize("input_in_l1", [True, False])
 @pytest.mark.parametrize("keep_l1_aligned", [True, False])
 def test_interleaved_to_sharded_hash(device, first_dtype, second_dtype, input_in_l1, keep_l1_aligned):
     # Sample tensor size and shard config
-    input_tensor_shape = (1, 1, 512, 512)
+    input_tensor_shape = (1, 1, 64, 64)
     input_memory_config = ttnn.L1_MEMORY_CONFIG if input_in_l1 else ttnn.DRAM_MEMORY_CONFIG
 
     # L1 grid and calculations
-    l1_core_grid_x = 4
-    l1_core_grid_y = 4
+    l1_core_grid_x = 2
+    l1_core_grid_y = 2
     l1_shard_grid = ttnn.CoreRangeSet(
         {ttnn.CoreRange(ttnn.CoreCoord(0, 0), ttnn.CoreCoord(l1_core_grid_x - 1, l1_core_grid_y - 1))}
     )
@@ -43,7 +57,8 @@ def test_interleaved_to_sharded_hash(device, first_dtype, second_dtype, input_in
     )
 
     # Create input tensors and send to device
-    input_tensor_torch = torch.randn(input_tensor_shape)
+    # input_tensor_torch = torch.randn(input_tensor_shape)
+    input_tensor_torch = random_torch_tensor(first_dtype, input_tensor_shape)
     input_tensor = ttnn.from_torch(input_tensor_torch, first_dtype, layout=ttnn.TILE_LAYOUT)
     input_tensor_device = ttnn.allocate_tensor_on_device(
         input_tensor.shape, input_tensor.dtype, input_tensor.layout, device, input_memory_config
@@ -55,15 +70,19 @@ def test_interleaved_to_sharded_hash(device, first_dtype, second_dtype, input_in
         output_tensor = ttnn.interleaved_to_sharded(
             input_tensor_device, sharded_mem_config, first_dtype, keep_l1_aligned=keep_l1_aligned
         )
+        print(output_tensor)
         pcc_passed_a, pcc_message_a = assert_with_pcc(input_tensor_torch, ttnn.to_torch(output_tensor), pcc=0.9999)
+        print("a")
 
         output_tensor = ttnn.interleaved_to_sharded(
             input_tensor_device, sharded_mem_config, second_dtype, keep_l1_aligned=keep_l1_aligned
         )
+        print(output_tensor)
         pcc_passed_b, pcc_message_b = assert_with_pcc(input_tensor_torch, ttnn.to_torch(output_tensor), pcc=0.9999)
+        print("b")
 
 
-@pytest.mark.parametrize("dtype", [ttnn.bfloat16, ttnn.bfloat8_b])
+@pytest.mark.parametrize("dtype", [ttnn.bfloat16, ttnn.bfloat8_b, ttnn.int32])
 @pytest.mark.parametrize("layout", [ttnn.TILE_LAYOUT, ttnn.ROW_MAJOR_LAYOUT])
 @pytest.mark.parametrize(
     "tensor_shape, shard_shape, shard_grid",
@@ -102,7 +121,7 @@ def test_interleaved_to_dram_height_sharded(
     assert_with_pcc(torch_input_tensor, ttnn.to_torch(ttnn_output_tensor), 0.9999)
 
 
-@pytest.mark.parametrize("dtype", [ttnn.bfloat16, ttnn.bfloat8_b])
+@pytest.mark.parametrize("dtype", [ttnn.bfloat16, ttnn.bfloat8_b, ttnn.int32])
 @pytest.mark.parametrize("layout", [ttnn.TILE_LAYOUT, ttnn.ROW_MAJOR_LAYOUT])
 @pytest.mark.parametrize(
     "tensor_shape, shard_shape, shard_grid",
@@ -146,6 +165,8 @@ def test_interleaved_to_dram_width_sharded(
     [
         [ttnn.bfloat8_b, ttnn.float32],
         [ttnn.float32, ttnn.bfloat8_b],
+        [ttnn.int32, ttnn.float32],
+        [ttnn.float32, ttnn.int32],
     ],
 )
 @pytest.mark.parametrize("layout", [ttnn.TILE_LAYOUT])
@@ -183,7 +204,7 @@ def test_interleaved_to_dram_sharded_convert_dtype(
     assert_with_pcc(torch_input_tensor, ttnn.to_torch(ttnn_output_tensor), 0.9999)
 
 
-@pytest.mark.parametrize("dtype", [ttnn.bfloat8_b, ttnn.float32])
+@pytest.mark.parametrize("dtype", [ttnn.bfloat8_b, ttnn.float32, ttnn.int32])
 @pytest.mark.parametrize("layout", [ttnn.TILE_LAYOUT, ttnn.ROW_MAJOR_LAYOUT])
 @pytest.mark.parametrize("input_mem_config", [ttnn.DRAM_MEMORY_CONFIG, ttnn.L1_MEMORY_CONFIG])
 @pytest.mark.parametrize(

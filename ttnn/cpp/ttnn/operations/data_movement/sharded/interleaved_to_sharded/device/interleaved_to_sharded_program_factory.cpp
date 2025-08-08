@@ -169,12 +169,21 @@ operation::ProgramWithCallbacks interleaved_to_sharded_multi_core(
         tt::tt_metal::WriterDataMovementConfig(writer_compile_time_args));
 
     tt::tt_metal::KernelHandle compute_kernel_id = 0;
+    std::map<std::string, std::string> compute_defines;
     if (convert_df) {
+        compute_defines.insert(
+            {"SFPU_OP_CHAIN_0",
+            fmt::format("typecast_tile_init(); typecast_tile<{0}u, {1}u>(0);", (uint32_t)input_cb_data_format, (uint32_t)output_cb_data_format)});
+        std::cout << input_cb_data_format << " " << output_cb_data_format << std::endl;
+        compute_defines.insert({"SFPU_OP_TYPECAST_INCLUDE", "1"});
         compute_kernel_id = tt::tt_metal::CreateKernel(
             program,
             "ttnn/cpp/ttnn/operations/data_movement/sharded/device/kernels/compute/eltwise_copy.cpp",
             all_cores,
-            tt::tt_metal::ComputeConfig{});
+            tt::tt_metal::ComputeConfig{
+                .defines = compute_defines,
+            }
+        );
     }
 
     uint32_t starting_idx_h = calculate_starting_idx_h(input, num_slices, slice_index);
