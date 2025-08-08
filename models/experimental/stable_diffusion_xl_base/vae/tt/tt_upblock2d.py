@@ -15,6 +15,7 @@ class TtUpDecoderBlock2D(nn.Module):
         num_layers = 3
         self.attentions = []
         self.resnets = []
+        self.device = device
 
         for i in range(num_layers):
             self.resnets.append(
@@ -44,5 +45,6 @@ class TtUpDecoderBlock2D(nn.Module):
         if self.upsamplers is not None:
             hidden_states = ttnn.reshape(hidden_states, (B, H, W, C))
             hidden_states, [C, H, W] = self.upsamplers.forward(hidden_states)
+            ttnn.ReadDeviceProfiler(self.device)
 
         return hidden_states, [C, H, W]

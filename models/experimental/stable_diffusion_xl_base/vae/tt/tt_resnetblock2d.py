@@ -104,6 +104,9 @@ class TtResnetBlock2D(nn.Module):
         B, C, H, W = input_shape
 
         hidden_states = ttnn.to_memory_config(input_tensor, ttnn.DRAM_MEMORY_CONFIG)
+        print(
+            f"Vae RN block, dram gn1 shape: {hidden_states.shape} core_grid: {self.norm_core_grid_1} num_out_blocks: {self.norm_blocks_1}"
+        )
         hidden_states = ttnn.group_norm(
             hidden_states,
             num_groups=self.norm_groups,
@@ -145,6 +148,9 @@ class TtResnetBlock2D(nn.Module):
         C = self.conv1_params["output_channels"]
 
         hidden_states = ttnn.to_memory_config(hidden_states, ttnn.DRAM_MEMORY_CONFIG)
+        print(
+            f"Vae RN block, dram gn2 shape: {hidden_states.shape} core_grid: {self.norm_core_grid_1} num_out_blocks: {self.norm_blocks_1}"
+        )
         hidden_states = ttnn.group_norm(
             hidden_states,
             num_groups=self.norm_groups,

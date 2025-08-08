@@ -33,7 +33,7 @@ def get_DRAM_GN_config(module_path, idx):
                 core_x = 4
                 core_y = 4
                 num_out_blocks = 96
-
+    # core_x = 8
     return core_x, core_y, num_out_blocks
 
 

@@ -5,6 +5,7 @@
 import torch.nn as nn
 from models.experimental.stable_diffusion_xl_base.vae.tt.tt_attention import TtAttention
 from models.experimental.stable_diffusion_xl_base.vae.tt.tt_resnetblock2d import TtResnetBlock2D
+import ttnn
 
 
 class TtUNetMidBlock2D(nn.Module):
@@ -15,6 +16,7 @@ class TtUNetMidBlock2D(nn.Module):
         num_layers_resn = num_layers_attn + 1
         self.attentions = []
         self.resnets = []
+        self.device = device
 
         for i in range(num_layers_attn):
             self.attentions.append(
@@ -34,5 +36,6 @@ class TtUNetMidBlock2D(nn.Module):
         for resnet, attn in tt_blocks:
             hidden_states = attn.forward(hidden_states, [B, C, H, W])
             hidden_states, [C, H, W] = resnet.forward(hidden_states, [B, C, H, W])
+            ttnn.ReadDeviceProfiler(self.device)
 
         return hidden_states, [C, H, W]
