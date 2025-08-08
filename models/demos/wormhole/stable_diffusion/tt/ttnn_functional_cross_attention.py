@@ -422,7 +422,7 @@ class cross_attention:
             ttnn.TensorMemoryLayout.HEIGHT_SHARDED,
             ttnn.ShardOrientation.ROW_MAJOR,
         )
-        return self.output_tensor
+        return output
 
     def sharded_attention(self, query, key, value, head_size, attn_type):
         grid_size = (2, 8)

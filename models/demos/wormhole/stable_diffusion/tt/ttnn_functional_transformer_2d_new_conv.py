@@ -355,6 +355,8 @@ class transformer_2d_model:
                     # hidden_states = ttnn.to_memory_config(hidden_states, ttnn.DRAM_MEMORY_CONFIG)
                     # residual = ttnn.to_memory_config(residual, ttnn.DRAM_MEMORY_CONFIG)
                     # hidden_states = ttnn.add(hidden_states, residual)
+                    if ttnn.get_memory_config(hidden_states) != ttnn.get_memory_config(residual):
+                        residual = ttnn.to_memory_config(residual, ttnn.get_memory_config(hidden_states))
                     hidden_states = dealloc_input(
                         ttnn.add,
                         hidden_states,
