@@ -45,7 +45,8 @@ int main() {
         constexpr CoreCoord core = {0, 0};
 
         constexpr uint32_t single_tile_size = 2 * 1024;
-        constexpr uint32_t num_tiles = 8;
+        constexpr uint32_t num_tiles = 64;
+        constexpr uint32_t block_size = 8;
         constexpr uint32_t dram_buffer_size =
             single_tile_size * num_tiles;  // num_tiles of FP16_B, hard-coded in the reader/writer kernels
 
@@ -67,7 +68,7 @@ int main() {
          * compute engine will use.
          */
         constexpr uint32_t src0_cb_index = tt::CBIndex::c_0;
-        constexpr uint32_t num_input_tiles = 2;
+        constexpr uint32_t num_input_tiles = block_size * 2;
         CircularBufferConfig cb_src0_config =
             CircularBufferConfig(num_input_tiles * single_tile_size, {{src0_cb_index, tt::DataFormat::Float16_b}})
                 .set_page_size(src0_cb_index, single_tile_size);
@@ -80,7 +81,7 @@ int main() {
         tt_metal::CreateCircularBuffer(program, core, cb_src1_config);
 
         constexpr uint32_t output_cb_index = tt::CBIndex::c_16;
-        constexpr uint32_t num_output_tiles = 2;
+        constexpr uint32_t num_output_tiles = block_size * 2;
         CircularBufferConfig cb_output_config =
             CircularBufferConfig(num_output_tiles * single_tile_size, {{output_cb_index, tt::DataFormat::Float16_b}})
                 .set_page_size(output_cb_index, single_tile_size);
@@ -155,12 +156,10 @@ int main() {
              src0_bank_id,
              src1_dram_buffer->address(),
              src1_bank_id,
-             num_tiles,
-             num_tiles,
-             1, 
-	     dst_dram_buffer->address(),
-	     dst_bank_id,
-	     num_tiles});
+             num_tiles / block_size,
+             block_size,
+             dst_dram_buffer->address(),
+             dst_bank_id});
 
         SetRuntimeArgs(program, unary_writer_kernel_id, core, {dst_dram_buffer->address(), dst_bank_id, num_tiles});
 

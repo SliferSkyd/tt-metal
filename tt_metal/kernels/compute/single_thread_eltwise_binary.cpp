@@ -16,19 +16,18 @@ void MAIN {
     uint32_t src0_bank_id = get_arg_val<uint32_t>(1);
     uint32_t src1_addr = get_arg_val<uint32_t>(2);
     uint32_t src1_bank_id = get_arg_val<uint32_t>(3);
-    uint32_t num_tiles = get_arg_val<uint32_t>(4);
 
     // Args for computing the results
     // How many blocks of tiles to work on
-    uint32_t per_core_block_cnt = get_arg_val<uint32_t>(5);
+    uint32_t per_core_block_cnt = get_arg_val<uint32_t>(4);
 
     // How many tiles per block; needs to be less than
     // circular buffer capacity.
-    uint32_t per_core_block_size = get_arg_val<uint32_t>(6);
+    uint32_t per_core_block_size = get_arg_val<uint32_t>(5);
 
     // For writing out the results
-    uint32_t dst_addr = get_arg_val<uint32_t>(7);
-    uint32_t dst_bank_id = get_arg_val<uint32_t>(8);
+    uint32_t dst_addr = get_arg_val<uint32_t>(6);
+    uint32_t dst_bank_id = get_arg_val<uint32_t>(7);
 
     // Input and output circular buffer ids.
     constexpr auto cb_in0 = tt::CBIndex::c_0;
