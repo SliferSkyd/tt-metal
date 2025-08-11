@@ -7,30 +7,26 @@
 #include "compute_kernel_api/eltwise_binary_st.h"
 #include "dataflow_api.h"
 
-inline void cb_push_back_from_dram(uint32_t dram_bank_id, uint32_t dram_addr, uint32_t cb_id, uint32_t num_tiles,  uint32_t noc = noc_index) {
-          UNPACK(
-    	  uint32_t tile_size_bytes = get_tile_size(cb_id);
-          uint64_t dram_noc_addr = get_noc_addr_from_bank_id<true>(dram_bank_id, dram_addr);
-          uint32_t l1_write_addr = get_write_ptr(cb_id);
-          noc_async_read(dram_noc_addr, l1_write_addr << 4, tile_size_bytes * num_tiles, noc);
-          noc_async_read_barrier(noc);
-          cb_push_back_df(cb_id, num_tiles);
-	  );
+inline void cb_push_back_from_dram(
+    uint32_t dram_bank_id, uint32_t dram_addr, uint32_t cb_id, uint32_t num_tiles, uint32_t noc = noc_index) {
+    UNPACK(uint32_t tile_size_bytes = get_tile_size(cb_id);
+           uint64_t dram_noc_addr = get_noc_addr_from_bank_id<true>(dram_bank_id, dram_addr);
+           uint32_t l1_write_addr = get_write_ptr(cb_id);
+           noc_async_read(dram_noc_addr, l1_write_addr << 4, tile_size_bytes * num_tiles, noc);
+           noc_async_read_barrier(noc);
+           cb_push_back_df(cb_id, num_tiles););
 }
 
-inline void cb_pop_front_to_dram(uint32_t dram_bank_id, uint32_t dram_addr, uint32_t cb_id, uint32_t num_tiles,  uint32_t noc = noc_index) {
-          UNPACK(
-    	  uint32_t tile_size_bytes = get_tile_size(cb_id);
-        uint64_t dram_noc_addr = get_noc_addr_from_bank_id<true>(dram_bank_id, dram_addr);
-        uint32_t l1_read_addr = get_read_ptr(cb_id);
-        noc_async_write(l1_read_addr << 4, dram_noc_addr, tile_size_bytes * num_tiles, noc);
-        noc_async_write_barrier(noc);
-        cb_pop_front_df(cb_id, num_tiles) ;
-	);
+inline void cb_pop_front_to_dram(
+    uint32_t dram_bank_id, uint32_t dram_addr, uint32_t cb_id, uint32_t num_tiles, uint32_t noc = noc_index) {
+    UNPACK(uint32_t tile_size_bytes = get_tile_size(cb_id);
+           uint64_t dram_noc_addr = get_noc_addr_from_bank_id<true>(dram_bank_id, dram_addr);
+           uint32_t l1_read_addr = get_read_ptr(cb_id);
+           noc_async_write(l1_read_addr << 4, dram_noc_addr, tile_size_bytes * num_tiles, noc);
+           noc_async_write_barrier(noc);
+           cb_pop_front_df(cb_id, num_tiles););
 }
 
-
- 
 namespace NAMESPACE {
 void MAIN {
     // Args for reading data from DRAM
@@ -47,7 +43,7 @@ void MAIN {
     uint32_t per_core_block_size = get_arg_val<uint32_t>(6);
 
     // For writing out the results
-    uint32_t dst_addr  = get_arg_val<uint32_t>(7);
+    uint32_t dst_addr = get_arg_val<uint32_t>(7);
     uint32_t dst_bank_id = get_arg_val<uint32_t>(8);
 
     // Input and output circular buffer ids.
@@ -67,12 +63,11 @@ void MAIN {
     binary_tiles_init_st<false, EltwiseBinaryType::ELWADD>(cb_in0, cb_in1);
 
     for (uint32_t block = 0; block < per_core_block_cnt; block += per_core_block_size) {
+        cb_push_back_from_dram(src0_bank_id, src0_addr, cb_in0, per_core_block_size);
+        src0_addr += ublock_size_bytes_0;
 
-         cb_push_back_from_dram(src0_bank_id, src0_addr, cb_in0, per_core_block_size);	    
-         src0_addr += ublock_size_bytes_0;
-
-         cb_push_back_from_dram(src1_bank_id, src1_addr, cb_in1, per_core_block_size);	    
-         src1_addr += ublock_size_bytes_1;
+        cb_push_back_from_dram(src1_bank_id, src1_addr, cb_in1, per_core_block_size);
+        src1_addr += ublock_size_bytes_1;
 
         // Perform the elementwise operation on the tiles in the block
         // and store them in the destination register
@@ -88,10 +83,10 @@ void MAIN {
 
         // Update the write pointer and counts for the output circular buffer.
         cb_push_back_st(cb_out0, per_core_block_size);
-        cb_pop_front_to_dram(dst_bank_id, dst_addr, cb_out0, per_core_block_size);	    
+        cb_pop_front_to_dram(dst_bank_id, dst_addr, cb_out0, per_core_block_size);
         dst_addr += ublock_size_bytes_dst;
 
-	// Pop out the used input tiles
+        // Pop out the used input tiles
         cb_pop_front(cb_in0, per_core_block_size);
         cb_pop_front(cb_in1, per_core_block_size);
     }
