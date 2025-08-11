@@ -64,7 +64,7 @@ ALWI void cb_reserve_back_st(uint32_t cbid, uint32_t ntiles) {
  * | ntiles    | The number of tiles to be pushed     | uint32_t | It must be less or equal than the size of the CB (the total number of tiles that fit into the CB) | True     |
  */
  // clang-format on
-ALWI void cb_push_back_st(uint32_t cbid, uint32_t ntiles) { UNPACK((llk_push_tiles<false, false>(cbid, ntiles))); }
+ALWI void cb_push_back_(uint32_t cbid, uint32_t ntiles) { UNPACK((llk_push_tiles<false, false>(cbid, ntiles))); }
 
 
 
