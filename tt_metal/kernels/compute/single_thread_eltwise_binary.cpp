@@ -22,7 +22,8 @@ void MAIN {
     // How many blocks of tiles to work on
     uint32_t per_core_block_cnt = get_arg_val<uint32_t>(5);
 
-    // How many tiles per block (1 or 2 due to limitations)
+    // How many tiles per block; needs to be less than
+    // circular buffer capacity.
     uint32_t per_core_block_size = get_arg_val<uint32_t>(6);
 
     // For writing out the results
@@ -45,7 +46,7 @@ void MAIN {
     // Initialize the parts that required specifically for this binary operatoins
     binary_tiles_init_<false, EltwiseBinaryType::ELWADD>(cb_in0, cb_in1);
 
-    for (uint32_t block = 0; block < per_core_block_cnt; block += per_core_block_size) {
+    for (uint32_t block = 0; block < per_core_block_cnt; block++) {
         cb_push_back_from_dram(src0_bank_id, src0_addr, cb_in0, per_core_block_size);
         src0_addr += ublock_size_bytes_0 * per_core_block_size;
 
