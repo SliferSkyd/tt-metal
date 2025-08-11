@@ -93,13 +93,13 @@ int main() {
          */
         KernelHandle binary_reader_kernel_id = CreateKernel(
             program,
-            "tt_metal/kernels/dataflow/reader_dummy.cpp",
+            "tt_metal/kernels/dataflow/reader_binary.cpp",
             core,
             DataMovementConfig{.processor = DataMovementProcessor::RISCV_1, .noc = NOC::RISCV_1_default});
 
         KernelHandle unary_writer_kernel_id = CreateKernel(
             program,
-            "tt_metal/kernels/dataflow/writer_dummy.cpp",
+            "tt_metal/kernels/dataflow/writer_unary.cpp",
             core,
             DataMovementConfig{.processor = DataMovementProcessor::RISCV_0, .noc = NOC::RISCV_0_default});
 
@@ -117,7 +117,7 @@ int main() {
          */
         KernelHandle eltwise_binary_kernel_id = CreateKernel(
             program,
-            "tt_metal/kernels/compute/single_thread_eltwise_binary_with_read_write.cpp",
+            "tt_metal/kernels/compute/single_thread_eltwise_binary.cpp",
             core,
             ComputeConfig{
                 .math_fidelity = MathFidelity::HiFi4,
@@ -152,14 +152,8 @@ int main() {
             program,
             eltwise_binary_kernel_id,
             core,
-            {src0_dram_buffer->address(),
-             src0_bank_id,
-             src1_dram_buffer->address(),
-             src1_bank_id,
-             num_tiles / block_size,
-             block_size,
-             dst_dram_buffer->address(),
-             dst_bank_id});
+            {num_tiles / block_size,
+             block_size});
 
         SetRuntimeArgs(program, unary_writer_kernel_id, core, {dst_dram_buffer->address(), dst_bank_id, num_tiles});
 

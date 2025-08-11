@@ -17,6 +17,7 @@ set(PROGRAMMING_EXAMPLES_SRCS
     ${CMAKE_CURRENT_SOURCE_DIR}/pad/pad_multi_core.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/sharding/shard_data_rm.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/single_thread_eltwise_binary/single_thread_eltwise_binary.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/triple_thread_eltwise_binary/triple_thread_eltwise_binary.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/vecadd_sharding/vecadd_sharding.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/vecadd_multi_core/vecadd_multi_core.cpp
 )
