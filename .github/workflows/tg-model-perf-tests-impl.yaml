@@ -102,6 +102,7 @@ jobs:
         with:
           name: ${{ inputs.wheel-artifact-name || 'wheel artifact not specified' }}
       - name: Run model perf regression tests
+        if: ${{ matrix.test-group.model-type != 'SD3.5' || inputs.topology == 'topology-6u' }}
         timeout-minutes: 60
         uses: ./.github/actions/docker-run
         env:
