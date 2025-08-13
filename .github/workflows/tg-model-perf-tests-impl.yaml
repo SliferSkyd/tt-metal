@@ -25,8 +25,8 @@ jobs:
   tg-model-perf-tests:
     strategy:
       fail-fast: false
-      matrix:
-        test-group: [
+      matrix: ${{ fromJSON(format('{
+    "test-group": [
           {
             name: "Galaxy CNN model perf tests",
             model-type: "CNN",
