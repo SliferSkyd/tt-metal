@@ -229,7 +229,7 @@ class Transformer(LightweightModule):
             current_pos, torch.tensor(0, dtype=torch.int64)
         )  # Ensure position indices are non-negative
         rope_idxs_global = self.rope_setup.get_rot_idxs(rot_current_pos, on_host=True)
-        if hasattr(self, "rope_local_setup"):
+        if self.rope_local_setup is not None:
             rope_idxs_local = self.rope_local_setup.get_rot_idxs(rot_current_pos, on_host=True)
         else:
             rope_idxs_local = None
