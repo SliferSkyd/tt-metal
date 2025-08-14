@@ -48,9 +48,7 @@ class TransformerBlock(LightweightModule):
         self.state_dict_prefix = args.get_state_dict_prefix(self.__class__.__name__, layer_num)
 
         ActualAttentionClass = attention_class if attention_class is not None else DefaultAttention
-        self.is_attention_sliding = (
-            self.args.layer_types[layer_num] == "sliding_window" if self.args.layer_types else False
-        )
+        self.is_attention_sliding = self.args.layer_is_sliding[layer_num]
 
         self.attention = ActualAttentionClass(
             mesh_device=mesh_device,
