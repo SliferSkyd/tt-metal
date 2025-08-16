@@ -7,6 +7,8 @@
 #include <tt-metalium/hal.hpp>
 #include <tt-metalium/tensor_accessor_args.hpp>
 
+#include <iostream>
+
 namespace ttnn::operations::data_movement {
 
 namespace detail {
@@ -289,6 +291,10 @@ PermuteDeviceOperation::MultiCoreBlockedGeneric::create(
     compute_defines["UNOPS"] = std::to_string(std::getenv("UNOPS") ? std::stoi(std::getenv("UNOPS")) : 0);
     compute_defines["MNOPS"] = std::to_string(std::getenv("MNOPS") ? std::stoi(std::getenv("MNOPS")) : 0);
     compute_defines["PNOPS"] = std::to_string(std::getenv("PNOPS") ? std::stoi(std::getenv("PNOPS")) : 0);
+    compute_defines["RISCV"] = std::to_string(std::getenv("RISCV") ? std::stoi(std::getenv("RISCV")) : 0);
+    for (const auto& pair : compute_defines) {
+        // std::cout << "Key: " << pair.first << ", Value: " << pair.second << std::endl;
+    }
     std::vector<uint32_t> compute_kernel_args = {x_block_size, w_block_size};
     bool fp32_dest_acc_en = cb_data_format_output == tt::DataFormat::Float32;
     auto compute_kernel_id = tt::tt_metal::CreateKernel(
