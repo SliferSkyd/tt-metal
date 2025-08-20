@@ -31,7 +31,7 @@ inline void add_nops() {
 
 template <const int U, const int M, const int P, const int R>
 inline void add_trisc_nops() {
-    DPRINT << "U " << (uint32_t)U << " M " << (uint32_t)M << " P " << (uint32_t)P << ENDL();
+    // DPRINT << "U " << (uint32_t)U << " M " << (uint32_t)M << " P " << (uint32_t)P << ENDL();
     if constexpr (U) {
         UNPACK((add_nops<U, R>()));
     }
@@ -58,6 +58,7 @@ void MAIN {
     unary_op_init_common(cb_in, cb_out);
 
     for (uint32_t n = 0; n < num_blocks; n++) {
+        // DPRINT << " LOOP " << n << ENDL();
         add_trisc_nops<UNOPS, MNOPS, PNOPS, RISCV>();
         // tilize input via unpack and then pack
         tilize_init(cb_in, 1, cb_tilize);
@@ -68,31 +69,33 @@ void MAIN {
         tilize_block(cb_in, 1, cb_tilize);  // tilize and pack into cb_tilize
 
         cb_push_back(cb_tilize, 1);
+        UNPACK(tt::compute::common::print_full_tile(cb_tilize, 0, true));
         cb_pop_front(cb_in, x_block_size);
 
-        tilize_uninit(cb_in, cb_tilize);
+        /*
+            tilize_uninit(cb_in, cb_tilize);
 
-        // transpose input
-        cb_wait_front(cb_tilize, 1);
+            // transpose input
+            cb_wait_front(cb_tilize, 1);
 
-        transpose_wh_init_short(cb_tilize);
-        pack_untilize_dest_init<1>(cb_out);
+            transpose_wh_init_short(cb_tilize);
+            pack_untilize_dest_init<1>(cb_out);
 
-        tile_regs_acquire();
-        transpose_wh_tile(cb_tilize, 0, 0);  // transpose call
-        tile_regs_commit();
+            tile_regs_acquire();
+            transpose_wh_tile(cb_tilize, 0, 0);  // transpose call
+            tile_regs_commit();
 
-        // pack and untilize
-        cb_reserve_back(cb_out, w_block_size);
+            // pack and untilize
+            cb_reserve_back(cb_out, w_block_size);
 
-        tile_regs_wait();
-        pack_untilize_dest<1>(cb_out);  // pack call
-        tile_regs_release();
+            tile_regs_wait();
+            pack_untilize_dest<1>(cb_out);  // pack call
+            tile_regs_release();
 
-        cb_push_back(cb_out, w_block_size);
+            cb_push_back(cb_out, w_block_size);
 
-        pack_untilize_uninit(cb_out);
-
+            pack_untilize_uninit(cb_out);
+           */
         cb_pop_front(cb_tilize, 1);
     }
 }

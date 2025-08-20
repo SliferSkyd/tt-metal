@@ -35,14 +35,12 @@ def random_torch_tensor(dtype, shape):
 # @pytest.mark.parametrize("shape", [(3, 33, 3, 3, 33)])
 # @pytest.mark.parametrize("shape", [(3, 33, 3, 2, 33)]) # Most efficient so far
 # @pytest.mark.parametrize("shape", [(3, 33, 2, 2, 33)])
-@pytest.mark.parametrize("shape", [(1, 33, 1, 1, 31)])
+@pytest.mark.parametrize("shape", [(1, 32, 1, 1, 32)])
 @pytest.mark.parametrize("perm", [(4, 0, 3, 2, 1)])
 @pytest.mark.parametrize("memory_config", [ttnn.L1_MEMORY_CONFIG])
 @pytest.mark.parametrize(
     "dtype",
     [
-        #        ttnn.bfloat16,
-        #        ttnn.float32,
         ttnn.int32,
     ],
 )
@@ -54,10 +52,10 @@ def test_permute_5d_blocked(device, shape, perm, memory_config, dtype):
 
     # torch.manual_seed(520)
     # input_a = random_torch_tensor(dtype, shape)
-    # tlist = torch.arange(33 * 31)
-    # tlist_a = torch.tensor(tlist)
-    # input_a = torch.reshape(tlist_a, shape)
-    input_a = torch.full(shape, 0, dtype=torch.int32)
+    tlist = torch.arange(32 * 32)
+    tlist_a = torch.tensor(tlist)
+    input_a = torch.reshape(tlist_a, shape)
+    # input_a = torch.full(shape, 0, dtype=torch.int32)
     torch_output = torch.permute(input_a, perm)
 
     # for is_risc in range(2):
@@ -72,7 +70,7 @@ def test_permute_5d_blocked(device, shape, perm, memory_config, dtype):
             min_it = my_it
             # for nops in range(my_nop):
             # failed with 47 nops in versim
-            for nops in range(47, 48):
+            for nops in range(0, 100):
                 os.environ[core_nop] = str(nops)
                 counter = 0
                 for i in range(my_it):
@@ -88,8 +86,7 @@ def test_permute_5d_blocked(device, shape, perm, memory_config, dtype):
                         counter = counter + 1
                     else:
                         torch.set_printoptions(profile="full", linewidth=1000, sci_mode=True)
-                        print(input_a)
-                        print(tt_output)
+                        # print(tt_output)
                 print("Nops ", nops, " Counter ", counter)
                 if min_it > counter:
                     min_nop = nops

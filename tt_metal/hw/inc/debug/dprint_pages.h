@@ -84,7 +84,7 @@ inline void print_full_tile(uint32_t cb_id, uint32_t tile_id = 0, bool untilize 
                           .hs = (uint8_t)1,
                           .w0 = (uint8_t)0,
                           .w1 = (uint8_t)32,
-                          .ws = (uint8_t)1},
+                          .ws = (uint8_t)2},
                       true,
                       untilize)
                << ENDL();
