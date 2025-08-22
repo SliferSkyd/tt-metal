@@ -225,7 +225,7 @@ jobs:
             -e HF_HOME=/mnt/MLPerf/huggingface
             -e HF_HUB_OFFLINE=1
             ${{ matrix.test-group.civ2-compatible && '-e TT_GH_CI_INFRA=1' || '' }}
-            -v /mnt/MLPerf:/mnt/MLPerf:ro
+            -v /mnt/MLPerf:/mnt/MLPerf:rw
             --cap-add=ALL
             --security-opt seccomp=unconfined
             --ulimit nproc=65536:65536
