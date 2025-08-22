@@ -347,6 +347,7 @@ operation::ProgramWithCallbacks layernorm_multi_core(
                                     "reader_unary_interleaved_ln_rm_gb.cpp"
                                   : "ttnn/cpp/ttnn/operations/normalization/layernorm/device/kernels/dataflow/"
                                     "reader_unary_interleaved_ln.cpp";
+    large_tensor_needed = true;
     reader_kernel_path =
         large_tensor_needed ? (use_welford ? "ttnn/cpp/ttnn/operations/normalization/layernorm/device/kernels/dataflow/"
                                              "reader_unary_interleaved_ln_large_tensor_welford.cpp"

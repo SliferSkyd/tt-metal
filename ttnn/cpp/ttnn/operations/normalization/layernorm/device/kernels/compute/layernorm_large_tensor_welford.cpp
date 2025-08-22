@@ -20,6 +20,7 @@
 #include "compute_kernel_api/eltwise_unary/eltwise_unary.h"
 #include "layernorm_compute_utils.hpp"
 #include "compute_kernel_api/transpose_wh.h"
+#include "debug/dprint.h"
 
 namespace NAMESPACE {
 
@@ -121,8 +122,8 @@ void MAIN {
                     // but there seems to be a bug with it, so we use the full init
                     constexpr auto cb_result_or_input = fuse_pre_add ? cb_interm_pre_add : cb_in;
                     reconfig_data_format_srca(cb_result_or_input);
-                    transpose_wh_init(cb_result_or_input, cb_result_or_input);
-                    // transpose_wh_init_short(cb_result_or_input);
+                    // transpose_wh_init(cb_result_or_input, cb_result_or_input);
+                    transpose_wh_init_short(cb_result_or_input);
                     transpose_wh_tile(cb_result_or_input, j, dst0);
 
                     // Accumulate mean and variance
