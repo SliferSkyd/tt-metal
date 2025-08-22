@@ -261,4 +261,6 @@ def test_large_layer_norm_with_weight_bias_and_residual_input(device, h, w, use_
     output_tensor = ttnn.from_device(output_tensor)
     output_tensor = ttnn.to_torch(output_tensor)
 
-    assert_with_pcc(torch_output_tensor, output_tensor, 0.9997)
+    # pcc_val = comp_pcc(torch_output_tensor, output_tensor)
+    # print("PCC ", pcc_val)
+    assert_with_pcc(torch_output_tensor, output_tensor, 1)
