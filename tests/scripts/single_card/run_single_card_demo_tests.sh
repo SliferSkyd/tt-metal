@@ -7,6 +7,21 @@ run_falcon7b_func() {
 
 }
 
+run_gemma3_func() {
+  fail=0
+
+  gemma3_4b="google/gemma-3-4b-it"
+
+  for gemma3 in "$gemma3_4b"; do
+    HF_MODEL=$gemma3 pytest models/experimental/gemma3_4b/tests/vision_tests/test_end2end.py --timeout 600 || fail=1
+    echo "LOG_METAL: Gemma3 e2e test for $gemma3 completed"
+  done
+
+  if [[ $fail -ne 0 ]]; then
+    exit 1
+  fi
+}
+
 run_mistral7b_func() {
 
   mistral7b=/mnt/MLPerf/tt_dnn-models/Mistral/hub/models--mistralai--Mistral-7B-Instruct-v0.3/snapshots/e0bc86c23ce5aae1db576c8cca6f06f1f73af2db
