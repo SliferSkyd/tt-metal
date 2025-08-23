@@ -376,6 +376,15 @@ operation::ProgramWithCallbacks layernorm_multi_core(
         compute_args.push_back(static_cast<uint32_t>(fuse_pre_add));
     }
 
+    compute_defines["UNOPS"] = std::to_string(std::getenv("UNOPS") ? std::stoi(std::getenv("UNOPS")) : 0);
+    compute_defines["MNOPS"] = std::to_string(std::getenv("MNOPS") ? std::stoi(std::getenv("MNOPS")) : 0);
+    compute_defines["PNOPS"] = std::to_string(std::getenv("PNOPS") ? std::stoi(std::getenv("PNOPS")) : 0);
+    compute_defines["RISCV"] = std::to_string(std::getenv("RISCV") ? std::stoi(std::getenv("RISCV")) : 0);
+    compute_defines["SHORT"] = std::to_string(std::getenv("SHORT") ? std::stoi(std::getenv("SHORT")) : 0);
+    // for (const auto& pair : compute_defines) {
+    //      std::cout << "Key: " << pair.first << ", Value: " << pair.second << std::endl;
+    // }
+
     auto compute_kernels_id = CreateKernel(
         program,
         large_tensor_needed and !use_row_major_kernel and !rms_norm

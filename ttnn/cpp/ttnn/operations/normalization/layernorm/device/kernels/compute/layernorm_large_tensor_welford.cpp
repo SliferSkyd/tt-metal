@@ -24,6 +24,35 @@
 
 namespace NAMESPACE {
 
+template <const int n, const int riscv>
+inline void add_nops() {
+    DPRINT << "RISCV " << riscv << " NOPS " << n << ENDL();
+
+    for (int i = 0; i < n; i++) {
+        if constexpr (riscv) {
+            asm("nop");
+        } else {
+            TTI_NOP;
+        }
+    }
+}
+
+template <const int U, const int M, const int P, const int R>
+inline void add_trisc_nops() {
+    DPRINT << "U " << (uint32_t)U << " M " << (uint32_t)M << " P " << (uint32_t)P << ENDL();
+    if constexpr (U) {
+        UNPACK((add_nops<U, R>()));
+    }
+
+    if constexpr (M) {
+        MATH((add_nops<M, R>()));
+    }
+
+    if constexpr (P) {
+        PACK((add_nops<P, R>()));
+    }
+}
+
 void MAIN {
     uint32_t NCHt = get_arg_val<uint32_t>(0);
     constexpr uint32_t Wt = get_compile_time_arg_val(0);
@@ -117,13 +146,17 @@ void MAIN {
                         tile_regs_wait();
                     }
 
+                    add_trisc_nops<UNOPS, MNOPS, PNOPS, RISCV>();
                     // Transpose
                     // Note: The init_short should be sufficient here,
                     // but there seems to be a bug with it, so we use the full init
                     constexpr auto cb_result_or_input = fuse_pre_add ? cb_interm_pre_add : cb_in;
                     reconfig_data_format_srca(cb_result_or_input);
-                    // transpose_wh_init(cb_result_or_input, cb_result_or_input);
-                    transpose_wh_init_short(cb_result_or_input);
+                    if constexpr (SHORT) {
+                        transpose_wh_init_short(cb_result_or_input);
+                    } else {
+                        transpose_wh_init(cb_result_or_input, cb_result_or_input);
+                    }
                     transpose_wh_tile(cb_result_or_input, j, dst0);
 
                     // Accumulate mean and variance

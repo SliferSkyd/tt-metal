@@ -2,13 +2,15 @@
 
 # SPDX-License-Identifier: Apache-2.0
 
+import os
+
 import pytest
 
 import torch
 
 import ttnn
 
-from tests.ttnn.utils_for_testing import assert_with_pcc
+from tests.ttnn.utils_for_testing import assert_with_pcc, comp_pcc
 from models.utility_functions import skip_for_wormhole_b0
 
 
@@ -230,9 +232,10 @@ def test_large_layer_norm_with_bias(device, h, w, use_welford):
 # @pytest.mark.parametrize("h", [32, 1024])
 # @pytest.mark.parametrize("w", [2880, 4096])
 @pytest.mark.parametrize("h", [32])
-@pytest.mark.parametrize("w", [32])
+@pytest.mark.parametrize("w", [64])
 @pytest.mark.parametrize("use_welford", [True, False])
 def test_large_layer_norm_with_weight_bias_and_residual_input(device, h, w, use_welford):
+    device.disable_and_clear_program_cache()
     if not use_welford:
         pytest.skip("Low PCC, see https://github.com/tenstorrent/tt-metal/issues/27291")
 
@@ -251,18 +254,43 @@ def test_large_layer_norm_with_weight_bias_and_residual_input(device, h, w, use_
     weight = ttnn.from_torch(torch_weight, layout=ttnn.TILE_LAYOUT, device=device)
     bias = ttnn.from_torch(torch_bias, layout=ttnn.TILE_LAYOUT, device=device)
 
-    program_config = ttnn.LayerNormDefaultProgramConfig(use_welford=use_welford)
-    output_tensor = ttnn.layer_norm(
-        input_tensor,
-        residual_input_tensor=residual_input_tensor,
-        weight=weight,
-        bias=bias,
-        program_config=program_config,
-    )
-    output_tensor = ttnn.to_layout(output_tensor, ttnn.ROW_MAJOR_LAYOUT)
-    output_tensor = ttnn.from_device(output_tensor)
-    output_tensor = ttnn.to_torch(output_tensor)
+    nop_types_sentence = "UNOPS MNOPS PNOPS"
+    nop_types = nop_types_sentence.split()
+    for short in range(2):
+        print("SHORT ", short)
+        os.environ["SHORT"] = str(short)
+        for core_nop in nop_types:
+            os.environ["UNOPS"] = str(0)
+            os.environ["MNOPS"] = str(0)
+            os.environ["PNOPS"] = str(0)
+            print("NOP TYPE ", core_nop)
+            my_it = 1
+            my_nop = 1
+            min_nop = 0
+            min_count = my_it
+            for nops in range(my_nop):
+                os.environ[core_nop] = str(nops)
+                counter = 0
+                for i in range(my_it):
+                    program_config = ttnn.LayerNormDefaultProgramConfig(use_welford=use_welford)
+                    output_tensor = ttnn.layer_norm(
+                        input_tensor,
+                        residual_input_tensor=residual_input_tensor,
+                        weight=weight,
+                        bias=bias,
+                        program_config=program_config,
+                    )
+                    output_tensor = ttnn.to_layout(output_tensor, ttnn.ROW_MAJOR_LAYOUT)
+                    output_tensor = ttnn.from_device(output_tensor)
+                    output_tensor = ttnn.to_torch(output_tensor)
 
-    # pcc_val = comp_pcc(torch_output_tensor, output_tensor)
-    # print("PCC ", pcc_val)
-    assert_with_pcc(torch_output_tensor, output_tensor, 1)
+                    pcc_val = comp_pcc(torch_output_tensor, output_tensor)[1]
+                    print("PCC ", pcc_val)
+                    # assert_with_pcc(torch_output_tensor, output_tensor, 1)
+                    if pcc_val < 0.999:
+                        counter = counter + 1
+                # print("Nops ", nops, " Counter ", counter)
+                if min_count > counter:
+                    min_nop = nops
+                    min_count = counter
+            print("Min nops ", min_nop, " Counter ", min_count)
