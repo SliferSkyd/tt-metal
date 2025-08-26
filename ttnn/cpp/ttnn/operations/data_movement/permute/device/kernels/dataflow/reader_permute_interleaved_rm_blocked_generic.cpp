@@ -116,6 +116,8 @@ void kernel_main() {
             uint64_t addr_offset = base_addr_offset + x * X_stride;
             uint64_t src_noc_addr = get_noc_addr(addr_offset, s0, w_offset);
 
+            DPRINT << "addr_offset " << addr_offset << " src_noc_addr " << src_noc_addr << ENDL();
+
             // Perform async read of the current line (w_block_len elements) into L1
             noc_async_read<NOC_MAX_BURST_SIZE + 1, true, 0>(
                 src_noc_addr, src_buffer_l1_addr + page_offset, w_read_size_bytes);
