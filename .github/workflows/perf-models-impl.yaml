@@ -85,57 +85,49 @@ jobs:
               - models/experimental/efficientnetb0/tests/perf/
 
     name: "${{ matrix.model-group.name }} ${{ matrix.test-info.name }}"
+    runs-on: ${{ matrix.test-info.runs-on }}
+    container:
+      image: ${{ inputs.docker-image || 'docker-image-unresolved!' }}
+      env:
+        TT_METAL_HOME: /work
+        PYTHONPATH: /work
+        LD_LIBRARY_PATH: /work/build/lib
+        ARCH_NAME: ${{ matrix.test-info.arch }}
+        LOGURU_LEVEL: INFO
+        GTEST_OUTPUT: xml:generated/test_reports/
+        GITHUB_ACTIONS: true
+      volumes:
+        - ${{ github.workspace }}/docker-job:/work # Subdir to workaround https://github.com/actions/runner/issues/691
+        - /dev/hugepages-1G:/dev/hugepages-1G
+        - /mnt/MLPerf:/mnt/MLPerf:ro
+      options: "--device /dev/tenstorrent -e TT_GH_CI_INFRA"
     defaults:
       run:
         shell: bash
-    runs-on: ${{ matrix.test-info.runs-on }}
+        working-directory: /work # https://github.com/actions/runner/issues/878
     steps:
-      - name: ⬇️ Checkout
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-      - name: ⬇️ Download Build
-        uses: actions/download-artifact@v4
+      - name: Setup Job
+        uses: tenstorrent/tt-metal/.github/actions/setup-job@main
         timeout-minutes: 10
         with:
-          name: ${{ inputs.build-artifact-name }}
-      - name: Extract files
-        run: tar -xvf ttm_any.tar
-      - name: ⬇️ Download Wheel
-        uses: actions/download-artifact@v4
-        timeout-minutes: 10
-        with:
-          name: ${{ inputs.wheel-artifact-name }}
+          build-artifact-name: ${{ inputs.build-artifact-name }}
+          wheel-artifact-name: ${{ inputs.wheel-artifact-name }}
       - name: Enable Performance mode
         run: sudo cpupower frequency-set -g performance
       - name: Run performance regressions
         timeout-minutes: ${{ matrix.model-group.timeout }}
-        uses: ./.github/actions/docker-run
-        env:
-          LOGURU_LEVEL: INFO
-        with:
-          docker_image: ${{ inputs.docker-image }}
-          docker_password: ${{ secrets.GITHUB_TOKEN }}
-          docker_opts: |
-            -v /mnt/MLPerf:/mnt/MLPerf:ro
-            -e TT_METAL_HOME=${{ github.workspace }}
-            -e ARCH_NAME=${{ matrix.test-info.arch }}
-            -e LD_LIBRARY_PATH=${{ github.workspace }}/build/lib
-            -e GTEST_OUTPUT=xml:generated/test_reports/
-            -e GITHUB_ACTIONS=true
-          install_wheel: true
-          run_args: |
-            if [[ "${{ matrix.model-group.name }}" == "other" ]]; then
-              echo "No environment variable engineering needed for other models"
-            elif [[ "${{ matrix.model-group.name }}" == "tt_transformers" ]]; then
-              export QWEN_DIR=/mnt/MLPerf/tt_dnn-models/qwen/Qwen2-7B-Instruct
-              export FAKE_DEVICE=N150
-            fi
+        run_args: |
+          if [[ "${{ matrix.model-group.name }}" == "other" ]]; then
+            echo "No environment variable engineering needed for other models"
+          elif [[ "${{ matrix.model-group.name }}" == "tt_transformers" ]]; then
+            export QWEN_DIR=/mnt/MLPerf/tt_dnn-models/qwen/Qwen2-7B-Instruct
+            export FAKE_DEVICE=N150
+          fi
 
-            pytest -n auto ${{ join(matrix.model-group.model-list, ' ') }} -m models_performance_bare_metal ${{ matrix.model-group.name == 'cnn_javelin' && '--timeout=480' || '' }}
+          pytest -n auto ${{ join(matrix.model-group.model-list, ' ') }} -m models_performance_bare_metal ${{ matrix.model-group.name == 'cnn_javelin' && '--timeout=480' || '' }}
 
-            ## Merge all the generated reports
-            env python3 models/perf/merge_perf_results.py
+          ## Merge all the generated reports
+          env python3 models/perf/merge_perf_results.py
       # TODO: Fix the pipeline before enabling notifications.
       #- uses: tenstorrent/tt-metal/.github/actions/slack-report@main
       #  if: ${{ failure() }}
