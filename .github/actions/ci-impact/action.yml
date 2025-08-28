@@ -1,0 +1,25 @@
+name: "CI Impact Recommender"
+description: "Analyze changed files and recommend which workflows to run"
+
+outputs:
+  recommended-workflows:
+    value: ${{ steps.run.outputs.recommended-workflows }}
+  impacted-components:
+    value: ${{ steps.run.outputs.impacted-components }}
+  impacted-files-count:
+    value: ${{ steps.run.outputs.impacted-files-count }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        submodules: false
+    - name: Run recommender
+      id: run
+      shell: bash
+      run: |
+        python3 .github/scripts/ci_impact/ci_impact.py --print-markdown || python .github/scripts/ci_impact/ci_impact.py --print-markdown
+
