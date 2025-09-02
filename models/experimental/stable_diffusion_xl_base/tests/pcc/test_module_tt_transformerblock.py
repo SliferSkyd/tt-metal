@@ -70,12 +70,18 @@ def test_transformerblock(
         layout=ttnn.TILE_LAYOUT,
         memory_config=ttnn.L1_MEMORY_CONFIG,
     )
+    sharded_mem_config = ttnn.create_sharded_memory_config(
+        shape=torch_input_tensor.shape if out_dim == 1280 else (512, 96),
+        core_grid=ttnn.CoreGrid(y=8, x=8) if out_dim == 1280 else ttnn.CoreGrid(y=8, x=7),
+        strategy=ttnn.ShardStrategy.BLOCK,
+        use_height_and_width_as_shard_shape=False if out_dim == 1280 else True,
+    )
     ttnn_input_tensor = ttnn.from_torch(
         torch_input_tensor,
         dtype=ttnn.bfloat16,
         device=device,
         layout=ttnn.TILE_LAYOUT,
-        memory_config=ttnn.DRAM_MEMORY_CONFIG,
+        memory_config=sharded_mem_config,
     )
     ttnn_output_tensor = tt_transformerblock.forward(ttnn_input_tensor, None, ttnn_encoder_tensor)
     output_tensor = ttnn.to_torch(ttnn_output_tensor)

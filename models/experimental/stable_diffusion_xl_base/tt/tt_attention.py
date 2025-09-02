@@ -133,7 +133,7 @@ class TtAttention(LightweightModule):
             q_heads = ttnn.matmul(
                 hidden_states,
                 self.tt_q_weights,
-                program_config=self.dense_out_program_config,
+                program_config=self.q_program_config,
                 compute_kernel_config=self.q_compute_kernel_config,
                 memory_config=ttnn.L1_MEMORY_CONFIG,
             )
@@ -193,7 +193,7 @@ class TtAttention(LightweightModule):
             bias=self.tt_out_bias,
             program_config=self.dense_out_program_config,
             compute_kernel_config=self.default_compute_kernel_config,
-            memory_config=ttnn.L1_MEMORY_CONFIG,
+            memory_config=ttnn.L1_BLOCK_SHARDED_MEMORY_CONFIG,
         )
 
         return hidden_states

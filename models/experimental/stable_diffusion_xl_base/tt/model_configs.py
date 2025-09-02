@@ -471,7 +471,7 @@ class ModelOptimisations:
 
         self.matmul_configs["2D_FF2_SEQ_LEN_4096"] = ttnn.MatmulMultiCoreReuseMultiCastProgramConfig(
             compute_with_storage_grid_size=(7, 8),
-            in0_block_w=10,  # max is 10
+            in0_block_w=5,  # lets optimize
             out_subblock_h=1,
             out_subblock_w=3,
             per_core_M=16,
@@ -499,7 +499,7 @@ class ModelOptimisations:
         out_subblock_w_geglu_640 = 5
         self.matmul_configs["2D_GEGLU_LINEAR_640_SPLIT"] = ttnn.MatmulMultiCoreReuseMultiCastProgramConfig(
             compute_with_storage_grid_size=(8, 8),
-            in0_block_w=in_0_block_w_geglu_640,
+            in0_block_w=5,  # lets optimize
             per_core_M=per_core_M_geglu_640,
             per_core_N=per_core_N_geglu_640,
             out_subblock_h=out_subblock_h_geglu_640,
@@ -510,7 +510,7 @@ class ModelOptimisations:
 
         self.matmul_configs["2D_GEGLU_LINEAR_640_SPLIT_GELU"] = ttnn.MatmulMultiCoreReuseMultiCastProgramConfig(
             compute_with_storage_grid_size=(8, 8),
-            in0_block_w=in_0_block_w_geglu_640,
+            in0_block_w=2,  # lets optimize
             per_core_M=per_core_M_geglu_640,
             per_core_N=per_core_N_geglu_640,
             out_subblock_h=out_subblock_h_geglu_640,
@@ -546,13 +546,24 @@ class ModelOptimisations:
             fused_activation=[ttnn.UnaryOpType.GELU, True],
         )
 
-        self.matmul_configs["2D_TM_LINEAR_640"] = ttnn.MatmulMultiCoreReuseMultiCastProgramConfig(
+        self.matmul_configs["2D_TM_LINEAR_IN_640"] = ttnn.MatmulMultiCoreReuseMultiCastProgramConfig(
             compute_with_storage_grid_size=(8, 8),
-            in0_block_w=2,
+            in0_block_w=5,  # block sharded input cant use 2 for now, needs optimising
             per_core_M=16,
             per_core_N=3,
-            out_subblock_h=8,
-            out_subblock_w=1,
+            out_subblock_h=1,
+            out_subblock_w=3,  # block sharded output Error: out_subblock_w must be equal to per_core_N or out_subblock_h must be equal to 1.
+            transpose_mcast=False,
+            fused_activation=None,
+        )
+
+        self.matmul_configs["2D_TM_LINEAR_OUT_640"] = ttnn.MatmulMultiCoreReuseMultiCastProgramConfig(
+            compute_with_storage_grid_size=(8, 8),
+            in0_block_w=1,  # block sharded input cant use 2 for now, needs optimising
+            per_core_M=16,
+            per_core_N=3,
+            out_subblock_h=1,
+            out_subblock_w=3,  # block sharded output Error: out_subblock_w must be equal to per_core_N or out_subblock_h must be equal to 1.
             transpose_mcast=False,
             fused_activation=None,
         )
@@ -570,13 +581,26 @@ class ModelOptimisations:
 
         self.matmul_configs["2D_ATTN_OUT_LINEAR_640"] = ttnn.MatmulMultiCoreReuseMultiCastProgramConfig(
             compute_with_storage_grid_size=(8, 8),
-            in0_block_w=4,
+            in0_block_w=2,  # lets optimize
             per_core_M=16,
             per_core_N=3,
             out_subblock_h=2,
             out_subblock_w=3,
             transpose_mcast=False,
             fused_activation=None,
+            fuse_batch=True,
+        )
+
+        self.matmul_configs["2D_ATTN_Q_LINEAR_640"] = ttnn.MatmulMultiCoreReuseMultiCastProgramConfig(
+            compute_with_storage_grid_size=(8, 8),
+            in0_block_w=1,  # lets optimize
+            per_core_M=16,
+            per_core_N=3,
+            out_subblock_h=2,
+            out_subblock_w=3,
+            transpose_mcast=False,
+            fused_activation=None,
+            fuse_batch=True,
         )
 
         self.matmul_configs["2D_RESNET_CONV_320_640"] = ttnn.MatmulMultiCoreReuseMultiCastProgramConfig(
@@ -600,6 +624,7 @@ class ModelOptimisations:
             out_subblock_w=5,
             transpose_mcast=False,
             fused_activation=None,
+            fuse_batch=True,
         )
 
         self.matmul_configs["2D_RESNET_CONV_640_1280"] = ttnn.MatmulMultiCoreReuseMultiCastProgramConfig(
@@ -615,7 +640,7 @@ class ModelOptimisations:
 
         self.matmul_configs["2D_ATTN_QKV_LINEAR_640"] = ttnn.MatmulMultiCoreReuseMultiCastProgramConfig(
             compute_with_storage_grid_size=(8, 8),
-            in0_block_w=4,
+            in0_block_w=1,  # lets optimize
             per_core_M=16,
             per_core_N=8,
             out_subblock_h=1,
@@ -662,14 +687,14 @@ class ModelOptimisations:
 
         self.matmul_configs["2D_ATTN_QKV_LINEAR_1280"] = ttnn.MatmulMultiCoreReuseMultiCastProgramConfig(
             compute_with_storage_grid_size=(8, 8),
-            in0_block_w=4,
+            in0_block_w=5,
             per_core_M=4,
             per_core_N=15,
             out_subblock_h=1,
             out_subblock_w=5,
             transpose_mcast=False,
             fused_activation=None,
-            fuse_batch=False,
+            fuse_batch=True,
         )
 
         self.matmul_configs["2D_RESNET_CONV_1920_1280"] = ttnn.MatmulMultiCoreReuseMultiCastProgramConfig(
@@ -829,12 +854,15 @@ class ModelOptimisations:
             # # # TM LINEAR # # #
             if "proj_in" in matmul_path or "proj_out" in matmul_path:
                 if "down_blocks.1" in matmul_path or "up_blocks.1" in matmul_path:
-                    return self.matmul_configs["2D_TM_LINEAR_640"]
+                    if "proj_in" in matmul_path:
+                        return self.matmul_configs["2D_TM_LINEAR_IN_640"]
+                    else:
+                        return self.matmul_configs["2D_TM_LINEAR_OUT_640"]
                 else:
                     return self.matmul_configs["2D_TM_LINEAR_1280"]
 
             # # # ATTN OUT LINEAR # # #
-            if "attn1.to_out" in matmul_path or "attn2.to_out" in matmul_path or "attn2.to_q" in matmul_path:
+            if "attn1.to_out" in matmul_path or "attn2.to_out" in matmul_path:
                 if "down_blocks.1" in matmul_path or "up_blocks.1" in matmul_path:
                     return self.matmul_configs["2D_ATTN_OUT_LINEAR_640"]
                 else:
@@ -844,6 +872,8 @@ class ModelOptimisations:
                     return self.matmul_configs["2D_ATTN_QKV_LINEAR_640"]
                 else:
                     return self.matmul_configs["2D_ATTN_QKV_LINEAR_1280"]
+            if "attn2.to_q" in matmul_path and ("down_blocks.1" in matmul_path or "up_blocks.1" in matmul_path):
+                return self.matmul_configs["2D_ATTN_Q_LINEAR_640"]
             if (
                 "attn1.to_k" in matmul_path
                 or "attn1.to_v" in matmul_path

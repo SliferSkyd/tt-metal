@@ -79,6 +79,23 @@ class TtBasicTransformerBlock(LightweightModule):
             packer_l1_acc=True,
         )
 
+        if out_dim == 640:
+            self.ln_program_config = ttnn.LayerNormShardedMultiCoreProgramConfig(
+                compute_with_storage_grid_size=ttnn.CoreCoord(7, 8),
+                subblock_w=1,
+                block_h=16,
+                block_w=3,
+                inplace=False,
+            )
+        else:
+            self.ln_program_config = ttnn.LayerNormShardedMultiCoreProgramConfig(
+                compute_with_storage_grid_size=ttnn.CoreCoord(8, 8),
+                subblock_w=1,
+                block_h=4,
+                block_w=5,
+                inplace=False,
+            )
+
     def forward(self, input_tensor, attention_mask=None, encoder_hidden_states=None):
         attn_hidden_states = ttnn.layer_norm(
             input_tensor,
@@ -86,10 +103,11 @@ class TtBasicTransformerBlock(LightweightModule):
             bias=self.tt_norm1_bias,
             epsilon=self.ln_eps,
             compute_kernel_config=self.ln_compute_kernel_config,
-            memory_config=ttnn.L1_MEMORY_CONFIG,
+            memory_config=input_tensor.memory_config(),
+            program_config=self.ln_program_config if input_tensor.is_sharded() else None,
         )
         attn_hidden_states = self.attn1(attn_hidden_states, attention_mask, None)
-        hidden_states = ttnn.add(input_tensor, attn_hidden_states, use_legacy=False)
+        hidden_states = ttnn.add(input_tensor, attn_hidden_states, use_legacy=True)
         ttnn.deallocate(input_tensor)
 
         attn_hidden_states = ttnn.layer_norm(
@@ -98,10 +116,11 @@ class TtBasicTransformerBlock(LightweightModule):
             bias=self.tt_norm2_bias,
             epsilon=self.ln_eps,
             compute_kernel_config=self.ln_compute_kernel_config,
-            memory_config=ttnn.L1_MEMORY_CONFIG,
+            memory_config=hidden_states.memory_config(),
+            program_config=self.ln_program_config if hidden_states.is_sharded() else None,
         )
         attn_hidden_states = self.attn2(attn_hidden_states, attention_mask, encoder_hidden_states)
-        hidden_states = ttnn.add(hidden_states, attn_hidden_states, use_legacy=False)
+        hidden_states = ttnn.add(hidden_states, attn_hidden_states, use_legacy=True)
 
         attn_hidden_states = ttnn.layer_norm(
             hidden_states,
@@ -109,8 +128,10 @@ class TtBasicTransformerBlock(LightweightModule):
             bias=self.tt_norm3_bias,
             epsilon=self.ln_eps,
             compute_kernel_config=self.ln_compute_kernel_config,
+            memory_config=hidden_states.memory_config(),
+            program_config=self.ln_program_config if hidden_states.is_sharded() else None,
         )
         attn_hidden_states = self.ff(attn_hidden_states)
-        hidden_states = ttnn.add(hidden_states, attn_hidden_states, use_legacy=False)
+        hidden_states = ttnn.add(hidden_states, attn_hidden_states, use_legacy=True)
 
         return hidden_states
