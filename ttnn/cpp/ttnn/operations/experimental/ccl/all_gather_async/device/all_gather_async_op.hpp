@@ -184,20 +184,8 @@ namespace ccl {
 
 Tensor all_gather_async(
     const Tensor& input_tensor,
-    uint32_t dim,
-    const std::optional<std::vector<GlobalSemaphore>>& multi_device_global_semaphore = std::nullopt,
-    bool do_sync = false,
-    uint32_t num_links = 1,
-    const std::optional<MemoryConfig>& memory_config = std::nullopt,
-    ttnn::ccl::Topology topology = ttnn::ccl::Topology::Ring,
-    std::optional<tt::tt_metal::SubDeviceId> sub_device_id = std::nullopt,
-    bool use_all_gather_async_llama_sharded = false,
-    bool use_optimal_ccl_for_llama = false);
-
-Tensor all_gather_async(
-    const Tensor& input_tensor,
-    const std::optional<ttnn::Tensor>& persistent_output_buffer,
-    uint32_t dim,
+    const int32_t dim,
+    const std::optional<ttnn::Tensor>& persistent_output_buffer = std::nullopt,
     const std::optional<std::vector<GlobalSemaphore>>& multi_device_global_semaphore = std::nullopt,
     bool do_sync = false,
     uint32_t num_links = 1,
@@ -210,21 +198,6 @@ Tensor all_gather_async(
     std::optional<uint32_t> chunks_per_sync = std::nullopt,
     std::optional<uint32_t> num_workers_per_link = std::nullopt,
     std::optional<uint32_t> num_buffers_per_channel = std::nullopt);
-
-Tensor all_gather_async(
-    const Tensor& input_tensor,
-    int32_t dim,
-    uint32_t cluster_axis,
-    const MeshDevice& mesh_device,
-    ttnn::ccl::Topology topology,
-    const std::optional<std::vector<GlobalSemaphore>>& multi_device_global_semaphore = std::nullopt,
-    bool do_sync = false,
-    const std::optional<ttnn::Tensor>& persistent_output_tensor = std::nullopt,
-    const std::optional<MemoryConfig>& memory_config = std::nullopt,
-    std::optional<size_t> num_preferred_links = std::nullopt,
-    std::optional<tt::tt_metal::SubDeviceId> sub_device_id = std::nullopt,
-    bool use_all_gather_async_llama_sharded = false,
-    bool use_optimal_ccl_for_llama = false);
 
 }  // namespace ccl
 }  // namespace experimental
