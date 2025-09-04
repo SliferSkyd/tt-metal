@@ -153,12 +153,12 @@ def run_reduce_scatter_impl(
     def run_op(i):
         tt_reduce_scatter_output_tensor = ttnn.experimental.reduce_scatter_minimal_async(
             tt_input_tensor_mesh_list[i],
+            dim=dim,
             persistent_output_buffers=None
             if do_sync
             else [persistent_intermediate_buffers[i], persistent_output_buffers[i]],
-            dim=dim,
-            multi_device_global_semaphore=ccl_semaphore_handles[i],
-            barrier_semaphore=barrier_semaphore_handles[i] if do_sync else None,
+            multi_device_global_semaphores=None if do_sync else ccl_semaphore_handles[i],
+            do_sync=do_sync,
             num_links=num_links,
             memory_config=mem_config_rs,
             intermediate_memory_config=mem_config_intermediate,

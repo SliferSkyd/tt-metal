@@ -127,14 +127,14 @@ def run_all_gather_impl(
     def run_op(i):
         tt_all_gather_out_tensor = ttnn.experimental.all_gather_async(
             input_tensor_mesh_list[i],
-            persistent_output_buffer=None if do_sync else persistent_output_buffers[i],
             dim=dim,
-            multi_device_global_semaphore=ccl_semaphore_handles[i],
+            persistent_output_buffer=None if do_sync else persistent_output_buffers[i],
+            multi_device_global_semaphores=None if do_sync else ccl_semaphore_handles[i],
+            do_sync=do_sync,
             num_links=num_links,
             memory_config=mem_config_ag,
             topology=all_gather_topology,
             subdevice_id=worker_sub_device_id,
-            barrier_semaphore=barrier_semaphore_handles[i] if do_sync else None,
             cluster_axis=cluster_axis,
             chunks_per_sync=chunks_per_sync,
             num_workers_per_link=num_workers_per_link,
