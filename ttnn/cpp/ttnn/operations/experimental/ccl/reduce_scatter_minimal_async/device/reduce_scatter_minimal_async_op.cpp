@@ -338,8 +338,8 @@ namespace ccl {
 namespace {
 Tensor reduce_scatter_minimal_async_impl(
     const Tensor& input_tensor,
+    const int32_t dim,
     const std::optional<std::vector<ttnn::Tensor>>& persistent_output_buffers,
-    const uint32_t dim,
     const std::optional<std::vector<GlobalSemaphore>>& multi_device_global_semaphore,
     bool do_sync,
     const uint32_t num_links,
@@ -417,8 +417,8 @@ Tensor reduce_scatter_minimal_async_impl(
 
 Tensor reduce_scatter_minimal_async(
     const Tensor& input_tensor,
+    const int32_t dim,
     const std::optional<std::vector<ttnn::Tensor>>& persistent_output_buffers,
-    const uint32_t dim,
     const std::optional<std::vector<GlobalSemaphore>>& multi_device_global_semaphore,
     bool do_sync,
     const uint32_t num_links,
@@ -433,8 +433,8 @@ Tensor reduce_scatter_minimal_async(
     std::vector<IDevice*> devices = ttnn::ccl::get_active_physical_devices(input_tensor);
     return reduce_scatter_minimal_async_impl(
         input_tensor,
-        persistent_output_buffers,
         dim,
+        persistent_output_buffers,
         multi_device_global_semaphore,
         do_sync,
         num_links,

@@ -205,8 +205,8 @@ namespace ccl {
 
 Tensor reduce_scatter_minimal_async(
     const Tensor& input_tensor,
-    const std::optional<std::vector<ttnn::Tensor>>& persistent_output_buffers,
-    uint32_t dim,
+    const int32_t dim,
+    const std::optional<std::vector<ttnn::Tensor>>& persistent_output_buffers = std::nullopt,
     const std::optional<std::vector<GlobalSemaphore>>& multi_device_global_semaphore = std::nullopt,
     bool do_sync = false,
     uint32_t num_links = 1,

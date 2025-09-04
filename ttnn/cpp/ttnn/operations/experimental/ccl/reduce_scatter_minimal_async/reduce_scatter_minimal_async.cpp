@@ -134,10 +134,10 @@ ttnn::Tensor composite_reduce_scatter(
 
 ttnn::Tensor ExecuteReduceScatterMinimalAsync::invoke(
     const ttnn::Tensor& input_tensor,
-    const std::optional<std::vector<ttnn::Tensor>>& persistent_output_buffers,
     const int32_t dim,
-    const std::vector<GlobalSemaphore>& multi_device_global_semaphore,
-    const std::optional<GlobalSemaphore>& barrier_semaphore,
+    const std::optional<std::vector<ttnn::Tensor>>& persistent_output_buffers,
+    const std::optional<std::vector<GlobalSemaphore>>& multi_device_global_semaphore,
+    bool do_sync,
     const uint32_t num_links,
     const std::optional<ttnn::MemoryConfig>& memory_config,
     const std::optional<ttnn::MemoryConfig>& intermediate_memory_config,
@@ -152,10 +152,10 @@ ttnn::Tensor ExecuteReduceScatterMinimalAsync::invoke(
     } else {
         return ttnn::operations::experimental::ccl::reduce_scatter_minimal_async(
             input_tensor,
-            persistent_output_buffers,
             dim,
+            persistent_output_buffers,
             multi_device_global_semaphore,
-            barrier_semaphore.has_value(),
+            do_sync,
             num_links,
             memory_config,
             intermediate_memory_config,
