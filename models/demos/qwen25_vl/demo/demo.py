@@ -180,6 +180,19 @@ def create_tt_model(
             False,  # stop_at_eos
             True,  # ci_only
         ),
+        (  # gemma test
+            "models/tt_transformers/demo/sample_prompts/input_data_long_1k.json",
+            True,  # instruct mode
+            1,  # repeat_batches to simulate multiple users with the same prompt
+            4096,  # max_seq_len, allow for image tokens
+            1,  # batch_size -- samples to load from the prompt JSON
+            2000,  # max_generated_tokens
+            True,  # paged_attention
+            {"page_block_size": 32, "page_max_num_blocks": 4096},  # page_params
+            {"temperature": 0, "top_p": 0.08},  # sampling_params (argmax)
+            True,  # stop_at_eos
+            False,  # ci_only
+        ),
     ],
     ids=[
         "batch-1",  # latency
@@ -188,6 +201,7 @@ def create_tt_model(
         "ci-only-32-users",  # ci_only batch-32 for faster testing coverage in CI pipelines
         "ci-only-bleu-score",  # ci_only batch-bleu-score for faster testing coverage in CI pipelines
         "ci-only-text-only",  # ci_only batch-text-only for faster testing coverage in CI pipelines
+        "gemma-test",  # gemma test
     ],
 )
 @pytest.mark.parametrize(

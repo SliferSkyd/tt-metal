@@ -2303,7 +2303,7 @@ class ModelArgs:
                 if "gemma-3" in self.model_name:
                     from transformers import Gemma3ForConditionalGeneration
 
-                    model = Gemma3ForConditionalGeneration.from_pretrained(self.CKPT_DIR, device_map="auto")
+                    model = Gemma3ForConditionalGeneration.from_pretrained(self.CKPT_DIR, torch_dtype="auto", device_map="auto")
                     model = model
                 else:
                     if self.cache_hf_flag and self.cached_hf_model is None:
@@ -2368,7 +2368,7 @@ class ModelArgs:
                 if "gemma-3" in self.model_name:
                     from transformers import Gemma3ForConditionalGeneration
 
-                    model = Gemma3ForConditionalGeneration.from_pretrained(self.CKPT_DIR)
+                    model = Gemma3ForConditionalGeneration.from_pretrained(self.CKPT_DIR, torch_dtype="auto")
                     model = model
                 else:
                     if self.cached_hf_model is None:
@@ -2507,7 +2507,7 @@ class ModelArgs:
             )
             return wrapper
 
-    def reference_attention(self):
+    def reference_attention(self, rope_embeddings="global"):
         if self.checkpoint_type == CheckpointType.Meta:
             from models.demos.t3000.llama2_70b.reference.llama.llama31_8b.model import Attention
 
@@ -2520,8 +2520,15 @@ class ModelArgs:
                 "MistralAttention",
                 "Gemma3Attention",
             )
+            if "gemma-3" in self.model_name:
+                if rope_embeddings == "local":
+                    rotary_emb = model.model.rotary_emb_local
+                else:
+                    rotary_emb = model.model.rotary_emb
+            else:
+                rotary_emb = model.model.rotary_emb
             wrapper = HfAttentionWrapper(
-                layer, self.head_dim, model.model.rotary_emb if use_position_embeddings else None
+                layer, self.head_dim, rotary_emb if use_position_embeddings else None
             )
             return wrapper
 

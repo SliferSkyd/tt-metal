@@ -1387,7 +1387,7 @@ class ModelArgs:
         # Gemma3 specific params
         is_gemma3 = "gemma-3" in self.base_model_name.lower()
         if is_gemma3:
-            self.rms_norm_add_unit_offset = True
+            self.rms_norm_add_unit_offset = False
             self.embed_scale = self.dim**0.5
 
     def _set_params_from_dict(self, config, is_hf=False):
@@ -2308,7 +2308,8 @@ class ModelArgs:
             return RMSNorm(self.dim, self.norm_eps)
         else:
             model = self.reference_transformer(wrap=False)
-            layer = model.model.layers[i].self_attn.q_norm
+            # layer = model.model.layers[i].self_attn.q_norm
+            layer = model.model.layers[i].input_layernorm
             layer._load_state_dict = layer.load_state_dict
             layer.load_state_dict = lambda x: layer._load_state_dict(convert_meta_to_hf(x, self.head_dim))
             return layer
@@ -2453,7 +2454,6 @@ class ModelArgs:
             model = self.reference_transformer(wrap=False)
             layer = model.model.layers[i]
             rotary_emb = model.model.rotary_emb
-
             if "gemma-3" in self.model_name:
                 rotary_emb_local = model.model.rotary_emb_local
                 wrapper = HfGemmaDecoderWrapper(layer, self.head_dim, rotary_emb, rotary_emb_local)
@@ -2462,7 +2462,7 @@ class ModelArgs:
 
             return wrapper
 
-    def reference_attention(self):
+    def reference_attention(self, rope_embeddings="global"):
         if self.checkpoint_type == CheckpointType.Meta:
             from models.demos.t3000.llama2_70b.reference.llama.llama31_8b.model import Attention
 
@@ -2475,9 +2475,14 @@ class ModelArgs:
                 "MistralAttention",
                 "Gemma3Attention",
             )
-            wrapper = HfAttentionWrapper(
-                layer, self.head_dim, model.model.rotary_emb if use_position_embeddings else None
-            )
+            if "gemma-3" in self.model_name:
+                if rope_embeddings == "local":
+                    rotary_emb = model.model.rotary_emb_local
+                else:
+                    rotary_emb = model.model.rotary_emb
+            else:
+                rotary_emb = model.model.rotary_emb
+            wrapper = HfAttentionWrapper(layer, self.head_dim, rotary_emb if use_position_embeddings else None)
             return wrapper
 
     def set_tg_attention_config(self):
@@ -2565,15 +2570,21 @@ class HfAttentionWrapper:
     def __init__(self, attention, head_dim, rotary_emb):
         from transformers import DynamicCache
 
+        # from transformers import StaticCache
+
         super().__init__()
         self.attention = attention
         self.past_key_value = DynamicCache()
+        # self.past_key_value = StaticCache(config=attention.config, max_batch_size=1, max_cache_len=256)
         self.head_dim = head_dim
         self.rotary_emb = rotary_emb
 
     def forward(self, x, start_pos, freqs_cis_i, mask=None):
+        # position_ids_uncast = torch.tensor([list(range(start_pos, start_pos + x.shape[1]))] * x.shape[0])
         position_ids = torch.tensor([list(range(start_pos, start_pos + x.shape[1]))] * x.shape[0])
-
+        # print(f"position_ids_uncast: {position_ids_uncast}")
+        # print(f"position_ids: {position_ids}")
+        # assert torch.allclose(position_ids_uncast, position_ids.to(position_ids_uncast.dtype))
         if mask is not None:
             while len(mask.shape) < 4:
                 mask = mask.unsqueeze(0)
@@ -2586,6 +2597,7 @@ class HfAttentionWrapper:
                 past_key_value=self.past_key_value,
                 use_cache=True,
                 attention_mask=mask,
+                # cache_position=position_ids,
             )
         else:
             output, _, self.past_key_value = self.attention(
@@ -2594,6 +2606,7 @@ class HfAttentionWrapper:
                 use_cache=True,
                 position_ids=position_ids,
                 attention_mask=mask,
+                # cache_position=position_ids,
             )
         return output
 
@@ -2689,9 +2702,9 @@ class HfGemmaDecoderWrapper:
         self.past_key_values = DynamicCache()
 
     def forward(self, x, start_pos, freqs_cis_i, mask=None):
+        # position_ids = torch.tensor([list(range(start_pos, start_pos + x.shape[1]))] * x.shape[0]).to(torch.bfloat16)
         position_ids = torch.tensor([list(range(start_pos, start_pos + x.shape[1]))] * x.shape[0])
         # TODO: Generalize for other HF models
-
         position_embeddings_global = self.rotary_emb(x, position_ids)
         position_embeddings_local = self.rotary_emb_local(x, position_ids)
         if mask is not None:
