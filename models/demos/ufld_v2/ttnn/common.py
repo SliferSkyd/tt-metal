@@ -52,8 +52,6 @@ class TtnnUFLDV2Conv2D:
         )
         if self.core_count is not None:
             shard_grid = get_shard_grid_from_num_cores(self.core_count, self.device)
-            self.conv_config.core_grid = shard_grid
-            self.conv_config.override_sharding_config = True
         if conv_pth.bias is not None:
             bias = ttnn.from_device(conv_pth.bias)
             self.bias = bias

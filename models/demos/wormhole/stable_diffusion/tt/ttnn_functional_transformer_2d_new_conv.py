@@ -210,23 +210,11 @@ class transformer_2d_model:
             dtype=ttnn.bfloat8_b,
         )
 
-        # enforce same core grid on BH as we use on WH for now
-        end_x = 7 if attention_head_dim == 160 else 4
-        core_grid = ttnn.CoreRangeSet(
-            {
-                ttnn.CoreRange(
-                    ttnn.CoreCoord(0, 0),
-                    ttnn.CoreCoord(end_x, 7),
-                ),
-            }
-        )
         conv_config = ttnn.Conv2dConfig(
             weights_dtype=ttnn.bfloat8_b,
             activation="",
             shard_layout=ttnn.TensorMemoryLayout.BLOCK_SHARDED,
             reshard_if_not_optimal=False,
-            override_sharding_config=True,
-            core_grid=core_grid,
             enable_act_double_buffer=True,
             enable_weights_double_buffer=True,
         )

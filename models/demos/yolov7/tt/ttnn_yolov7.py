@@ -502,7 +502,6 @@ class ttnn_yolov7:
             [1, 20, 20, 1024],
             (1, 1, 1, 1, 0, 0, 1, 1),
             parameters["54"],
-            num_cores_nhw=56,
         )
 
         self.conv44 = Conv(

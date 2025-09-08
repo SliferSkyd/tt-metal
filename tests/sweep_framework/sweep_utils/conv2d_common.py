@@ -70,8 +70,6 @@ def run_conv2d_full_sweep(
     fp32_accum,
     packer_l1_acc,
     groups,
-    override_sharding_config,
-    core_grid,
     deallocate_activation,
     enable_auto_formatting,
     device,
@@ -123,7 +121,6 @@ def run_conv2d_full_sweep(
         weights_dtype=weights_dtype,
         shard_layout=None,
         deallocate_activation=deallocate_activation,
-        override_sharding_config=override_sharding_config,
         output_layout=output_layout,
         enable_act_double_buffer=enable_act_double_buffer,
         enable_split_reader=enable_split_reader,
@@ -134,13 +131,6 @@ def run_conv2d_full_sweep(
         fp32_dest_acc_en=fp32_accum,
         packer_l1_acc=packer_l1_acc,
     )
-    if override_sharding_config:
-        if len(core_grid) == 2:
-            conv_config.core_grid = ttnn.CoreRangeSet({ttnn.CoreRange(core_grid[0], core_grid[1])})
-        elif len(core_grid) == 4:
-            conv_config.core_grid = ttnn.CoreRangeSet(
-                {ttnn.CoreRange(core_grid[0], core_grid[1]), ttnn.CoreRange(core_grid[2], core_grid[3])}
-            )
     start_time = start_measuring_time()
     [tt_output_tensor_on_device, [out_height, out_width], [weights_device, bias_device]] = ttnn.conv2d(
         input_tensor=tt_input_tensor,

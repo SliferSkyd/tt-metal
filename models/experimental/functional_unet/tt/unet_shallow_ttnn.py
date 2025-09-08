@@ -184,14 +184,6 @@ class UNetConv2D:
             enable_weights_double_buffer=True,
         )
 
-        if override_core_grid is not None:
-            self.conv_config.core_grid = get_core_grid_from_num_cores(
-                override_core_grid,
-                grid_rows=8 if is_wormhole_b0(self.device) else 13,
-                grid_cols=8 if is_wormhole_b0(self.device) else 10,
-            )
-            self.conv_config.override_sharding_config = True
-
         self.compute_config = ttnn.init_device_compute_kernel_config(
             device.arch(),
             math_fidelity=ttnn.MathFidelity.LoFi,

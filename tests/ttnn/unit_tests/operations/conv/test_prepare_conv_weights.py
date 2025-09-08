@@ -83,12 +83,6 @@ def prepare_conv_weights_func(
     if config_override and "act_block_w_div" in config_override:
         conv_config.act_block_w_div = config_override["act_block_w_div"]
 
-    if config_override and "num_cores_nhw" in config_override:
-        if config_override["num_cores_nhw"] == 98:
-            conv_config.core_grid = ttnn.CoreRangeSet({ttnn.CoreRange((0, 0), (11, 7)), ttnn.CoreRange((0, 8), (1, 8))})
-            conv_config.override_sharding_config = True
-            print("Setting num_cores_nhw to 98")
-
     conv_kwargs = {
         "input_layout": ttnn.ROW_MAJOR_LAYOUT,
         "in_channels": input_channels,
@@ -184,8 +178,8 @@ def prepare_conv_weights_func(
         (16, 512, 512, 7, 7, 3, 3, 1, 1, 1, 1, None, 1),
         (20, 512, 512, 7, 7, 3, 3, 1, 1, 1, 1, None, 1),
         ## small test
-        (1, 64, 64, 8, 8, 3, 3, 1, 1, 1, 1, {"num_cores_nhw": 2, "grid_size": (2, 2)}, 1),
-        (1, 64, 64, 16, 16, 3, 3, 1, 1, 1, 1, {"num_cores_nhw": 4, "grid_size": (2, 4)}, 1),
+        (1, 64, 64, 8, 8, 3, 3, 1, 1, 1, 1, {}, 1),
+        (1, 64, 64, 16, 16, 3, 3, 1, 1, 1, 1, {}, 1),
         # (1, 160, 160, 7, 7, 3, 3, 1, 1, 1, 1, None, 1), sliding_window_op_infra/sliding_window.cpp:341: indices_length_last_core <= indices_length_per_core
         (8, 256, 256, 7, 7, 3, 3, 1, 1, 1, 1, None, 1),
         # r50 1x1s2 shapes
@@ -357,12 +351,6 @@ def test_prepare_bias(
 
     if config_override and "act_block_w_div" in config_override:
         conv_config.act_block_w_div = config_override["act_block_w_div"]
-
-    if config_override and "num_cores_nhw" in config_override:
-        if config_override["num_cores_nhw"] == 98:
-            conv_config.core_grid = ttnn.CoreRangeSet({ttnn.CoreRange((0, 0), (11, 7)), ttnn.CoreRange((0, 8), (1, 8))})
-            conv_config.override_sharding_config = True
-            print("Setting num_cores_nhw to 98")
 
     conv_kwargs = {
         "input_layout": ttnn.ROW_MAJOR_LAYOUT,

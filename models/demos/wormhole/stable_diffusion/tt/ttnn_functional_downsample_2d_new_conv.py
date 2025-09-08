@@ -72,30 +72,6 @@ class downsample_2d:
             ttnn.TensorMemoryLayout.HEIGHT_SHARDED if self.in_channels < 320 else ttnn.TensorMemoryLayout.BLOCK_SHARDED
         )
 
-        self.input_memory_config = ttnn._ttnn.operations.conv.create_sharded_memory_config_from_parallel_config(
-            tensor_shape=ttnn.Shape(
-                [
-                    1,
-                    1,
-                    self.batch_size * self.input_height * self.input_width,
-                    self.out_channels,
-                ]
-            ),
-            parallel_config=ttnn._ttnn.operations.conv.determine_parallel_config(
-                shard_layout=self.shard_layout,
-                batch_size=self.batch_size,
-                input_channels=self.in_channels,
-                output_height=self.output_height,
-                output_width=self.output_width,
-                output_channels=self.out_channels,
-                input_channels_alignment=32,
-                compute_grid_size=self.device.compute_with_storage_grid_size(),
-                block_shard_orientation=ttnn.ShardOrientation.ROW_MAJOR,
-                enable_channels_padding=False,
-            ),
-            tile_size=32,
-        )
-
     def __call__(
         self,
         in_channels,
@@ -121,13 +97,10 @@ class downsample_2d:
             weights_dtype=ttnn.bfloat8_b,
             activation="",
             shard_layout=self.shard_layout,
-            reshard_if_not_optimal=False,
+            reshard_if_not_optimal=True,
             enable_act_double_buffer=True,
             enable_weights_double_buffer=True,
         )
-
-        if hidden_states.memory_config() != self.input_memory_config:
-            hidden_states = ttnn.to_memory_config(hidden_states, self.input_memory_config)
 
         compute_config = get_default_compute_config(self.device)
         if self.conv_config_override and "act_block_h" in self.conv_config_override:

@@ -305,9 +305,7 @@ void py_bind_conv2d(py::module& module) {
             uint32_t,
             uint32_t,
             bool,
-            bool,
             std::optional<TensorMemoryLayout>,
-            std::optional<CoreRangeSet>,
             bool,
             Layout,
             bool,
@@ -324,9 +322,7 @@ void py_bind_conv2d(py::module& module) {
         py::arg("act_block_h_override") = 0,
         py::arg("act_block_w_div") = 1,
         py::arg("reshard_if_not_optimal") = false,
-        py::arg("override_sharding_config") = false,
         py::arg("shard_layout") = std::nullopt,
-        py::arg("core_grid") = std::nullopt,
         py::arg("transpose_shards") = false,
         py::arg("output_layout") = Layout::TILE,
         py::arg("enable_act_double_buffer") = false,
@@ -382,18 +378,11 @@ void py_bind_conv2d(py::module& module) {
         If this flag is false, the conv op will try to execute the op with the current shard config.
         It is recommended to set this flag to true if the input dimensions of the previous conv op and the current op are significantly different, either due to differences in the input vs output channels, or large stride / kernel size / dilation.
         )doc");
-    py_conv_config.def_readwrite("override_sharding_config", &Conv2dConfig::override_sharding_config, R"doc(
-        Boolean flag that allows the core grid for the conv op to be specified.
-        If true, then core_grid must also be specified.
-        )doc");
     py_conv_config.def_readwrite("shard_layout", &Conv2dConfig::shard_layout, R"doc(
         Optional argument that determines the TensorMemoryLayout to be used for the input and output tensor.
         If this is not specified, the op will try to determine the optimal layout based on it's own heuristics.
         Can be either :class:`ttnn.TensorMemoryLayout.HEIGHT_SHARDED`, :class:`ttnn.TensorMemoryLayout.BLOCK_SHARDED` or :class:`ttnn.TensorMemoryLayout.WIDTH_SHARDED`.
         )doc");
-    py_conv_config.def_readwrite("core_grid", &Conv2dConfig::core_grid, R"doc(
-        Core Grid to be used for sharding the input tensor.
-        This flag is only used when override_sharding_config is set to true. )doc");
 
     py_conv_config.def_readwrite("transpose_shards", &Conv2dConfig::transpose_shards, R"doc(
         Determines if the Shard Orientation should be Row Major or Column Major.

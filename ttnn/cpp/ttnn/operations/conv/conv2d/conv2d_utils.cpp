@@ -540,11 +540,6 @@ static std::tuple<ttnn::Shape, ttnn::MemoryConfig, bool> get_conv_padded_input_s
     const ttnn::Tensor& input_tensor = input_tensor_;  // tensor to return
     bool input_tensor_on_device = tt::tt_metal::is_device_tensor(input_tensor_);
     bool needs_shard_or_reshard = false;
-    if (conv_config.override_sharding_config && conv_config.reshard_if_not_optimal) {
-        TT_ASSERT(
-            false,
-            "Incorrect config provided: reshard_if_not_optimal and override_sharding_config cannot both be set.");
-    }
 
     TT_FATAL(
         (!input_tensor_on_device || input_tensor_.is_sharded()) || conv_config.shard_layout.has_value(),
@@ -594,26 +589,6 @@ static std::tuple<ttnn::Shape, ttnn::MemoryConfig, bool> get_conv_padded_input_s
                     shard_layout = TensorMemoryLayout::BLOCK_SHARDED;
                 }
             }
-
-            if (conv_config.override_sharding_config) {
-                TT_FATAL(
-                    conv_config.core_grid.has_value(),
-                    "If override_sharding_config is set, core_grid must be set as well.");
-                TT_FATAL(
-                    conv_config.shard_layout.has_value(),
-                    "If override_sharding_config is set, shard_layout must be set as well.");
-                if (conv_config.core_grid.value() != input_shard_grid) {
-                    needs_shard_or_reshard = true;
-                }
-                if (shard_layout != input_shard_scheme) {
-                    needs_shard_or_reshard = true;
-                }
-                bool input_transpose_shards = input_shard_orientation == ShardOrientation::COL_MAJOR;
-                if (shard_layout == TensorMemoryLayout::BLOCK_SHARDED &&
-                    conv_config.transpose_shards != input_transpose_shards) {
-                    needs_shard_or_reshard = true;
-                }
-            }
         }
     }
 
@@ -636,18 +611,7 @@ static std::tuple<ttnn::Shape, ttnn::MemoryConfig, bool> get_conv_padded_input_s
             true,
             conv_config.act_block_h_override);
 
-        if (conv_config.override_sharding_config) {
-            TT_FATAL(conv_config.core_grid.has_value(), "Core grid must be provided when overriding sharding config");
-            // override parallel config
-            auto shard_orientation = shard_layout == TensorMemoryLayout::BLOCK_SHARDED ? block_shard_orientation
-                                                                                       : ShardOrientation::ROW_MAJOR;
-            parallel_config = {
-                .grid = conv_config.core_grid.value(),
-                .shard_scheme = shard_layout,
-                .shard_orientation = shard_orientation};
-        } else {
-            parallel_config = optimal_parallel_config;
-        }
+        parallel_config = optimal_parallel_config;
         if (input_tensor_parallel_config != parallel_config) {
             needs_shard_or_reshard = true;
         }

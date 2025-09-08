@@ -43,18 +43,11 @@ struct Conv2dConfig {
     uint32_t act_block_w_div = 1;
 
     // Only considered when input is already sharded in L1.
-    //  if reshard_if_not_optimal is true, override_sharding_config should not be set to true
     bool reshard_if_not_optimal = false;
-
-    // if override_sharding_config is true, reshard_if_not_optimal should not be set to true
-    bool override_sharding_config = false;
 
     std::optional<tt::tt_metal::TensorMemoryLayout> shard_layout;
 
-    // used only if override_sharding_config is true
-    std::optional<CoreRangeSet> core_grid = std::nullopt;
-
-    // used only if override_sharding_config is true and shard_layout is set to BLOCK_SHARDED
+    // Applies only to block sharded layout.
     bool transpose_shards = false;
 
     // Useful when output is BFLOAT16.
@@ -112,9 +105,7 @@ struct Conv2dConfig {
         "act_block_h_override",
         "act_block_w_div",
         "reshard_if_not_optimal",
-        "override_sharding_config",
         "shard_layout",
-        "core_grid",
         "transpose_shards",
         "output_layout",
         "enable_act_double_buffer",
@@ -132,9 +123,7 @@ struct Conv2dConfig {
             std::cref(this->act_block_h_override),
             std::cref(this->act_block_w_div),
             std::cref(this->reshard_if_not_optimal),
-            std::cref(this->override_sharding_config),
             std::cref(this->shard_layout),
-            std::cref(this->core_grid),
             std::cref(this->transpose_shards),
             std::cref(this->output_layout),
             std::cref(this->enable_act_double_buffer),

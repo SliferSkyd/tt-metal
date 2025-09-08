@@ -5,7 +5,6 @@
 import ttnn
 from ttnn.model_preprocessing import ParameterDict
 from torch import nn
-from tests.ttnn.ttnn_utility_fuction import get_shard_grid_from_num_cores
 
 
 class OpenPDNMnistConv2D:
@@ -21,7 +20,6 @@ class OpenPDNMnistConv2D:
         weights_dtype=ttnn.bfloat8_b,
         use_1d_systolic_array=True,
         shard_layout=ttnn.TensorMemoryLayout.HEIGHT_SHARDED,
-        num_cores_nhw=None,
     ):
         self.device = device
         self.batch_size = conv.batch_size
@@ -49,11 +47,6 @@ class OpenPDNMnistConv2D:
             deallocate_activation=self.deallocate_activation,
             output_layout=ttnn.TILE_LAYOUT,
         )
-        if num_cores_nhw is not None:
-            shard_grid = get_shard_grid_from_num_cores(num_cores_nhw, device)
-
-            self.conv_config.core_grid = shard_grid
-            self.conv_config.override_sharding_config = True
 
         config_override = conv.conv_blocking_and_parallelization_config_override
         if config_override and "act_block_h" in config_override:
@@ -97,9 +90,9 @@ class TtOpenPDNMnist:
         self.device = device
         self.parameters = parameters.conv_args
         self.parameter_pth = parameters
-        self.conv1 = OpenPDNMnistConv2D(parameters.conv_args.conv1, parameters.conv1, device=device, num_cores_nhw=56)
-        self.conv2 = OpenPDNMnistConv2D(parameters.conv_args.conv2, parameters.conv2, device=device, num_cores_nhw=48)
-        self.conv3 = OpenPDNMnistConv2D(parameters.conv_args.conv3, parameters.conv3, device=device, num_cores_nhw=16)
+        self.conv1 = OpenPDNMnistConv2D(parameters.conv_args.conv1, parameters.conv1, device=device)
+        self.conv2 = OpenPDNMnistConv2D(parameters.conv_args.conv2, parameters.conv2, device=device)
+        self.conv3 = OpenPDNMnistConv2D(parameters.conv_args.conv3, parameters.conv3, device=device)
         self.conv4 = OpenPDNMnistConv2D(parameters.conv_args.conv4, parameters.conv4, device=device)
         self.fc1_weights = parameters.conv_args.fc1.module.weight
         self.fc2_weights = parameters.conv_args.fc2.module.weight

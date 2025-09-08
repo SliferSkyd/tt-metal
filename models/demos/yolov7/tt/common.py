@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import ttnn
-from tests.ttnn.ttnn_utility_fuction import get_shard_grid_from_num_cores
 
 
 class TtYOLOv7Conv2D:
@@ -20,7 +19,6 @@ class TtYOLOv7Conv2D:
         activation="silu",
         groups=1,
         dtype=ttnn.bfloat8_b,
-        num_cores_nhw=None,
         is_reshape=False,
         enable_split_reader=False,
         enable_act_double_buffer=False,
@@ -50,7 +48,6 @@ class TtYOLOv7Conv2D:
         self.shard_layout = (
             ttnn.TensorMemoryLayout.HEIGHT_SHARDED if height_sharding else ttnn.TensorMemoryLayout.BLOCK_SHARDED
         )
-        self.num_cores_nhw = num_cores_nhw
         self.is_reshape = is_reshape
         self.enable_split_reader = enable_split_reader
         self.enable_act_double_buffer = enable_act_double_buffer
@@ -75,10 +72,6 @@ class TtYOLOv7Conv2D:
             packer_l1_acc=self.packer_l1_acc,
             math_approx_mode=self.math_approx_mode,
         )
-        if self.num_cores_nhw is not None:
-            shard_grid = get_shard_grid_from_num_cores(self.num_cores_nhw, device)
-            conv_config.core_grid = shard_grid
-            conv_config.override_sharding_config = True
 
         if self.act_block_h is not None:
             conv_config.act_block_h_override = self.act_block_h

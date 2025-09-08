@@ -1102,8 +1102,8 @@ def test_conv_for_segformer_512x512(
         (16, 512, 512, 7, 7, 3, 3, 1, 1, 1, 1, BS, None),
         (20, 512, 512, 7, 7, 3, 3, 1, 1, 1, 1, BS, None),
         ## small test
-        (1, 64, 64, 8, 8, 3, 3, 1, 1, 1, 1, BS, {"num_cores_nhw": 2, "grid_size": (2, 2)}),
-        (1, 64, 64, 16, 16, 3, 3, 1, 1, 1, 1, BS, {"num_cores_nhw": 4, "grid_size": (2, 4)}),
+        (1, 64, 64, 8, 8, 3, 3, 1, 1, 1, 1, BS, None),
+        (1, 64, 64, 16, 16, 3, 3, 1, 1, 1, 1, BS, None),
         # (1, 160, 160, 7, 7, 3, 3, 1, 1, 1, 1, BS, None), sliding_window_op_infra/sliding_window.cpp:341: indices_length_last_core <= indices_length_per_core
         (8, 256, 256, 7, 7, 3, 3, 1, 1, 1, 1, BS, None),
         # r50 1x1s2 shapes
@@ -2103,127 +2103,6 @@ def test_unet_conv_groups_8_wh(
         auto_shard=auto_shard,
         groups=groups,
         input_layout=ttnn.TILE_LAYOUT if output_dtype == ttnn.bfloat8_b else None,
-    )
-
-
-@pytest.mark.parametrize("device_params", [{"l1_small_size": 16384}], indirect=True)
-@pytest.mark.parametrize(
-    "batch_size, output_channels, input_channels, input_height, input_width, filter_height, filter_width, stride_h, stride_w, pad_h, pad_w, config_override",
-    (
-        (1, 128, 128, 32, 32, 3, 3, 1, 1, 1, 1, {"act_reshard_num_cores_nhw": 1}),
-        (1, 128, 128, 32, 32, 3, 3, 2, 2, 1, 1, {"act_reshard_num_cores_nhw": 1}),
-        (1, 128, 128, 32, 32, 3, 3, 1, 1, 1, 1, {"act_reshard_num_cores_nhw": 4}),
-        (1, 128, 128, 32, 32, 3, 3, 1, 1, 1, 1, {"act_reshard_num_cores_nhw": 8}),
-        (1, 128, 128, 32, 32, 3, 3, 1, 1, 1, 1, {"act_reshard_num_cores_nhw": 8, "num_cores_nhw": 4}),
-        (2, 64, 64, 16, 16, 3, 3, 1, 1, 1, 1, {"act_reshard_num_cores_nhw": 8, "num_cores_nhw": 4}),
-        (2, 64, 64, 16, 16, 3, 3, 1, 1, 1, 1, {"act_reshard_num_cores_nhw": 4, "num_cores_nhw": 8}),
-    ),
-)
-@pytest.mark.parametrize("shard_layout", [BS, HS])
-@pytest.mark.parametrize("auto_shard", [True, False], ids=["auto_shard", "no_auto_shard"])
-def test_halo_reshard_conv(
-    device,
-    torch_tensor_map,
-    shard_layout,
-    batch_size,
-    output_channels,
-    input_channels,
-    input_height,
-    input_width,
-    filter_height,
-    filter_width,
-    stride_h,
-    stride_w,
-    pad_h,
-    pad_w,
-    config_override,
-    auto_shard,
-):
-    math_fidelity = ttnn.MathFidelity.HiFi4
-    output_dtype = ttnn.bfloat16
-    weights_dtype = ttnn.bfloat8_b
-
-    run_conv(
-        device,
-        torch_tensor_map,
-        math_fidelity,
-        output_dtype,
-        weights_dtype,
-        batch_size,
-        output_channels,
-        input_channels,
-        input_height,
-        input_width,
-        filter_height,
-        filter_width,
-        stride_h,
-        stride_w,
-        (pad_h, pad_w),
-        config_override,
-        shard_layout=shard_layout,
-        auto_shard=auto_shard,
-    )
-
-
-@pytest.mark.skip("New API needs to be tested")
-@pytest.mark.parametrize("device_params", [{"l1_small_size": 16384}], indirect=True)
-@pytest.mark.parametrize(
-    "batch_size, output_channels, input_channels, input_height, input_width, filter_height, filter_width, stride_h, stride_w, pad_h, pad_w, config_override, xfail",
-    (
-        (1, 128, 128, 17, 17, 3, 3, 1, 1, 1, 1, {"num_cores_nhw": 4}, False),
-        (1, 128, 128, 17, 17, 3, 3, 2, 2, 1, 1, {"num_cores_nhw": 2}, False),
-        (2, 64, 64, 16, 16, 3, 3, 1, 1, 1, 1, {"num_cores_nhw": 3}, False),
-        (2, 64, 64, 23, 23, 3, 3, 2, 2, 1, 1, {"num_cores_nhw": 3}, False),
-        (1, 64, 64, 23, 23, 3, 3, 1, 1, 1, 1, {"num_cores_nhw": 10}, True),
-    ),
-)
-@pytest.mark.parametrize("shard_layout", [BS, HS])
-@pytest.mark.parametrize("auto_shard", [True, False], ids=["auto_shard", "no_auto_shard"])
-def test_conv_core_nondivis(
-    device,
-    torch_tensor_map,
-    shard_layout,
-    batch_size,
-    output_channels,
-    input_channels,
-    input_height,
-    input_width,
-    filter_height,
-    filter_width,
-    stride_h,
-    stride_w,
-    pad_h,
-    pad_w,
-    config_override,
-    xfail,
-    auto_shard,
-):
-    if xfail:
-        pytest.xfail()
-
-    math_fidelity = ttnn.MathFidelity.HiFi4
-    output_dtype = ttnn.bfloat16
-    weights_dtype = ttnn.bfloat8_b
-
-    run_conv(
-        device,
-        torch_tensor_map,
-        math_fidelity,
-        output_dtype,
-        weights_dtype,
-        batch_size,
-        output_channels,
-        input_channels,
-        input_height,
-        input_width,
-        filter_height,
-        filter_width,
-        stride_h,
-        stride_w,
-        (pad_h, pad_w),
-        config_override,
-        shard_layout=shard_layout,
-        auto_shard=auto_shard,
     )
 
 

@@ -63,8 +63,6 @@ def run_full(
     fp32_accum,
     packer_l1_acc,
     groups,
-    override_sharding_config,
-    core_grid,
     deallocate_activation,
     enable_auto_formatting,
     device,
@@ -122,19 +120,11 @@ def run_full(
         deallocate_activation=deallocate_activation,
         fp32_dest_acc_enabled=fp32_accum,
         packer_l1_accum_enabled=packer_l1_acc,
-        override_sharding_config=override_sharding_config,
         output_layout=output_layout,
         enable_act_double_buffer=enable_act_double_buffer,
         enable_split_reader=enable_split_reader,
     )
 
-    if override_sharding_config:
-        if len(core_grid) == 2:
-            conv_config.core_grid = ttnn.CoreRangeSet({ttnn.CoreRange(core_grid[0], core_grid[1])})
-        elif len(core_grid) == 4:
-            conv_config.core_grid = ttnn.CoreRangeSet(
-                {ttnn.CoreRange(core_grid[0], core_grid[1]), ttnn.CoreRange(core_grid[2], core_grid[3])}
-            )
     start_time = start_measuring_time()
     [tt_output_tensor_on_device, [out_height, out_width]] = ttnn.conv_transpose2d(
         input_tensor=tt_input_tensor,
