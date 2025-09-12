@@ -180,6 +180,7 @@ operation::ProgramWithCallbacks HaloDeviceOperation::create_program(
             padding_exists,
             config_.num_cores_nhw,
             config_.num_cores_c,
+            num_cores_x,
             max_out_nsticks_per_core_,
             max_ref_size,
             in_out_shard_size_delta,
