@@ -937,9 +937,11 @@ std::tuple<std::vector<std::vector<std::vector<uint16_t>>>, int> generate_inplac
         }
         max_len += 6;  // account for the key tuple and null plug
 
+        printf("LOCAL CONFIG\n");
         std::vector<std::vector<std::vector<uint16_t>>> flattened_config(2);
         for (const auto& [key, data] : config) {
             auto [nocx, nocy, len] = key;
+            printf("core (%d, %d) len %d\n", nocx, nocy, len);
             std::vector<std::vector<uint16_t>> flat_data(2, std::vector<uint16_t>(max_len, 0));
             flat_data[0][0] = nocx;
             flat_data[0][1] = nocy;
@@ -955,6 +957,7 @@ std::tuple<std::vector<std::vector<std::vector<uint16_t>>>, int> generate_inplac
                         flat_data[0][idx1++] = dst_start;
                         flat_data[0][idx1++] = length;
                         flat_data[0][2] += 3;
+
                     } else {
                         flat_data[1][idx2++] = src_start;
                         flat_data[1][idx2++] = dst_start;
@@ -976,6 +979,7 @@ std::tuple<std::vector<std::vector<std::vector<uint16_t>>>, int> generate_inplac
                     flat_data[0][idx1++] = dst_start;
                     flat_data[0][idx1++] = length;
                     flat_data[0][2] += 3;
+                    printf("    %d -> %d (%d)\n", src_start, dst_start, length);
                 }
                 for (int32_t i = data.size() - 1; i >= rev_i_end;
                      --i) {  // reverse direction local config in region where input / output shards overlap (for in
@@ -985,6 +989,7 @@ std::tuple<std::vector<std::vector<std::vector<uint16_t>>>, int> generate_inplac
                     flat_data[0][idx1++] = dst_start;
                     flat_data[0][idx1++] = length;
                     flat_data[0][2] += 3;
+                    printf("    %d -> %d (%d)\n", src_start, dst_start, length);
                 }
             }
 
