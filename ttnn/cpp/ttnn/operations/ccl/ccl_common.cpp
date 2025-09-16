@@ -160,6 +160,96 @@ std::vector<IDevice*> get_active_physical_devices(const std::vector<Tensor>& ten
     return devices;
 }
 
+/**
+ * Extract info from the inputs to aid with device discovery later during program creation.
+ *
+ * @param tensors Input tensor(s) to the CCL op
+ */
+MeshInfo::MeshInfo(const std::vector<ttnn::Tensor>& tensors) {
+    // Get the mesh that we need to operate on.
+    //
+    // CCL operations always operate on a single tensor (stored on multiple devices).
+    // The tensor can either be mapped to an entire mesh or to a sub-mesh within a larger mesh.
+    if (tensors.size() == 1) {
+        // If user provides a single tensor, we only operate within the scope that the tensor
+        // is mapped to, irrespective of if it's a sub-mesh or the full mesh.
+        this->mesh_device = std::make_shared<tt::tt_metal::distributed::MeshDevice>(tensors.at(0).device());
+    } else {
+        // User can choose to create separate tensor objects mapped to separate sub-meshes, but
+        // they collectively behave as a single tensor.
+        // They might do this to separate out the memory Allocators, for instance.
+        //
+        // In this case, we need to zoom out to the parent mesh to get the global view of
+        // all devices that we need to operate on.
+        bool same_parent = std::all_of(tensors.begin(), tensors.end(), [&](const ttnn::Tensor& tensor) {
+            return tensor.device()->get_parent_mesh() == tensors.at(0).device()->get_parent_mesh();
+        });
+        bool same_address = std::all_of(tensors.begin(), tensors.end(), [&](const ttnn::Tensor& tensor) {
+            return tensor.buffer()->address() == tensors.at(0).buffer()->address();
+        });
+        TT_FATAL(same_parent, "Every tensor's sub-mesh must be derived from the same parent mesh");
+        TT_FATAL(same_address, "Every tensor must reside at the same buffer address on every device");
+        this->mesh_device = tensors.at(0).device()->get_parent_mesh();
+    }
+
+    // Get the devices within the mesh to operate on, which are essentially devices occupied by
+    // the input tensor.
+    for (const auto& tensor : tensors) {
+        this->device_coords.insert(
+            this->device_coords.end(), tensor.device_storage().coords.begin(), tensor.device_storage().coords.end());
+    }
+}
+
+/**
+ * Get devices that the CCL op program should operate on. Has the following features:
+ * - Returns the correct order of devices based on they're physically connected.
+ * - Returns device coordinates rather than IDevice objects, since they play nice with
+ *   multi-host APIs.
+ *
+ * @param mesh_info Struct containing info extracted from CCL op inputs to aid with device discovery.
+ * @param topology Linear or Ring
+ * @param mesh_row Return devices along this row. If not provided, all devices in the mesh are returned.
+ * @param mesh_col Return devices along this column. If not provided, all devices in the mesh are returned.
+ * @return Device coordinates.
+ */
+std::vector<tt::tt_metal::distributed::MeshCoordinate> get_all_device_coords(
+    const MeshInfo& mesh_info,
+    const ttnn::ccl::Topology topology,
+    std::optional<uint32_t> mesh_row = std::nullopt,
+    std::optional<uint32_t> mesh_col = std::nullopt) {
+    // Linearize the devices based on the requested topology.
+    auto mesh_view = mesh_info.mesh_device->get_view();
+    std::vector<MeshCoordinate> coords;
+    if (mesh_row.has_value()) {
+        // devices along a specific row
+        coords = mesh_view.get_row_coordinates(mesh_row.value());
+    } else if (mesh_col.has_value()) {
+        // devices along a specific column
+        coords = mesh_view.get_column_coordinates(mesh_col.value());
+    } else {
+        // all devices in mesh
+        if (topology == ttnn::ccl::Topology::Linear) {
+            coords = mesh_view.get_line_coordinates();
+        } else {
+            coords = mesh_view.get_ring_coordinates();
+        }
+    }
+
+    // Keep only the devices that the tensor is actually stored on (while maintaining the order of
+    // devices), and remove the rest.
+    auto& device_coords = mesh_info.device_coords;
+    coords.erase(
+        std::remove_if(
+            coords.begin(),
+            coords.end(),
+            [&](const MeshCoordinate& coord) {
+                return std::find(device_coords.begin(), device_coords.end(), coord) == device_coords.end();
+            }),
+        coords.end());
+
+    return coords;
+}
+
 std::tuple<CoreRangeSet, std::vector<CoreCoord>> choose_worker_cores(
     size_t num_links,
     size_t num_workers_per_link,

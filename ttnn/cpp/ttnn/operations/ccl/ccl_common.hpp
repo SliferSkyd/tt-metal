@@ -65,6 +65,19 @@ std::vector<IDevice*> get_active_physical_devices(const Tensor& tensor);
 // to run a CCL over the unit-meshes.
 std::vector<IDevice*> get_active_physical_devices(const std::vector<Tensor>& tensor_shards);
 
+struct MeshInfo {
+    std::shared_ptr<tt::tt_metal::distributed::MeshDevice> mesh_device;
+    std::vector<tt::tt_metal::distributed::MeshCoordinate> device_coords;
+
+    MeshInfo(const std::vector<ttnn::Tensor>& tensors);
+};
+
+std::vector<tt::tt_metal::distributed::MeshCoordinate> get_all_device_coords(
+    const MeshInfo& mesh_info,
+    const ttnn::ccl::Topology topology,
+    std::optional<uint32_t> mesh_row = std::nullopt,
+    std::optional<uint32_t> mesh_col = std::nullopt);
+
 std::tuple<CoreRangeSet, std::vector<CoreCoord>> choose_worker_cores(
     size_t num_links,
     size_t num_workers_per_link,

@@ -75,44 +75,44 @@ tt::tt_metal::operation::ProgramWithCallbacks AllBroadcastAsync::create_program_
     const GlobalSemaphore& init_barrier_semaphore,
     const GlobalSemaphore& final_barrier_semaphore) const {
     log_debug(tt::LogOp, "DEBUG: create_program_at is called");
-    auto mesh_device = input_tensors[0].device();
-    IDevice* target_device = mesh_device ? mesh_device->get_device(coord) : input_tensors[0].device();
-    std::vector<IDevice*> devices_to_use = {};
-    if (this->cluster_axis.has_value()) {
-        // User specified the cluster-axis. Derive devices based on the current coordinate
-        // and the cluster-axis.
-        const auto& mesh_view = input_tensors[0].device()->get_view();
-        devices_to_use = (this->cluster_axis.value() == 0) ? mesh_view.get_devices_on_column(coord[1])
-                                                           : mesh_view.get_devices_on_row(coord[0]);
-    } else {
-        devices_to_use = devices;
-    }
-    uint32_t target_ring_size = devices_to_use.size();
 
-    std::optional<IDevice*> forward_device = std::nullopt;
-    std::optional<IDevice*> backward_device = std::nullopt;
+    std::vector<MeshCoordinate> device_coords = ttnn::ccl::get_all_device_coords(
+        this->mesh_info,
+        this->topology,
+        this->cluster_axis.has_value() && this->cluster_axis.value() == 1 ? std::optional<uint32_t>(coord[0])
+                                                                          : std::nullopt,
+        this->cluster_axis.has_value() && this->cluster_axis.value() == 0 ? std::optional<uint32_t>(coord[1])
+                                                                          : std::nullopt);
+
+    std::optional<MeshCoordinate> forward_device = std::nullopt;
+    std::optional<MeshCoordinate> backward_device = std::nullopt;
     uint32_t device_index = 0;  // Initialize device index
+    uint32_t target_ring_size = device_coords.size();
     for (uint32_t i = 0; i < target_ring_size; ++i) {
-        if (devices_to_use.at(i) == target_device) {
+        if (device_coords.at(i) == coord) {
             device_index = i;
             if (i != 0) {
-                backward_device = devices_to_use.at(i - 1);
+                backward_device = device_coords.at(i - 1);
             } else if (topology == ttnn::ccl::Topology::Ring) {
-                backward_device = devices_to_use.at(target_ring_size - 1);
+                backward_device = device_coords.at(target_ring_size - 1);
             }
             if (i != target_ring_size - 1) {
-                forward_device = devices_to_use.at(i + 1);
+                forward_device = device_coords.at(i + 1);
             } else if (topology == ttnn::ccl::Topology::Ring) {
-                forward_device = devices_to_use.at(0);
+                forward_device = device_coords.at(0);
             }
         }
     }
 
     return all_broadcast_async_multicore(
         input_tensors[0],
-        target_device,
-        forward_device,
-        backward_device,
+        this->mesh_info.mesh_device->get_device(coord),
+        forward_device.has_value()
+            ? std::optional<IDevice*>(this->mesh_info.mesh_device->get_device(forward_device.value()))
+            : std::nullopt,
+        backward_device.has_value()
+            ? std::optional<IDevice*>(this->mesh_info.mesh_device->get_device(backward_device.value()))
+            : std::nullopt,
         output_tensors,
         this->num_links,
         target_ring_size,
@@ -150,26 +150,23 @@ namespace operations::experimental::ccl {
 
 std::vector<Tensor> all_broadcast_async_impl(
     const Tensor& input_tensor,
+    const ttnn::ccl::MeshInfo& mesh_info,
     const uint32_t num_links,
     const std::optional<MemoryConfig>& memory_config,
     const ttnn::ccl::Topology topology,
     std::optional<uint32_t> cluster_axis,
-    std::optional<tt::tt_metal::SubDeviceId> sub_device_id,
-    const std::vector<IDevice*>& devices) {
+    std::optional<tt::tt_metal::SubDeviceId> sub_device_id) {
     TT_FATAL(
         std::getenv("TT_METAL_SLOW_DISPATCH_MODE") == nullptr,
         "all_broadcast_async op is only supported for Fast Dispatch");
 
-    uint32_t num_devices;
-    if (cluster_axis.has_value()) {
-        auto mesh_device = input_tensor.device();
-        TT_FATAL(mesh_device != nullptr, "Mesh device is required when cluster_axis is set");
-        const auto& mesh_view = mesh_device->get_view();
-        // Use the mesh dimensions to determine the ring size
-        num_devices = (cluster_axis.value() == 0) ? mesh_view.num_rows() : mesh_view.num_cols();
-    } else {
-        num_devices = devices.size();
-    }
+    std::vector<MeshCoordinate> device_coords = ttnn::ccl::get_all_device_coords(
+        mesh_info,
+        topology,
+        cluster_axis.has_value() && cluster_axis.value() == 1 ? std::optional<uint32_t>(0) : std::nullopt,
+        cluster_axis.has_value() && cluster_axis.value() == 0 ? std::optional<uint32_t>(0) : std::nullopt);
+
+    uint32_t num_devices = device_coords.size();
 
     TT_FATAL(num_devices > 1, "all_broadcast_async op will only work for num_devices > 1, but has {}", num_devices);
 
@@ -182,7 +179,7 @@ std::vector<Tensor> all_broadcast_async_impl(
 
     return tt::tt_metal::operation::run(
         ttnn::AllBroadcastAsync(
-            devices,
+            mesh_info,
             num_links,
             num_devices,
             memory_config.value_or(input_tensor.memory_config()),
@@ -201,12 +198,12 @@ std::vector<Tensor> all_broadcast_async(
     std::optional<tt::tt_metal::SubDeviceId> sub_device_id) {
     return all_broadcast_async_impl(
         input_tensor,
+        ttnn::ccl::MeshInfo({input_tensor}),
         num_links,
         memory_config,
         topology,
         cluster_axis,
-        sub_device_id,
-        ttnn::ccl::get_active_physical_devices(input_tensor));
+        sub_device_id);
 }
 
 }  // namespace operations::experimental::ccl
