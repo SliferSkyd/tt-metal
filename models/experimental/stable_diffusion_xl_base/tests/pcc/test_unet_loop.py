@@ -25,7 +25,7 @@ import matplotlib.pyplot as plt
 from models.common.utility_functions import is_wormhole_b0
 
 # TODO: Restore pcc after issue #28487 is resolved
-UNET_LOOP_PCC = {"10": 0.862, "50": 0.894}
+UNET_LOOP_PCC = {"10": 0.889, "50": 0.906}
 
 
 def run_tt_denoising(
