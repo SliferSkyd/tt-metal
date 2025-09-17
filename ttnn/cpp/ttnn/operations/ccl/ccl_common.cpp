@@ -161,7 +161,7 @@ std::vector<IDevice*> get_active_physical_devices(const std::vector<Tensor>& ten
 }
 
 /**
- * Extract info from the inputs to aid with device discovery later during program creation.
+ * Extract info from CCL op inputs to later aid with device discovery during program creation.
  *
  * @param tensors Input tensor(s) to the CCL op
  */
@@ -173,7 +173,7 @@ MeshInfo::MeshInfo(const std::vector<ttnn::Tensor>& tensors) {
     if (tensors.size() == 1) {
         // If user provides a single tensor, we only operate within the scope that the tensor
         // is mapped to, irrespective of if it's a sub-mesh or the full mesh.
-        this->mesh_device = std::make_shared<tt::tt_metal::distributed::MeshDevice>(tensors.at(0).device());
+        this->mesh_device = tensors.at(0).device();
     } else {
         // User can choose to create separate tensor objects mapped to separate sub-meshes, but
         // they collectively behave as a single tensor.
@@ -189,7 +189,7 @@ MeshInfo::MeshInfo(const std::vector<ttnn::Tensor>& tensors) {
         });
         TT_FATAL(same_parent, "Every tensor's sub-mesh must be derived from the same parent mesh");
         TT_FATAL(same_address, "Every tensor must reside at the same buffer address on every device");
-        this->mesh_device = tensors.at(0).device()->get_parent_mesh();
+        this->mesh_device = tensors.at(0).device()->get_parent_mesh().get();
     }
 
     // Get the devices within the mesh to operate on, which are essentially devices occupied by
@@ -208,24 +208,26 @@ MeshInfo::MeshInfo(const std::vector<ttnn::Tensor>& tensors) {
  *
  * @param mesh_info Struct containing info extracted from CCL op inputs to aid with device discovery.
  * @param topology Linear or Ring
- * @param mesh_row Return devices along this row. If not provided, all devices in the mesh are returned.
- * @param mesh_col Return devices along this column. If not provided, all devices in the mesh are returned.
+ * @param mesh_axis 0 for devices along column, 1 for devices along row. If not provided, all devices in the mesh are returned.
+ * @param mesh_axis_coord Which actual column or row to return devices for, indicated by providing the target coord.
  * @return Device coordinates.
  */
 std::vector<tt::tt_metal::distributed::MeshCoordinate> get_all_device_coords(
     const MeshInfo& mesh_info,
     const ttnn::ccl::Topology topology,
-    std::optional<uint32_t> mesh_row = std::nullopt,
-    std::optional<uint32_t> mesh_col = std::nullopt) {
+    std::optional<uint32_t> mesh_axis,
+    std::optional<tt::tt_metal::distributed::MeshCoordinate> mesh_axis_coord) {
     // Linearize the devices based on the requested topology.
     auto mesh_view = mesh_info.mesh_device->get_view();
     std::vector<MeshCoordinate> coords;
-    if (mesh_row.has_value()) {
-        // devices along a specific row
-        coords = mesh_view.get_row_coordinates(mesh_row.value());
-    } else if (mesh_col.has_value()) {
-        // devices along a specific column
-        coords = mesh_view.get_column_coordinates(mesh_col.value());
+    if (mesh_axis.has_value() && mesh_axis_coord.has_value()) {
+        if (mesh_axis.value() == 1) {
+            // devices along a specific row
+            coords = mesh_view.get_row_coordinates(mesh_axis_coord.value()[0]);
+        } else {
+            // devices along a specific column
+            coords = mesh_view.get_column_coordinates(mesh_axis_coord.value()[1]);
+        }
     } else {
         // all devices in mesh
         if (topology == ttnn::ccl::Topology::Linear) {

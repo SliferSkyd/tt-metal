@@ -79,10 +79,8 @@ tt::tt_metal::operation::ProgramWithCallbacks AllBroadcastAsync::create_program_
     std::vector<MeshCoordinate> device_coords = ttnn::ccl::get_all_device_coords(
         this->mesh_info,
         this->topology,
-        this->cluster_axis.has_value() && this->cluster_axis.value() == 1 ? std::optional<uint32_t>(coord[0])
-                                                                          : std::nullopt,
-        this->cluster_axis.has_value() && this->cluster_axis.value() == 0 ? std::optional<uint32_t>(coord[1])
-                                                                          : std::nullopt);
+        this->cluster_axis,
+        coord);
 
     std::optional<MeshCoordinate> forward_device = std::nullopt;
     std::optional<MeshCoordinate> backward_device = std::nullopt;
@@ -163,8 +161,8 @@ std::vector<Tensor> all_broadcast_async_impl(
     std::vector<MeshCoordinate> device_coords = ttnn::ccl::get_all_device_coords(
         mesh_info,
         topology,
-        cluster_axis.has_value() && cluster_axis.value() == 1 ? std::optional<uint32_t>(0) : std::nullopt,
-        cluster_axis.has_value() && cluster_axis.value() == 0 ? std::optional<uint32_t>(0) : std::nullopt);
+        cluster_axis,
+        MeshCoordinate(0, 0));
 
     uint32_t num_devices = device_coords.size();
 
