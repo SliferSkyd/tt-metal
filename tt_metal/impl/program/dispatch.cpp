@@ -129,35 +129,26 @@ uint32_t configure_rta_offsets_for_kernel_groups(
     std::vector<std::shared_ptr<KernelGroup>>& kernel_groups,
     uint32_t base_offset) {
     const auto& hal = MetalContext::instance().hal();
-    // Note: it's wrong to use HAL processor class here, because HAL will be fixed to have only DM/COMPUTE classes,
-    // whereas the RTA allocation is separate for DM0/DM1/COMPUTE.
-    std::vector<uint32_t> max_rtas(DISPATCH_CLASS_MAX);
     uint32_t max_unique_rta_size = 0;
     uint32_t l1_alignment = hal.get_alignment(HalMemType::L1);
 
     for (auto& kg : kernel_groups) {
-        std::ranges::fill(max_rtas, 0);
+        uint32_t max_rtas = 0;
+        uint32_t offset = 0;
         for (auto kernel_id : kg->kernel_ids) {
             const auto& kernel = kernels.at(kernel_id);
-            auto dispatch_class = kernel->dispatch_class();
             for (const CoreRange& core_range : kg->core_ranges.ranges()) {
                 for (auto x = core_range.start_coord.x; x <= core_range.end_coord.x; x++) {
                     for (auto y = core_range.start_coord.y; y <= core_range.end_coord.y; y++) {
                         CoreCoord core_coord(x, y);
-                        max_rtas[dispatch_class] =
-                            std::max(max_rtas[dispatch_class], (uint32_t)kernel->runtime_args(core_coord).size());
+                        max_rtas = std::max(max_rtas, (uint32_t)kernel->runtime_args(core_coord).size());
                     }
                 }
             }
-        }
-        uint32_t offset = 0;
-        for (auto kernel_id : kg->kernel_ids) {
-            const auto& kernel = kernels.at(kernel_id);
-            auto dispatch_class = kernel->dispatch_class();
-            kg->rta_sizes[dispatch_class] = max_rtas[dispatch_class] * sizeof(uint32_t);
+            kg->rta_sizes[kernel_id] = max_rtas * sizeof(uint32_t);
             uint32_t rta_offset = base_offset + offset;
-            offset += max_rtas[dispatch_class] * sizeof(uint32_t);
-            kernel->set_runtime_args_count(kg->core_ranges, max_rtas[dispatch_class]);
+            offset += max_rtas * sizeof(uint32_t);
+            kernel->set_runtime_args_count(kg->core_ranges, max_rtas);
             for (size_t i = 0; i < kernel->expected_num_binaries(); i++) {
                 uint32_t processor_index = hal.get_processor_index(
                     kernel->get_kernel_programmable_core_type(),
@@ -743,16 +734,15 @@ BatchedTransfers assemble_runtime_args_commands(
                                 auto device_local_kernel_handle = get_device_local_kernel_handle(kernel_id);
                                 auto kernel = program.get_kernel(device_local_kernel_handle);
                                 if (!kernel->cores_with_runtime_args().empty()) {
-                                    auto dispatch_class = kernel->dispatch_class();
                                     const auto& runtime_args_data = kernel->runtime_args(core_coord);
                                     unique_rt_args_data.back().emplace_back(
                                         RtaDataPair(kernel->runtime_args_data(core_coord), runtime_args_data));
                                     TT_ASSERT(
-                                        runtime_args_data.size() * sizeof(uint32_t) <= kg->rta_sizes[dispatch_class]);
+                                        runtime_args_data.size() * sizeof(uint32_t) <= kg->rta_sizes.at(kernel_id));
                                     unique_rt_data_and_sizes.back().emplace_back(
                                         kernel->runtime_args_data(core_coord).rt_args_data,
                                         runtime_args_data.size() * sizeof(uint32_t),
-                                        kg->rta_sizes[dispatch_class]);
+                                        kg->rta_sizes.at(kernel_id));
                                 }
                             }
                             CoreCoord virtual_core = device->virtual_core_from_logical_core(core_coord, core_type);
