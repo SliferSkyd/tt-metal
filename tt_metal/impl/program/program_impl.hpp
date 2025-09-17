@@ -84,7 +84,7 @@ struct KernelGroup {
     CoreRangeSet core_ranges;
     // kernel_ids are ordered by dispatch class
     std::vector<KernelHandle> kernel_ids;
-    uint32_t rta_sizes[DISPATCH_CLASS_MAX]{};
+    std::unordered_map<KernelHandle, uint32_t> rta_sizes;
     uint32_t total_rta_size{};
     // kernel_text_offsets is indexed by processor index within core.
     std::vector<uint32_t> kernel_text_offsets;
