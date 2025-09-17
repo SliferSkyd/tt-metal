@@ -48,24 +48,53 @@ tt::tt_metal::operation::MeshWorkloadWithCallbacks AllBroadcastAsync::create_mes
     const ttnn::MeshCoordinateRangeSet& tensor_coords,
     const std::vector<Tensor>& input_tensors,
     std::vector<Tensor>& output_tensors) const {
-    auto mesh_device = input_tensors[0].device();
-    auto sub_device_id = this->sub_device_id;
+    if (!this->is_vector_of_mesh) {
+        auto mesh_device = input_tensors[0].device();
+        auto sub_device_id = this->sub_device_id;
 
-    auto subdevice = sub_device_id.has_value() ? *sub_device_id : mesh_device->get_sub_device_ids().at(0);
-    const auto available_cores = mesh_device->worker_cores(tt::tt_metal::HalProgrammableCoreType::TENSIX, subdevice);
-    auto subdevices = {subdevice};
+        auto subdevice = sub_device_id.has_value() ? *sub_device_id : mesh_device->get_sub_device_ids().at(0);
+        const auto available_cores =
+            mesh_device->worker_cores(tt::tt_metal::HalProgrammableCoreType::TENSIX, subdevice);
+        auto subdevices = {subdevice};
 
-    auto init_barrier_semaphore = ttnn::global_semaphore::create_global_semaphore(mesh_device, available_cores, 0);
-    auto final_barrier_semaphore = ttnn::global_semaphore::create_global_semaphore(mesh_device, available_cores, 0);
-    log_debug(tt::LogOp, "Semaphores allocated and waiting for all devices to be ready");
-    tt::tt_metal::distributed::Synchronize(mesh_device, std::nullopt, subdevices);
-    log_debug(tt::LogOp, "All devices are ready, starting program execution");
+        auto init_barrier_semaphore = ttnn::global_semaphore::create_global_semaphore(mesh_device, available_cores, 0);
+        auto final_barrier_semaphore = ttnn::global_semaphore::create_global_semaphore(mesh_device, available_cores, 0);
+        log_debug(tt::LogOp, "Semaphores allocated and waiting for all devices to be ready");
+        tt::tt_metal::distributed::Synchronize(mesh_device, std::nullopt, subdevices);
+        log_debug(tt::LogOp, "All devices are ready, starting program execution");
 
-    return ccl::create_mesh_workload_from_programs(
-        tensor_coords, input_tensors, output_tensors, [&, this](const ttnn::MeshCoordinate& coord) {
-            return create_program_at(
-                coord, input_tensors, output_tensors, init_barrier_semaphore, final_barrier_semaphore);
-        });
+        return ccl::create_mesh_workload_from_programs(
+            tensor_coords, input_tensors, output_tensors, [&, this](const ttnn::MeshCoordinate& coord) {
+                return create_program_at(
+                    coord, input_tensors, output_tensors, init_barrier_semaphore, final_barrier_semaphore);
+            });
+    } else {
+        // TODO this is wrong! this whole function will be called in a loop
+
+        // same as above but for vector of mesh
+        auto& devices = this->devices;
+        auto sub_device_id = this->sub_device_id;
+
+        auto subdevice = sub_device_id.has_value() ? sub_device_id.value() : devices.at(0)->get_sub_device_ids().at(0);
+        const auto available_cores = devices.at(0)->worker_cores(HalProgrammableCoreType::TENSIX, subdevice);
+        auto subdevices = {subdevice};
+
+        auto init_barrier_semaphore = ttnn::global_semaphore::create_global_semaphore_with_same_address(
+            devices, available_cores, 0, tt::tt_metal::BufferType::L1, 10);
+        auto final_barrier_semaphore = ttnn::global_semaphore::create_global_semaphore_with_same_address(
+            devices, available_cores, 0, tt::tt_metal::BufferType::L1, 10);
+        log_debug(tt::LogOp, "Semaphores allocated and waiting for all devices to be ready");
+        for (const auto& device : devices) {
+            tt::tt_metal::distributed::Synchronize(device, std::nullopt, subdevices);
+        }
+        log_debug(tt::LogOp, "All devices are ready, starting program execution");
+
+        return ccl::create_mesh_workload_from_programs(
+            tensor_coords, input_tensors, output_tensors, [&, this](const ttnn::MeshCoordinate& coord) {
+                return create_program_at(
+                    coord, input_tensors, output_tensors, init_barrier_semaphore, final_barrier_semaphore);
+            });
+    }
 }
 
 tt::tt_metal::operation::ProgramWithCallbacks AllBroadcastAsync::create_program_at(
@@ -76,7 +105,7 @@ tt::tt_metal::operation::ProgramWithCallbacks AllBroadcastAsync::create_program_
     const GlobalSemaphore& final_barrier_semaphore) const {
     log_debug(tt::LogOp, "DEBUG: create_program_at is called");
     auto mesh_device = input_tensors[0].device();
-    IDevice* target_device = mesh_device ? mesh_device->get_device(coord) : input_tensors[0].device();
+    IDevice* target_device = mesh_device->get_device(coord);
     std::vector<IDevice*> devices_to_use = {};
     if (this->cluster_axis.has_value()) {
         // User specified the cluster-axis. Derive devices based on the current coordinate
@@ -85,7 +114,7 @@ tt::tt_metal::operation::ProgramWithCallbacks AllBroadcastAsync::create_program_
         devices_to_use = (this->cluster_axis.value() == 0) ? mesh_view.get_devices_on_column(coord[1])
                                                            : mesh_view.get_devices_on_row(coord[0]);
     } else {
-        devices_to_use = devices;
+        devices_to_use = this->devices;
     }
     uint32_t target_ring_size = devices_to_use.size();
 
@@ -150,6 +179,7 @@ namespace operations::experimental::ccl {
 
 std::vector<Tensor> all_broadcast_async_impl(
     const Tensor& input_tensor,
+    const bool is_vector_of_mesh,
     const uint32_t num_links,
     const std::optional<MemoryConfig>& memory_config,
     const ttnn::ccl::Topology topology,
@@ -183,6 +213,7 @@ std::vector<Tensor> all_broadcast_async_impl(
     return tt::tt_metal::operation::run(
         ttnn::AllBroadcastAsync(
             devices,
+            is_vector_of_mesh,
             num_links,
             num_devices,
             memory_config.value_or(input_tensor.memory_config()),
@@ -201,12 +232,36 @@ std::vector<Tensor> all_broadcast_async(
     std::optional<tt::tt_metal::SubDeviceId> sub_device_id) {
     return all_broadcast_async_impl(
         input_tensor,
+        false,
         num_links,
         memory_config,
         topology,
         cluster_axis,
         sub_device_id,
         ttnn::ccl::get_active_physical_devices(input_tensor));
+}
+
+std::vector<std::vector<Tensor>> all_broadcast_async(
+    const std::vector<Tensor>& input_tensors,
+    const uint32_t num_links,
+    const std::optional<MemoryConfig>& memory_config,
+    const ttnn::ccl::Topology topology,
+    std::optional<uint32_t> cluster_axis,
+    std::optional<tt::tt_metal::SubDeviceId> sub_device_id) {
+    std::vector<std::vector<Tensor>> output_tensors;
+    output_tensors.reserve(input_tensors.size());
+    for (size_t i = 0; i < input_tensors.size(); ++i) {
+        output_tensors.push_back(all_broadcast_async_impl(
+            input_tensors.at(i),
+            true,
+            num_links,
+            memory_config,
+            topology,
+            cluster_axis,
+            sub_device_id,
+            ttnn::ccl::get_active_physical_devices(input_tensors)));
+    }
+    return output_tensors;
 }
 
 }  // namespace operations::experimental::ccl

@@ -28,6 +28,7 @@ using ccl::EriscDatamoverBuilder;
 
 struct AllBroadcastAsync {
     std::vector<IDevice*> devices;
+    const bool is_vector_of_mesh;
     const uint32_t num_links;
     const uint32_t ring_size;
     const MemoryConfig output_mem_config;
@@ -37,6 +38,7 @@ struct AllBroadcastAsync {
 
     AllBroadcastAsync(
         std::vector<IDevice*> devices,
+        bool is_vector_of_mesh,
         uint32_t num_links,
         uint32_t ring_size,
         MemoryConfig output_mem_config,
@@ -44,6 +46,7 @@ struct AllBroadcastAsync {
         std::optional<tt::tt_metal::SubDeviceId>& sub_device_id,
         std::optional<uint32_t> cluster_axis) :
         devices(std::move(devices)),
+        is_vector_of_mesh(is_vector_of_mesh),
         num_links(num_links),
         ring_size(ring_size),
         output_mem_config(std::move(output_mem_config)),
@@ -56,6 +59,7 @@ struct AllBroadcastAsync {
         using tt::stl::reflection::Attribute;
         std::vector<std::tuple<std::string, Attribute>> attrs;
 
+        attrs.emplace_back("is_vector_of_mesh", is_vector_of_mesh);
         attrs.emplace_back("num_links", num_links);
         attrs.emplace_back("ring_size", ring_size);
         attrs.emplace_back("output_mem_config", output_mem_config);
@@ -98,6 +102,15 @@ namespace operations::experimental::ccl {
 
 std::vector<Tensor> all_broadcast_async(
     const Tensor& input_tensor,
+    uint32_t num_links = 1,
+    const std::optional<MemoryConfig>& memory_config = std::nullopt,
+    ttnn::ccl::Topology topology = ttnn::ccl::Topology::Linear,
+    std::optional<uint32_t> cluster_axis = std::nullopt,
+    std::optional<tt::tt_metal::SubDeviceId> sub_device_id = std::nullopt);
+
+// same as above but for vector of mesh
+std::vector<std::vector<Tensor>> all_broadcast_async(
+    const std::vector<Tensor>& input_tensors,
     uint32_t num_links = 1,
     const std::optional<MemoryConfig>& memory_config = std::nullopt,
     ttnn::ccl::Topology topology = ttnn::ccl::Topology::Linear,

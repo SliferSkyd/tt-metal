@@ -21,4 +21,15 @@ std::vector<ttnn::Tensor> ExecuteAllBroadcastAsync::invoke(
         input_tensor, num_links, memory_config, topology, cluster_axis, subdevice_id);
 }
 
+std::vector<std::vector<ttnn::Tensor>> ExecuteAllBroadcastAsync::invoke(
+    const std::vector<ttnn::Tensor>& input_tensors,
+    const uint32_t num_links,
+    const std::optional<ttnn::MemoryConfig>& memory_config,
+    const ttnn::ccl::Topology topology,
+    std::optional<uint32_t> cluster_axis,
+    std::optional<tt::tt_metal::SubDeviceId> subdevice_id) {
+    return ttnn::operations::experimental::ccl::all_broadcast_async(
+        input_tensors, num_links, memory_config, topology, cluster_axis, subdevice_id);
+}
+
 }  // namespace ttnn::operations::experimental::ccl

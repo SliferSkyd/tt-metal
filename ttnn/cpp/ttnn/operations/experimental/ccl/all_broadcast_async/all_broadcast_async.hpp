@@ -19,6 +19,15 @@ struct ExecuteAllBroadcastAsync {
         ttnn::ccl::Topology topology = ttnn::ccl::Topology::Linear,
         std::optional<uint32_t> cluster_axis = std::nullopt,
         std::optional<tt::tt_metal::SubDeviceId> subdevice_id = std::nullopt);
+
+    // same as above but for vector of mesh
+    static std::vector<std::vector<ttnn::Tensor>> invoke(
+        const std::vector<ttnn::Tensor>& input_tensors,
+        uint32_t num_links = 1,
+        const std::optional<ttnn::MemoryConfig>& memory_config = std::nullopt,
+        ttnn::ccl::Topology topology = ttnn::ccl::Topology::Linear,
+        std::optional<uint32_t> cluster_axis = std::nullopt,
+        std::optional<tt::tt_metal::SubDeviceId> subdevice_id = std::nullopt);
 };
 
 }  // namespace operations::experimental::ccl
