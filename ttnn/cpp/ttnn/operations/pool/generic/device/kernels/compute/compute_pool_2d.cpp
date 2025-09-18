@@ -27,12 +27,6 @@
 
 namespace NAMESPACE {
 
-inline void PACK_INIT(uint32_t ocb) {
-    PACK((llk_pack_hw_configure_disaggregated<DST_ACCUM_MODE, false>(ocb)));
-    PACK((llk_pack_init<false>(ocb)));
-    PACK((llk_pack_dest_init<DST_ACCUM_MODE, false>()));
-}
-
 inline void unary_op_init_common_x(uint32_t icb, uint32_t ocb) {
     UNPACK((llk_unpack_A_hw_configure_disaggregated<DST_ACCUM_MODE, StochRndType::None, true>(icb)));
     PACK((llk_pack_hw_configure_disaggregated<DST_ACCUM_MODE, false>(ocb)));
@@ -219,8 +213,11 @@ void MAIN {
                         // Workaround until #27504 is not closed
                         tensix_sync();
                         unary_op_init_common_x(pre_tilize_cb_id, out_cb_id);
-                        tensix_sync();
+                        // reconfig_data_format_srca(pre_tilize_cb_id);
                         // PACK(pack_reconfig_data_format(pre_tilize_cb_id, out_cb_id));
+                        tensix_sync();
+
+                        asm volatile("ebreak");
 
                         // Skip fast_tilize path for bfp4_b output until #28380 is closed
                         if constexpr (is_output_bfp4_b) {
@@ -242,9 +239,10 @@ void MAIN {
                         if constexpr (is_output_block_format) {
                             tensix_sync();
                             unary_op_init_common_x(in_cb_id_0, pre_tilize_cb_id);
+                            // reconfig_data_format_srca(in_cb_id_0);
+                            // PACK(pack_reconfig_data_format(out_cb_id, pre_tilize_cb_id));
                             tensix_sync();
                         }
-                        // PACK(pack_reconfig_data_format(out_cb_id, pre_tilize_cb_id));
 
                         // init math for reduction again since FPU gets reprogrammed by tilize
                         MATH((llk_math_reduce_init<REDUCE_OP, REDUCE_DIM, DST_ACCUM_MODE, MATH_FIDELITY>()));
