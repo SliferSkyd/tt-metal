@@ -17,6 +17,7 @@
 #include "ttnn/operations/math.hpp"
 #include "ttnn/operation.hpp"
 #include <tt-metalium/tensor_accessor_args.hpp>
+#include "ttnn/operations/compute_throttle_utils.hpp"
 
 using namespace tt::constants;
 using namespace tt::tt_metal;
@@ -426,6 +427,9 @@ operation::ProgramWithCallbacks sdpa_multi_core(
     if (balanced_q_parallel) {
         defines["BALANCED_Q_PARALLEL"] = "1";
     }
+
+    ttnn::operations::compute_throttle_utils::throttle_mm_perf(
+        device->arch(), core_grid.size(), defines, ttnn::get_throttle_level(compute_kernel_config));
 
     log_debug(tt::LogOp, "BALANCED_Q_PARALLEL: {}", balanced_q_parallel);
 
