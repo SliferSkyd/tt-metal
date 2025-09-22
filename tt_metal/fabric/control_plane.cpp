@@ -102,7 +102,7 @@ std::vector<chip_id_t> get_adjacent_chips_from_ethernet_connections(
     chip_id_t chip_id, std::uint32_t num_ports_per_side) {
     const auto& cluster = tt::tt_metal::MetalContext::instance().get_cluster();
     auto eth_links = cluster.get_ethernet_cores_grouped_by_connected_chips(chip_id);
-    bool is_ubb = cluster.get_board_type(chip_id) == BoardType::UBB;
+    bool is_ubb = cluster.get_board_type(chip_id) == BoardType::UBB_BLACKHOLE;
 
     auto mmio_chip_ids = cluster.mmio_chip_ids();
 
@@ -614,7 +614,7 @@ std::map<FabricNodeId, chip_id_t> ControlPlane::get_logical_chip_to_physical_chi
             const auto& cluster = tt::tt_metal::MetalContext::instance().get_cluster();
             // TODO: remove once we use global physical graph to map logical big mesh to physical chips
             // NOTE: This nw chip may not be set the same for UBB devices when using the Mock Cluster Descriptor
-            if (cluster.get_board_type(0) == BoardType::UBB) {
+            if (cluster.get_board_type(0) == BoardType::UBB_BLACKHOLE) {
                 for (const auto& chip_id : cluster.all_chip_ids()) {
                     auto candidate_ubb_id = tt::tt_fabric::get_ubb_id(chip_id);
                     if (candidate_ubb_id.tray_id == 1 && candidate_ubb_id.asic_id == 1) {

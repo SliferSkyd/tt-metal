@@ -53,7 +53,7 @@ TrayID get_tray_id_for_chip(chip_id_t chip_id, const std::string& mobo_name) {
 std::pair<TrayID, ASICLocation> get_asic_position(chip_id_t chip_id) {
     const auto& cluster = tt::tt_metal::MetalContext::instance().get_cluster();
     auto cluster_desc = cluster.get_cluster_desc();
-    if (cluster_desc->get_board_type(chip_id) == BoardType::UBB) {
+    if (cluster_desc->get_board_type(chip_id) == BoardType::UBB_BLACKHOLE) {
         constexpr std::string_view ubb_mobo_name = "S7T-MB";
 
         TT_FATAL(get_mobo_name() == ubb_mobo_name, "UBB systems must use S7T-MB motherboard.");

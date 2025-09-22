@@ -136,7 +136,7 @@ protected:
 
         // Check to deal with TG systems
         if (enable_remote_chip or
-            tt::tt_metal::MetalContext::instance().get_cluster().get_board_type(0) == BoardType::UBB or
+            tt::tt_metal::MetalContext::instance().get_cluster().get_board_type(0) == BoardType::UBB_BLACKHOLE or
             tt::tt_metal::MetalContext::instance().get_cluster().is_galaxy_cluster()) {
             for (chip_id_t id : tt::tt_metal::MetalContext::instance().get_cluster().user_exposed_chip_ids()) {
                 chip_ids.push_back(id);

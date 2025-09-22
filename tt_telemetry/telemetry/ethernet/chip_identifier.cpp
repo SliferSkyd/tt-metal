@@ -66,7 +66,7 @@ size_t hash_value(const ChipIdentifier &c) {
 static uint16_t get_bus_id(tt::umd::TTDevice* device) { return device->get_pci_device()->get_device_info().pci_bus; }
 
 ChipIdentifier get_chip_identifier_from_umd_chip_id(tt::umd::TTDevice* device, tt::umd::chip_id_t chip_id) {
-    if (device->get_board_type() == BoardType::UBB) {
+    if (device->get_board_type() == BoardType::UBB_BLACKHOLE) {
         // UBB is the Galaxy 6U board type
         const std::unordered_map<tt::ARCH, std::vector<std::uint16_t>> ubb_bus_ids = {
             {tt::ARCH::WORMHOLE_B0, {0xC0, 0x80, 0x00, 0x40}},

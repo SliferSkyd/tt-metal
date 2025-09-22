@@ -368,7 +368,7 @@ private:
 // BH_UBB board class
 class BH_UBB : public Board {
 public:
-    BH_UBB() : Board(create_bh_ubb_ports_and_connections(), tt::umd::BoardType::UBB) {}
+    BH_UBB() : Board(create_bh_ubb_ports_and_connections(), tt::umd::BoardType::UBB_BLACKHOLE) {}
 
 private:
     static std::pair<
@@ -447,8 +447,7 @@ Board create_board(tt::umd::BoardType board_type) {
         case BoardType::P150: return P150();
         case BoardType::N150: return N150();
         // TODO: Uncomment this once BH_UBB is finalized and has an enum value in BoardType
-        // case BoardType::BH_UBB:
-        //     return BH_UBB();
+        case BoardType::UBB_BLACKHOLE: return BH_UBB();
         default: throw std::runtime_error("Unknown board type: " + std::string(enchantum::to_string(board_type)));
     }
 }

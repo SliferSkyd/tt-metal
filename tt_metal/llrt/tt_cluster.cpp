@@ -170,6 +170,8 @@ tt::tt_metal::ClusterType Cluster::get_cluster_type_from_cluster_desc(
             cluster_type = tt::tt_metal::ClusterType::P300;
         } else if (board_type == BoardType::UBB) {
             cluster_type = tt::tt_metal::ClusterType::GALAXY;
+        } else if (board_type == BoardType::UBB_BLACKHOLE) {
+            cluster_type = tt::tt_metal::ClusterType::GALAXY;
         }
     }
     return cluster_type;
@@ -1034,7 +1036,7 @@ void Cluster::disable_ethernet_cores_with_retrain() {
         for (const auto& [other_chip_id, eth_cores] : connected_chips) {
             for (const auto& eth_core : eth_cores) {
                 if (rtoptions_.get_skip_eth_cores_with_retrain() and
-                    this->cluster_desc_->get_board_type(chip_id) == BoardType::UBB) {
+                    this->cluster_desc_->get_board_type(chip_id) == BoardType::UBB_BLACKHOLE) {
                     tt_cxy_pair virtual_eth_core(
                         chip_id, get_virtual_coordinate_from_logical_coordinates(chip_id, eth_core, CoreType::ETH));
                     auto retrain_count_addr = hal_.get_dev_addr(
@@ -1375,7 +1377,7 @@ bool Cluster::is_external_cable(chip_id_t physical_chip_id, CoreCoord eth_core) 
     auto chan_id = this->get_soc_desc(physical_chip_id).logical_eth_core_to_chan_map.at(eth_core);
     bool is_external_cable = false;
     auto board_type = this->get_board_type(physical_chip_id);
-    if (board_type == BoardType::UBB) {
+    if (board_type == BoardType::UBB_BLACKHOLE) {
         auto ubb_asic_id = get_ubb_asic_id(physical_chip_id);
         if (ubb_asic_id == 1) {
             // UBB 1 has external cables on channels 0-7

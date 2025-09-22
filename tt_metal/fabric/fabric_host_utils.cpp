@@ -335,7 +335,7 @@ std::vector<chip_id_t> convert_1d_mesh_adjacency_to_row_major_vector(
             // User provided a sorting function. This is primarily done for testing.
             std::tie(adj_map, first_chip) = graph_sorter.value()(topology_info);
         }
-    } else if (cluster.get_board_type(0) == BoardType::UBB) {
+    } else if (cluster.get_board_type(0) == BoardType::UBB_BLACKHOLE) {
         if (!graph_sorter.has_value()) {
             // Default behavior: sort adjacency map by Ethernet coordinates
             std::tie(adj_map, first_chip) = sort_adjacency_map_by_ubb_id(topology_info);
