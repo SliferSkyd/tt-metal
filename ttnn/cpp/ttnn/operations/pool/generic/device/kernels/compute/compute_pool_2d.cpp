@@ -29,7 +29,7 @@ namespace NAMESPACE {
 
 inline void unary_op_init_common_x(uint32_t icb, uint32_t ocb) {
     UNPACK((llk_unpack_A_hw_configure_disaggregated<DST_ACCUM_MODE, StochRndType::None, true>(icb)));
-    PACK((llk_pack_hw_configure_disaggregated<DST_ACCUM_MODE, false>(ocb)));
+    //    PACK((llk_pack_hw_configure_disaggregated<DST_ACCUM_MODE, false>(ocb)));
 }
 
 void MAIN {
@@ -214,10 +214,10 @@ void MAIN {
                         tensix_sync();
                         unary_op_init_common_x(pre_tilize_cb_id, out_cb_id);
                         // reconfig_data_format_srca(pre_tilize_cb_id);
-                        // PACK(pack_reconfig_data_format(pre_tilize_cb_id, out_cb_id));
+                        PACK(pack_reconfig_data_format(pre_tilize_cb_id, out_cb_id));
                         tensix_sync();
 
-                        asm volatile("ebreak");
+                        // asm volatile("ebreak");
 
                         // Skip fast_tilize path for bfp4_b output until #28380 is closed
                         if constexpr (is_output_bfp4_b) {
@@ -239,6 +239,7 @@ void MAIN {
                         if constexpr (is_output_block_format) {
                             tensix_sync();
                             unary_op_init_common_x(in_cb_id_0, pre_tilize_cb_id);
+                            PACK((llk_pack_hw_configure_disaggregated<DST_ACCUM_MODE, false>(pre_tilize_cb_id)));
                             // reconfig_data_format_srca(in_cb_id_0);
                             // PACK(pack_reconfig_data_format(out_cb_id, pre_tilize_cb_id));
                             tensix_sync();
