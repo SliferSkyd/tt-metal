@@ -126,7 +126,6 @@ struct SoftmaxBackwardDeviceOperation {
 };
 
 Tensor softmax_backward(
-    QueueId queue_id,
     const Tensor& y,     // softmax output
     const Tensor& grad,  // upstream grad dL/dy
     uint32_t dim         // reduction dimension (same as fwd)

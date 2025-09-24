@@ -20,7 +20,7 @@ namespace ttnn::operations::normalization {
  */
 struct ExecuteSoftmaxBackward {
     static ttnn::Tensor invoke(
-        ttnn::QueueId queue_id, const ttnn::Tensor& softmax_output_tensor, const ttnn::Tensor& grad_tensor, int dim);
+        const ttnn::Tensor& softmax_output_tensor, const ttnn::Tensor& grad_tensor, uint32_t dim);
 };
 }  // namespace ttnn::operations::normalization
 
