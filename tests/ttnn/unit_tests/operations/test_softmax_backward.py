@@ -43,14 +43,16 @@ def test_bw_softmax(input_shapes, dtype, device):
     pt_softmax_tensor = torch.softmax(in_data, dim=3, dtype=torch_dtype)
     tt_softmax_tensor = torch_to_device(pt_softmax_tensor, dtype, device)
 
-    # tt_output_tensor_on_device = ttnn.operations.moreh.softmax_backward(tt_softmax_tensor, grad_tensor, dim=3)
-    tt_output_tensor_on_device = ttnn.softmax_backward(tt_softmax_tensor, grad_tensor, dim=3)
-    pt_output_tensor_on_device = ttnn.to_torch(tt_output_tensor_on_device)
+    tt_output_tensor_on_device_moreh = ttnn.operations.moreh.softmax_backward(tt_softmax_tensor, grad_tensor, dim=3)
+    pt_output_tensor_on_device_moreh = ttnn.to_torch(tt_output_tensor_on_device_moreh)
+    tt_output_tensor_on_device_composite = ttnn.softmax_backward(tt_softmax_tensor, grad_tensor, dim=3)
+    pt_output_tensor_on_device_composite = ttnn.to_torch(tt_output_tensor_on_device_composite)
     pt_output_tensor_reference = reference_softmax_backward_output(pt_softmax_tensor, grad_data, axis=3)
-    print(pt_output_tensor_on_device - pt_output_tensor_reference)
-    # print(pt_output_tensor_reference)
-    assert torch.allclose(pt_output_tensor_on_device, pt_output_tensor_reference, rtol=1e-2, atol=1e-2)
-    # tt_output_tensor_reference = torch_to_device(pt_output_tensor_reference, dtype, device)
-
-    # comp_pass = compare_pcc(tt_output_tensor_on_device, pt_output_tensor_reference, pcc=0.99)
-    # assert comp_pass
+    with open("all_tensors_output.txt", "a") as f:
+        torch.set_printoptions(threshold=10_000)
+        print(pt_output_tensor_reference, file=f)
+        print(pt_output_tensor_on_device_moreh, file=f)
+        print(pt_output_tensor_on_device_composite, file=f)
+        print(pt_output_tensor_on_device_moreh - pt_output_tensor_reference, file=f)
+        print(pt_output_tensor_on_device_composite - pt_output_tensor_reference, file=f)
+    assert torch.allclose(pt_output_tensor_on_device_composite, pt_output_tensor_reference, rtol=1e-2, atol=1e-2)

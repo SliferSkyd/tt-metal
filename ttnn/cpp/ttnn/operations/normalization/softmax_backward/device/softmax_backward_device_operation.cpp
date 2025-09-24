@@ -57,14 +57,9 @@ Tensor softmax_backward(
     uint32_t dim         // reduction dimension (same as fwd)
 ) {
     const ttnn::Tensor mul = ttnn::multiply(y, grad);
-    auto grad_scaled_dot = ttnn::multiply(
-        y,
-        ttnn::subtract(
-            grad,
-            // ttnn_fixed::sum_over_dim(ttnn::multiply(y, grad), dim)));
-            // ttnn::add(ttnn::multiply(y, grad), dim)));
-            // ttnn::reduce(ttnn::ReduceOpType::SUM, ttnn::multiply(y, grad), dim)));
-            ttnn::sum(queue_id, mul, std::optional<uint32_t>(dim), /*keepdim=*/true, std::nullopt, std::nullopt)));
+    int dim_ = dim;
+    auto grad_scaled_dot =
+        ttnn::multiply(y, ttnn::subtract(grad, ttnn::sum(mul, dim_, /*keepdim=*/true, std::nullopt, std::nullopt)));
     return grad_scaled_dot;
 }
 
