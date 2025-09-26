@@ -113,6 +113,7 @@ jobs:
             runner-label: config-t3000,
             mesh-device: T3K,
             override-tt-config: "{\"fabric_config\": \"FABRIC_1D\", \"l1_small_size\": 768}",
+            server-args: "[\"--max_num_seqs=1\", \"--num_scheduler_steps=1\"]",
             tt-llama-text-ver: tt_transformers,
             co-owner-1-id: U08E1JCDVNX, # Pavle Petrovic
             co-owner-2-id: U08BH66EXAL, # Radoica Draskic
@@ -186,6 +187,17 @@ jobs:
 
           echo "Override config: ${OVERRIDE_TT_CONFIG[@]}"
 
+          # Process server args from matrix or workflow input
+          SERVER_ARGS_JSON="${{ matrix.test-group.server-args || inputs.server-args }}"
+          if [ -n "$SERVER_ARGS_JSON" ] && [ "$SERVER_ARGS_JSON" != "[]" ]; then
+            # Parse JSON array and convert to bash array
+            readarray -t SERVER_ARGS < <(echo "$SERVER_ARGS_JSON" | python3 -c "import json, sys; [print(arg) for arg in json.load(sys.stdin)]")
+          else
+            export SERVER_ARGS=()
+          fi
+
+          echo "Server args: ${SERVER_ARGS[@]}"
+
           export MESH_DEVICE=${{ matrix.test-group.mesh-device }}
           export TT_LLAMA_TEXT_VER=${{ matrix.test-group.tt-llama-text-ver }}
 
@@ -200,6 +212,7 @@ jobs:
           python3 vllm/examples/server_example_tt.py \
             --model ${{ matrix.test-group.model }} \
             "${OVERRIDE_TT_CONFIG[@]}" \
+            "${SERVER_ARGS[@]}" \
             > "${FILE_SERVER_LOG}" 2>&1 &
 
           # Store server's pid for cleanup
