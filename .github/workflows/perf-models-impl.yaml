@@ -16,6 +16,9 @@ on:
         required: false
         type: string
         default: "in-service"
+      requested-models:
+        default: "all"
+        type: string
 
 jobs:
   models-perf:
@@ -76,13 +79,13 @@ jobs:
         uses: ./.github/actions/single-card-perf-test
         with:
           commands: pytest -n auto models/demos/falcon7b_common/tests -m models_performance_bare_metal
-        if: ${{ !cancelled() && matrix.test-info.model-group == 'llm_javelin' }}
+        if: ${{ !cancelled() && matrix.test-info.model-group == 'llm_javelin' && (inputs.requested-models == 'all' || contains(fromJson(inputs.requested-models), 'falcon7b')) }}
       - name: Run mamba model_perf test
         timeout-minutes: ${{ matrix.test-info.timeout }}
         uses: ./.github/actions/single-card-perf-test
         with:
           commands: pytest -n auto models/demos/wormhole/mamba/tests -m models_performance_bare_metal
-        if: ${{ !cancelled() && matrix.test-info.model-group == 'llm_javelin' }}
+        if: ${{ !cancelled() && matrix.test-info.model-group == 'llm_javelin' && (inputs.requested-models == 'all' || contains(fromJson(inputs.requested-models), 'mamba')) }}
       - name: Run functional_unet model_perf test
         timeout-minutes: ${{ matrix.test-info.timeout }}
         uses: ./.github/actions/single-card-perf-test

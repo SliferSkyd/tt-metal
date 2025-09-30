@@ -2,6 +2,11 @@ name: "(Single-card) Model perf tests"
 
 on:
   workflow_dispatch:
+    inputs:
+      requested-models:
+        description: "List of requested models as JSON array, for example: [\"resnet\", \"sdxl\"]. Default is 'all'"
+        default: "all"
+        type: string
   schedule:
     - cron: "0 2,7,10,14,17,20,23 * * *"
   workflow_call:
