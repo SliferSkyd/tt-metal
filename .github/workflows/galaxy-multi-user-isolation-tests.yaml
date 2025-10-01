@@ -30,7 +30,7 @@ jobs:
       - topology-6u
       - arch-wormhole_b0
       - bare-metal
-    with: 
+    env: 
       extra-tag: ${{ inputs.extra-tag }}
     steps:
       - name: ⬇️ Checkout
