@@ -666,6 +666,30 @@ uint8_t PopCurrentCommandQueueIdForThread();
 // clang-format on
 uint8_t GetCurrentCommandQueueIdForThread();
 
+namespace experimental {
+
+// Set the kernel binary path prefix for pre-compiled kernels
+// This path will be combined with kernel hash and name to form the full path to pre-compiled binaries
+void SetKernelBinaryPathPrefix(IDevice* device, const std::string& binary_path_prefix);
+
+// Compute hash for original kernel path (for use with CreateKernelFromBinary)
+// This allows users to pre-compute the original_path hash without revealing the actual path
+size_t ComputeKernelOriginalPathHash(const std::string& original_path);
+
+// Create a kernel from pre-compiled binaries
+// The binary_path should be the kernel name, which will be combined with the prefix set via SetKernelBinaryPathPrefix
+// original_path_or_hash can be either:
+//   - std::string: the original path of the kernel source (will be hashed internally)
+//   - size_t: pre-computed hash of the original path (use ComputeKernelOriginalPathHash)
+KernelHandle CreateKernelFromBinary(
+    Program& program,
+    const std::string& kernel_name,
+    const std::variant<CoreCoord, CoreRange, CoreRangeSet>& core_spec,
+    const std::variant<DataMovementConfig, ComputeConfig, EthernetConfig>& config,
+    const std::variant<std::string, size_t>& original_path_or_hash);
+
+}  // namespace experimental
+
 }  // namespace tt_metal
 
 }  // namespace tt
