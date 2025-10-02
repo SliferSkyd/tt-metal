@@ -22,7 +22,7 @@
 #include <vector>
 
 #include <tt-metalium/allocator.hpp>
-#include <tt-metalium/assert.hpp>
+#include <tt_stl/assert.hpp>
 #include <tt-metalium/buffer_types.hpp>
 #include "common.h"
 #include <tt-metalium/core_coord.hpp>
@@ -39,8 +39,7 @@
 #include "test_common.hpp"
 #include "impl/context/metal_context.hpp"
 #include "tt_metal/impl/dispatch/kernels/cq_commands.hpp"
-#include "umd/device/tt_core_coordinates.h"
-#include <tt-metalium/utils.hpp>
+#include <umd/device/types/core_coordinates.hpp>
 
 constexpr uint32_t DEFAULT_ITERATIONS = 10000;
 constexpr uint32_t DEFAULT_WARMUP_ITERATIONS = 100;
@@ -485,7 +484,7 @@ int main(int argc, char** argv) {
             exit(-1);
         }
 
-        uint32_t dram_data_addr = l1_buf_base;
+        uint32_t dram_data_addr = device->allocator()->get_base_allocator_addr(HalMemType::DRAM);
         uint32_t l1_data_addr = l1_buf_base;
 
         // Separate Buffer space for paged write testing to not conflict with dispatch or prefetch buffers in L1
@@ -527,12 +526,11 @@ int main(int argc, char** argv) {
 
             auto range = 1 + max_paged_write_base_addr_g - min_paged_write_base_addr_g;
             // TODO: can we make these play better w/ the non-paged tests?
-            dram_data_addr = ((min_paged_write_base_addr_g + (std::rand() % range)) >> 4) << 4;
             l1_data_addr = ((min_paged_write_base_addr_g + (std::rand() % range)) >> 4) << 4;
         }
 
         DeviceData device_data(
-            device, all_workers_g, l1_data_addr, dram_data_addr, 0, paged_test, DRAM_DATA_SIZE_WORDS);
+            device, all_workers_g, l1_data_addr, dram_data_addr, nullptr, paged_test, DRAM_DATA_SIZE_WORDS);
 
         if (is_paged_dram_test() && debug_g) {
             initialize_dram_banks(device);

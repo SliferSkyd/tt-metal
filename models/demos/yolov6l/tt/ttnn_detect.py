@@ -5,13 +5,6 @@
 import ttnn
 from models.demos.yolov6l.tt.common import Yolov6l_Conv2D
 
-try:
-    from tracy import signpost
-
-    use_signpost = True
-except ModuleNotFoundError:
-    use_signpost = False
-
 
 class TtDetect:
     def __init__(self, device, parameters, model_params):
@@ -21,19 +14,19 @@ class TtDetect:
             device=device,
             conv=model_params.stems[0].block.conv,
             conv_pth=parameters.stems[0].block.conv,
-            activation="silu",
+            activation=ttnn.UnaryWithParam(ttnn.UnaryOpType.SILU),
         )
         self.stem_1 = Yolov6l_Conv2D(
             device=device,
             conv=model_params.stems[1].block.conv,
             conv_pth=parameters.stems[1].block.conv,
-            activation="silu",
+            activation=ttnn.UnaryWithParam(ttnn.UnaryOpType.SILU),
         )
         self.stem_2 = Yolov6l_Conv2D(
             device=device,
             conv=model_params.stems[2].block.conv,
             conv_pth=parameters.stems[2].block.conv,
-            activation="silu",
+            activation=ttnn.UnaryWithParam(ttnn.UnaryOpType.SILU),
             shard_layout=ttnn.TensorMemoryLayout.BLOCK_SHARDED,
         )
 
@@ -41,34 +34,34 @@ class TtDetect:
             device=device,
             conv=model_params.cls_convs[0].block.conv,
             conv_pth=parameters.cls_convs[0].block.conv,
-            activation="silu",
+            activation=ttnn.UnaryWithParam(ttnn.UnaryOpType.SILU),
         )
         self.cls_convs_1 = Yolov6l_Conv2D(
             device=device,
             conv=model_params.cls_convs[1].block.conv,
             conv_pth=parameters.cls_convs[1].block.conv,
-            activation="silu",
+            activation=ttnn.UnaryWithParam(ttnn.UnaryOpType.SILU),
         )
         self.cls_convs_2 = Yolov6l_Conv2D(
             device=device,
             conv=model_params.cls_convs[2].block.conv,
             conv_pth=parameters.cls_convs[2].block.conv,
             shard_layout=ttnn.TensorMemoryLayout.BLOCK_SHARDED,
-            activation="silu",
+            activation=ttnn.UnaryWithParam(ttnn.UnaryOpType.SILU),
         )
 
         self.reg_convs_0 = Yolov6l_Conv2D(
             device=device,
             conv=model_params.reg_convs[0].block.conv,
             conv_pth=parameters.reg_convs[0].block.conv,
-            activation="silu",
+            activation=ttnn.UnaryWithParam(ttnn.UnaryOpType.SILU),
             deallocate_activation=True,
         )
         self.reg_convs_1 = Yolov6l_Conv2D(
             device=device,
             conv=model_params.reg_convs[1].block.conv,
             conv_pth=parameters.reg_convs[1].block.conv,
-            activation="silu",
+            activation=ttnn.UnaryWithParam(ttnn.UnaryOpType.SILU),
             deallocate_activation=True,
         )
         self.reg_convs_2 = Yolov6l_Conv2D(
@@ -76,7 +69,7 @@ class TtDetect:
             conv=model_params.reg_convs[2].block.conv,
             conv_pth=parameters.reg_convs[2].block.conv,
             shard_layout=ttnn.TensorMemoryLayout.BLOCK_SHARDED,
-            activation="silu",
+            activation=ttnn.UnaryWithParam(ttnn.UnaryOpType.SILU),
             deallocate_activation=True,
         )
 
@@ -129,8 +122,6 @@ class TtDetect:
         self.ones_tensor = parameters.ones_tensor
 
     def __call__(self, input_list):
-        if use_signpost:
-            signpost(header="TtDetect Start")
         stems_0 = self.stem_0(input_list[0])
         stems_1 = self.stem_1(input_list[1])
         stems_2 = self.stem_2(input_list[2])
@@ -250,8 +241,5 @@ class TtDetect:
 
         output = ttnn.concat([bbox, self.ones_tensor, cls_score_list], dim=1, memory_config=ttnn.L1_MEMORY_CONFIG)
         output = ttnn.permute(output, (0, 2, 1))
-
-        if use_signpost:
-            signpost(header="TtDetect End")
 
         return output

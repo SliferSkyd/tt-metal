@@ -304,7 +304,6 @@ class resnetBlock2D:
 
         conv_config = ttnn.Conv2dConfig(
             weights_dtype=ttnn.bfloat8_b,
-            activation="",
             shard_layout=self.conv1_shard_layout,
             reshard_if_not_optimal=False,
             enable_act_double_buffer=True,
@@ -333,6 +332,7 @@ class resnetBlock2D:
             "groups": 1,
             "device": self.device,
             "conv_config": conv_config,
+            "slice_config": ttnn.Conv2dL1FullSliceConfig,
         }
 
         hidden_states, [self.conv1_weight, self.conv1_bias] = ttnn.conv2d(
@@ -416,7 +416,6 @@ class resnetBlock2D:
 
         conv_config = ttnn.Conv2dConfig(
             weights_dtype=ttnn.bfloat8_b,
-            activation="",
             shard_layout=ttnn.TensorMemoryLayout.BLOCK_SHARDED,
             reshard_if_not_optimal=False,
             enable_act_double_buffer=True,
@@ -439,6 +438,7 @@ class resnetBlock2D:
             "groups": 1,
             "device": self.device,
             "conv_config": conv_config,
+            "slice_config": ttnn.Conv2dL1FullSliceConfig,
         }
 
         hidden_states, [self.conv2_weights, self.conv2_bias] = ttnn.conv2d(
@@ -467,7 +467,6 @@ class resnetBlock2D:
             # input_tensor = self.conv_shortcut(input_tensor)
             conv_config = ttnn.Conv2dConfig(
                 weights_dtype=ttnn.bfloat8_b,
-                activation="",
                 shard_layout=ttnn.TensorMemoryLayout.BLOCK_SHARDED,
                 reshard_if_not_optimal=False,
                 enable_act_double_buffer=True,
@@ -494,6 +493,7 @@ class resnetBlock2D:
                 "groups": 1,
                 "device": self.device,
                 "conv_config": conv_config,
+                "slice_config": ttnn.Conv2dL1FullSliceConfig,
             }
 
             input_tensor, [self.conv_shortcut_weights, self.conv_shortcut_bias] = ttnn.conv2d(

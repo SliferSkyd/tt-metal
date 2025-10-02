@@ -119,7 +119,6 @@ class downsample_2d:
         # hidden_states = self.conv(hidden_states)
         conv_config = ttnn.Conv2dConfig(
             weights_dtype=ttnn.bfloat8_b,
-            activation="",
             shard_layout=self.shard_layout,
             reshard_if_not_optimal=False,
             enable_act_double_buffer=True,
@@ -146,6 +145,7 @@ class downsample_2d:
             "groups": 1,
             "device": self.device,
             "conv_config": conv_config,
+            "slice_config": ttnn.Conv2dL1FullSliceConfig,
         }
 
         hidden_states, [self.conv_weights, self.conv_bias] = ttnn.conv2d(

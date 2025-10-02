@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: © 2025 Tenstorrent Inc.
+// SPDX-FileCopyrightText: © 2025 Tenstorrent AI ULC
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -6,7 +6,7 @@
 
 #include <cstddef>
 
-#include <tt-metalium/assert.hpp>
+#include <tt_stl/assert.hpp>
 #include <tt-metalium/distributed.hpp>
 #include <tt-metalium/program.hpp>
 #include <tt-metalium/mesh_device.hpp>
@@ -76,7 +76,7 @@ ApplyDeviceDelayDeviceOperation::ApplyDeviceDelayMeshWorkload::create_mesh_workl
     for (const auto& coord : tensor_coords.coords()) {
         auto cached_program = create_at(operation_attributes, coord, tensor_args, tensor_return_value);
         workload.add_program(ttnn::MeshCoordinateRange(coord), std::move(cached_program.program));
-        shared_variables.emplace(coord, std::move(cached_program.shared_variables));
+        shared_variables.emplace(coord, cached_program.shared_variables);
     }
     log_info(tt::LogAlways, "Created delay mesh workload");
     return cached_mesh_workload_t{std::move(workload), std::move(shared_variables)};

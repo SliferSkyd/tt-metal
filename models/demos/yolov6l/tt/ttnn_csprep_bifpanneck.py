@@ -7,13 +7,6 @@ from models.demos.yolov6l.tt.common import Yolov6l_Conv2D
 from models.demos.yolov6l.tt.ttnn_bepc3 import TtBepC3
 from models.demos.yolov6l.tt.ttnn_bifusion import TtBiFusion
 
-try:
-    from tracy import signpost
-
-    use_signpost = True
-except ModuleNotFoundError:
-    use_signpost = False
-
 
 class TtCSPRepBiFPANNeck:
     def __init__(self, device, parameters, model_params):
@@ -23,7 +16,7 @@ class TtCSPRepBiFPANNeck:
             device=device,
             conv=model_params.reduce_layer0.block.conv,
             conv_pth=parameters.reduce_layer0.block.conv,
-            activation="relu",
+            activation=ttnn.UnaryWithParam(ttnn.UnaryOpType.RELU),
             deallocate_activation=True,
         )
         self.Bifusion0 = TtBiFusion(
@@ -35,7 +28,7 @@ class TtCSPRepBiFPANNeck:
             device=device,
             conv=model_params.reduce_layer1.block.conv,
             conv_pth=parameters.reduce_layer1.block.conv,
-            activation="relu",
+            activation=ttnn.UnaryWithParam(ttnn.UnaryOpType.RELU),
         )
         self.Bifusion1 = TtBiFusion(device, parameters.Bifusion1, model_params.Bifusion1)
         self.Rep_p3 = TtBepC3(device, parameters.Rep_p3, model_params.Rep_p3, n=12)
@@ -44,7 +37,7 @@ class TtCSPRepBiFPANNeck:
             device=device,
             conv=model_params.downsample2.block.conv,
             conv_pth=parameters.downsample2.block.conv,
-            activation="relu",
+            activation=ttnn.UnaryWithParam(ttnn.UnaryOpType.RELU),
         )
         self.Rep_n3 = TtBepC3(device, parameters.Rep_n3, model_params.Rep_n3, n=12)
 
@@ -52,7 +45,7 @@ class TtCSPRepBiFPANNeck:
             device=device,
             conv=model_params.downsample1.block.conv,
             conv_pth=parameters.downsample1.block.conv,
-            activation="relu",
+            activation=ttnn.UnaryWithParam(ttnn.UnaryOpType.RELU),
             shard_layout=ttnn.ttnn.TensorMemoryLayout.BLOCK_SHARDED,
         )
         self.Rep_n4 = TtBepC3(
@@ -64,8 +57,6 @@ class TtCSPRepBiFPANNeck:
         )
 
     def __call__(self, input_list):
-        if use_signpost:
-            signpost(header="TtCSPRepBiFPANNeck Start")
         (input_tensor_3, input_tensor_2, input_tensor_1, input_tensor_0) = input_list
 
         fpn_out0 = self.reduce_layer0(input_tensor_0)
@@ -113,8 +104,5 @@ class TtCSPRepBiFPANNeck:
         pan_out0 = self.Rep_n4(p_concat_layer2)
 
         outputs = [pan_out2, pan_out_1, pan_out0]
-
-        if use_signpost:
-            signpost(header="TtCSPRepBiFPANNeck End")
 
         return outputs

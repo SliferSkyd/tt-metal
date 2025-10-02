@@ -167,6 +167,8 @@ def gen_tensors(
     return input_tokens, expert_indices, expert_mapping, output_tensor, metadata_tensor
 
 
+# we import and use this function in tests.sweeps_framework.sweeps.ccl.generality.all_to_all_dispatch.py
+# so be sure to carry over interface changes!
 def run_all_to_all_dispatch_test(
     mesh_device,
     mesh_shape,
@@ -193,6 +195,7 @@ def run_all_to_all_dispatch_test(
     test_skew=False,
 ):
     torch.manual_seed(2005)
+    random.seed(2005)
     mesh_device.enable_program_cache()
     devices = mesh_shape[0] * mesh_shape[1]
 
