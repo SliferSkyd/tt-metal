@@ -14,11 +14,20 @@
 #include "test_fabric_edm_common.hpp"
 
 #include <vector>
+#include <algorithm>
 
 namespace tt::tt_metal {
 
 namespace {
 namespace CMAKE_UNIQUE_NAMESPACE {
+
+GlobalSemaphore create_global_semaphore(distributed::MeshDevice* mesh_device) {
+    return ttnn::global_semaphore::create_global_semaphore(
+        mesh_device,
+        mesh_device->worker_cores(HalProgrammableCoreType::TENSIX, SubDeviceId{0}),
+        0,
+        tt::tt_metal::BufferType::L1);
+}
 
 ttnn::global_semaphore::MultiDeviceGlobalSemaphore create_global_semaphore(const std::vector<IDevice*>& devices) {
     return ttnn::global_semaphore::create_global_semaphore_with_same_address(
@@ -58,6 +67,69 @@ protected:
         tt::tt_fabric::SetFabricConfig(tt::tt_fabric::FabricConfig::DISABLED);
     }
 };
+
+TEST_F(MultiCQFabricMeshDevice2x4Fixture, NewAllGatherMinimalAsync) {
+    constexpr int num_devices = 4;
+
+    // Create submesh
+    auto submesh = mesh_device_->create_submesh(MeshShape(1, num_devices), distributed::MeshCoordinate(0, 0));
+
+    // Input tensor spec
+    const ttnn::Shape shape{num_devices, 1, 1024, 768};  // {num_devices, 8, 1024, 768}
+    const TensorSpec tensor_spec(
+        ttnn::Shape(shape), TensorLayout(DataType::BFLOAT16, PageConfig(Layout::TILE), MemoryConfig{}));
+
+    // Create input tensor data
+    std::size_t volume = tensor_spec.logical_shape().volume();
+    std::size_t volume_per_device = volume / num_devices;
+    std::vector<bfloat16> data(volume);
+    for (int dev_idx = 0; dev_idx < num_devices; ++dev_idx) {
+        std::fill(
+            data.begin() + (dev_idx * volume_per_device),
+            data.begin() + ((dev_idx + 1) * volume_per_device),
+            bfloat16(static_cast<float>(dev_idx)));
+    }
+
+    // Create input tensor and shard across devices
+    auto input_tensor = Tensor::from_vector(std::move(data), tensor_spec).to_device(submesh.get());
+    // Get tensor shards
+    auto input_tensors = ttnn::distributed::get_device_tensors(input_tensor);
+
+    // Create semaphores across devices
+    auto forward_semaphore = CMAKE_UNIQUE_NAMESPACE::create_global_semaphore(submesh.get());
+    auto backward_semaphore = CMAKE_UNIQUE_NAMESPACE::create_global_semaphore(submesh.get());
+    std::vector<GlobalSemaphore> multi_dev_semaphore = {forward_semaphore, backward_semaphore};
+    // auto forward_semaphore = CMAKE_UNIQUE_NAMESPACE::create_global_semaphore(submesh->get_devices());
+    // auto backward_semaphore = CMAKE_UNIQUE_NAMESPACE::create_global_semaphore(submesh->get_devices());
+    // std::vector<ttnn::global_semaphore::MultiDeviceGlobalSemaphore> multi_dev_semaphore = {
+    //     forward_semaphore, backward_semaphore};
+
+    // Wait for semaphores to be allocated
+    tt::tt_metal::distributed::Synchronize(submesh.get(), std::nullopt, std::vector<SubDeviceId>());
+
+    auto all_gathered = ttnn::experimental::all_gather_async(
+        /* input_tensors */ input_tensors,
+        /* persistent_output_buffer */ std::nullopt,
+        /* dim */ 0,
+        /* multi_device_global_semaphore */ multi_dev_semaphore,
+        /* num_links */ 1,
+        /* memory_config */ std::nullopt,
+        /* topology */ ttnn::ccl::Topology::Linear,
+        /* subdevice_id */ SubDeviceId(0),
+        /* cluster_axis */ std::nullopt,
+        /* use_optimal_ccl_for_llama */ false,
+        /* barrier_semaphore */ std::nullopt,
+        /* chunks_per_sync */ std::nullopt,
+        /* num_workers_per_link */ std::nullopt,
+        /* num_buffers_per_channel */ std::nullopt);
+    for (int dev_idx = 0; dev_idx < num_devices; dev_idx++) {
+        auto data = all_gathered[dev_idx].to_vector<bfloat16>();
+        for (int i = 0; i < data.size(); i++) {
+            float expected = static_cast<float>(dev_idx);
+            EXPECT_EQ(static_cast<float>(data[i]), expected);
+        }
+    }
+}
 
 TEST_F(MultiCQFabricMeshDevice2x4Fixture, AllGatherCommandProcessorAsync) {
     auto mesh_devices = CMAKE_UNIQUE_NAMESPACE::get_line_devices(mesh_device_.get());

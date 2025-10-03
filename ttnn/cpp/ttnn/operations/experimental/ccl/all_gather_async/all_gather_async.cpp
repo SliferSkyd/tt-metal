@@ -137,6 +137,44 @@ std::vector<ttnn::Tensor> ExecuteAllGatherAsync::invoke(
     }
 }
 
+std::vector<ttnn::Tensor> ExecuteAllGatherAsync::invoke(
+    const std::vector<ttnn::Tensor>& input_tensors,
+    const std::optional<ttnn::Tensor>& persistent_output_buffer,
+    const int32_t dim,
+    const std::vector<GlobalSemaphore>& multi_device_global_semaphore,
+    const uint32_t num_links,
+    const std::optional<ttnn::MemoryConfig>& memory_config,
+    const ttnn::ccl::Topology topology,
+    std::optional<tt::tt_metal::SubDeviceId> subdevice_id,
+    std::optional<uint32_t> cluster_axis,
+    bool use_optimal_ccl_for_llama,
+    const std::optional<GlobalSemaphore>& barrier_semaphore,
+    std::optional<uint32_t> chunks_per_sync,
+    std::optional<uint32_t> num_workers_per_link,
+    std::optional<uint32_t> num_buffers_per_channel) {
+    // Combine individual sharded tensors into a single tensor
+    ttnn::Tensor combined_input_tensor = ttnn::distributed::combine_device_tensors(input_tensors);
+    // Invoke the single-tensor version
+    ttnn::Tensor combined_output_tensor = ExecuteAllGatherAsync::invoke(
+        combined_input_tensor,
+        persistent_output_buffer,
+        dim,
+        multi_device_global_semaphore,
+        num_links,
+        memory_config,
+        topology,
+        subdevice_id,
+        cluster_axis,
+        use_optimal_ccl_for_llama,
+        std::nullopt,  // barrier_semaphore,
+        chunks_per_sync,
+        num_workers_per_link,
+        num_buffers_per_channel,
+        false);
+    // Shard the combined output tensor back into individual tensors
+    return ttnn::distributed::get_device_tensors(combined_output_tensor);
+}
+
 ttnn::Tensor ExecuteAllGatherAsync::invoke(
     const ttnn::Tensor& input_tensor,
     const int32_t dim,
