@@ -119,7 +119,8 @@ jobs:
             runner-label: config-t3000,
             mesh-device: T3K,
             override-tt-config: "{\"fabric_config\": \"FABRIC_1D\", \"l1_small_size\": 24576, \"trace_region_size\": 21448704}",
-            vllm-server-args: "--max-model-len 16384 --max-num-seqs 1",
+            override-batch-size: 1,
+            vllm-server-args: "--max-model-len 16384",
             tt-llama-text-ver: tt_transformers,
             multimodal: true,
             co-owner-1-id: U08E1JCDVNX, # Pavle Petrovic
@@ -200,7 +201,12 @@ jobs:
             VLLM_SERVER_ARGS=()
           fi
 
+          if [ -n "${{ matrix.test-group.override-batch-size }}" ]; then
+            VLLM_SERVER_ARGS+=(--max-num-seqs "${{ matrix.test-group.override-batch-size }}")
+          fi
+
           echo "Override config: ${OVERRIDE_TT_CONFIG[@]}"
+          echo "vLLM server args: ${VLLM_SERVER_ARGS[@]}"
 
           export MESH_DEVICE=${{ matrix.test-group.mesh-device }}
           export TT_LLAMA_TEXT_VER=${{ matrix.test-group.tt-llama-text-ver }}
@@ -246,11 +252,18 @@ jobs:
       - name: 📐 Run benchmark
         timeout-minutes: ${{ matrix.test-group.benchmark-timeout }}
         run: |
+          # If batch size is set, use it for --num-prompts
+          if [[ -n "${{ matrix.test-group.override-batch-size }}" ]]; then
+            NUM_PROMPTS=${{ matrix.test-group.override-batch-size }}
+          else
+            NUM_PROMPTS=32
+          fi
+
           python3 vllm/benchmarks/benchmark_serving.py \
             --backend vllm \
             --model ${{ matrix.test-group.model }} \
             --dataset-name random \
-            --num-prompts 32 \
+            --num-prompts $NUM_PROMPTS \
             --random-input-len 100 \
             --random-output-len 100 \
             --ignore-eos \
@@ -275,6 +288,13 @@ jobs:
           echo "Using: $(pip list | grep datasets)"
           unset HF_HUB_OFFLINE # Disable offline mode to allow downloading the dataset
 
+          # If batch size is set, use it for --num-prompts
+          if [[ -n "${{ matrix.test-group.override-batch-size }}" ]]; then
+            NUM_PROMPTS=${{ matrix.test-group.override-batch-size }}
+          else
+            NUM_PROMPTS=32
+          fi
+
           python3 vllm/benchmarks/benchmark_serving.py \
             --backend openai-chat \
             --endpoint /v1/chat/completions \
@@ -282,7 +302,7 @@ jobs:
             --dataset-name hf \
             --dataset-path lmarena-ai/vision-arena-bench-v0.1 \
             --no-stream \
-            --num-prompts 32 \
+            --num-prompts $NUM_PROMPTS \
             --random-input-len 100 \
             --random-output-len 100 \
             --ignore-eos \
