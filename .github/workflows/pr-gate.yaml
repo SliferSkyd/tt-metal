@@ -156,6 +156,18 @@ jobs:
       distributed: false
       ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || '' }}
 
+  t3000-apc-fast-tests:
+    needs: build
+    if: ${{ github.event.pull_request.head.repo.fork == false }}
+    secrets: inherit
+    strategy:
+      fail-fast: false
+    uses: ./.github/workflows/t3000-fast-tests-impl.yaml
+    with:
+      docker-image: ${{ needs.build.outputs.dev-docker-image }}
+      build-artifact-name: ${{ needs.build.outputs.build-artifact-name }}
+      wheel-artifact-name: ${{ needs.build.outputs.wheel-artifact-name }}
+
   metalium-examples:
     needs: [ build, find-changed-files ]
     if: ${{
