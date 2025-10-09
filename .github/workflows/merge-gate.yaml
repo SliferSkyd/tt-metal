@@ -150,6 +150,16 @@ jobs:
       packages: write
     secrets: inherit
 
+  t3000-apc-fast-tests:
+    if: ${{ github.event.pull_request.head.repo.fork == false }}
+    needs: build
+    secrets: inherit
+    uses: ./.github/workflows/t3000-fast-tests-impl.yaml
+    with:
+      docker-image: ${{ needs.build.outputs.dev-docker-image }}
+      build-artifact-name: ${{ needs.build.outputs.build-artifact-name }}
+      wheel-artifact-name: ${{ needs.build.outputs.wheel-artifact-name }}
+
   metalium-smoke-tests:
     needs: [find-changes, build-tsan]
     if: ${{ github.ref_name == 'main' ||
