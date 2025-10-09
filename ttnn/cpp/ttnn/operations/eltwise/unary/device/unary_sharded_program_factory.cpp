@@ -81,7 +81,8 @@ UnaryShardedProgramFactory::cached_program_t UnaryShardedProgramFactory::create(
 
     // tmp sharded CB
     uint32_t tmp_cb_id = tt::CBIndex::c_1;  // temporary buffer for intermediate results
-    if (ops_chain[0].type() == UnaryOpType::HARDSHRINK || ops_chain[0].type() == UnaryOpType::CBRT) {
+    if (ops_chain[0].type() == UnaryOpType::HARDSHRINK || ops_chain[0].type() == UnaryOpType::CBRT ||
+        ops_chain[0].type() == UnaryOpType::LOGIT) {
         tt::tt_metal::CircularBufferConfig cb_tmp0_config =
             tt::tt_metal::CircularBufferConfig(in_cb_pagesize * in_cb_npages, {{tmp_cb_id, act_df}})
                 .set_page_size(tmp_cb_id, in_cb_pagesize);
@@ -143,6 +144,16 @@ UnaryShardedProgramFactory::cached_program_t UnaryShardedProgramFactory::create(
                     unary_defines["FILL_INT"] = "fill_tile_int";
                 } else {
                     unary_defines["FILL_FLOAT"] = "fill_tile";
+                }
+                break;
+            case UnaryOpType::LOGIT:
+                value1 = *ops_chain[0].get_param_if<float>(0);
+                value2 = 1.0f - value1;
+                if (value1 >= 0.0f) {
+                    unary_defines["CLAMP"] = "clamp_tile";
+                }
+                if (value1 > 0.5f) {
+                    unary_defines["WHERE"] = "where_tile";
                 }
                 break;
             default: break;

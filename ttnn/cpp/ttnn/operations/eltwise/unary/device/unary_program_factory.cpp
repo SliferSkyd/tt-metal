@@ -51,7 +51,8 @@ UnaryProgramFactory::cached_program_t UnaryProgramFactory::create(
     tt::tt_metal::CreateCircularBuffer(program, all_cores, cb_src0_config);
 
     uint32_t tmp0_cb_index = tt::CBIndex::c_1;  // temporary buffer for intermediate results
-    if (ops_chain[0].type() == UnaryOpType::HARDSHRINK || ops_chain[0].type() == UnaryOpType::CBRT) {
+    if (ops_chain[0].type() == UnaryOpType::HARDSHRINK || ops_chain[0].type() == UnaryOpType::CBRT ||
+        ops_chain[0].type() == UnaryOpType::LOGIT) {
         tt::tt_metal::CircularBufferConfig cb_tmp0_config =
             tt::tt_metal::CircularBufferConfig(num_input_tiles * single_tile_size, {{tmp0_cb_index, cb_data_format}})
                 .set_page_size(tmp0_cb_index, single_tile_size);
@@ -110,6 +111,16 @@ UnaryProgramFactory::cached_program_t UnaryProgramFactory::create(
                     unary_defines["FILL_INT"] = "fill_tile_int";
                 } else {
                     unary_defines["FILL_FLOAT"] = "fill_tile";
+                }
+                break;
+            case UnaryOpType::LOGIT:
+                value1 = *ops_chain[0].get_param_if<float>(0);
+                value2 = 1.0f - value1;
+                if (value1 >= 0.0f) {
+                    unary_defines["CLAMP"] = "clamp_tile";
+                }
+                if (value1 > 0.5f) {
+                    unary_defines["WHERE"] = "where_tile";
                 }
                 break;
             default: break;
