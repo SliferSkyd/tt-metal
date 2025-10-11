@@ -321,13 +321,15 @@ class Transformer(LightweightModule):
         It returns ttnn device tensors.
         """
         if hasattr(self.args, "sliding_window") and self.args.sliding_window is not None:
-            mask = torch.triu(torch.full((1, 1, x.shape[-2], x.shape[-2]), -float("inf")), diagonal=1)
+            seq_len = x.shape[-2]
+            neg_large = float("-inf")
+            mask = torch.triu(torch.full((1, 1, seq_len, seq_len), neg_large), diagonal=1)
             sliding_mask = mask + torch.tril(
-                torch.full((1, 1, x.shape[-2], x.shape[-2]), -float("inf")),
+                torch.full((1, 1, seq_len, seq_len), neg_large),
                 diagonal=-self.args.sliding_window,
             )
             sliding_attn_mask = ttnn.from_torch(
-                sliding_mask, device=self.mesh_device, layout=ttnn.TILE_LAYOUT, dtype=ttnn.bfloat16
+                sliding_mask, device=self.mesh_device, layout=ttnn.TILE_LAYOUT, dtype=ttnn.bfloat4_b
             )
         else:
             sliding_attn_mask = None
