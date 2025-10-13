@@ -30,6 +30,7 @@
 #include "tt_metal/hw/inc/utils/utils.h"
 #include "tt_metal/fabric/hw/inc/edm_fabric/fabric_txq_setup.h"
 #include "hostdevcommon/fabric_common.h"
+#include "tt_metal/fabric/hw/inc/tt_fabric_api.h"
 
 #include <array>
 #include <cstddef>
@@ -777,11 +778,54 @@ FORCE_INLINE __attribute__((optimize("jump-tables"))) void receiver_forward_pack
         }
     };
 
+    // Helper to forward packet to next mesh
+    auto forward_to_next_mesh = [&]() {
+        eth_chan_directions next_direction =
+            get_next_hop_router_direction(packet_start->dst_start_mesh_id, packet_start->dst_start_chip_id);
+        // Helper macro to forward to a specific direction with constexpr edm_index
+#define FORWARD_TO_DIRECTION(DIR)                                                                               \
+    do {                                                                                                        \
+        constexpr auto edm_index = get_downstream_edm_interface_index<rx_channel_id, DIR>();                    \
+        forward_payload_to_downstream_edm<enable_deadlock_avoidance, vc1_has_different_downstream_dest, false>( \
+            packet_start,                                                                                       \
+            payload_size_bytes,                                                                                 \
+            cached_routing_fields,                                                                              \
+            get_downstream_interface.template operator()<edm_index>(),                                          \
+            transaction_id);                                                                                    \
+    } while (0)
+        switch (next_direction) {
+            case EAST: FORWARD_TO_DIRECTION(EAST); break;
+            case WEST: FORWARD_TO_DIRECTION(WEST); break;
+            case NORTH: FORWARD_TO_DIRECTION(NORTH); break;
+            case SOUTH: FORWARD_TO_DIRECTION(SOUTH); break;
+            default: ASSERT(false);
+        }
+#undef FORWARD_TO_DIRECTION
+    };
+
+    // This indicates inter-mesh packet arrived at another mesh.
+    // if (hop_cmd == LowLatencyMeshRoutingFields::NOOP && cached_routing_fields.hop_index != 0) {
+    //     // TODO: pass dst_start_mesh_id when ACTIVE_ETH supports inter-mesh routing
+    //     fabric_set_unicast_route(packet_start, packet_start->dst_start_chip_id, packet_start->dst_start_mesh_id);
+    // }
+    // const auto* routing_table =
+    //     reinterpret_cast<tt_l1_ptr tt::tt_fabric::fabric_router_l1_config_t*>(ROUTING_TABLE_BASE);
+    //     if (packet_start->dst_start_mesh_id != routing_table->my_mesh_id) {
+    //         return false;
+    //     }
+    // const auto* routing_table =
+    //     reinterpret_cast<tt_l1_ptr tt::tt_fabric::fabric_router_l1_config_t*>(ROUTING_TABLE_BASE);
+
     switch (hop_cmd) {
         case LowLatencyMeshRoutingFields::NOOP: break;
         case LowLatencyMeshRoutingFields::FORWARD_EAST:
             if constexpr (my_direction == EAST) {
-                execute_chip_unicast_to_local_chip(packet_start, payload_size_bytes, transaction_id, rx_channel_id);
+                // execute_chip_unicast_to_local_chip(packet_start, payload_size_bytes, transaction_id, rx_channel_id);
+                if (packet_start->dst_start_mesh_id == routing_table->my_mesh_id) {
+                    execute_chip_unicast_to_local_chip(packet_start, payload_size_bytes, transaction_id, rx_channel_id);
+                } else {
+                    forward_to_next_mesh();
+                }
             } else {
                 constexpr auto edm_index = get_downstream_edm_interface_index<rx_channel_id, EAST>();
                 forward_payload_to_downstream_edm<enable_deadlock_avoidance, vc1_has_different_downstream_dest, false>(
@@ -794,7 +838,12 @@ FORCE_INLINE __attribute__((optimize("jump-tables"))) void receiver_forward_pack
             break;
         case LowLatencyMeshRoutingFields::FORWARD_WEST:
             if constexpr (my_direction == WEST) {
-                execute_chip_unicast_to_local_chip(packet_start, payload_size_bytes, transaction_id, rx_channel_id);
+                // execute_chip_unicast_to_local_chip(packet_start, payload_size_bytes, transaction_id, rx_channel_id);
+                if (packet_start->dst_start_mesh_id == routing_table->my_mesh_id) {
+                    execute_chip_unicast_to_local_chip(packet_start, payload_size_bytes, transaction_id, rx_channel_id);
+                } else {
+                    forward_to_next_mesh();
+                }
             } else {
                 constexpr auto edm_index = get_downstream_edm_interface_index<rx_channel_id, WEST>();
                 forward_payload_to_downstream_edm<enable_deadlock_avoidance, vc1_has_different_downstream_dest, false>(
@@ -827,7 +876,12 @@ FORCE_INLINE __attribute__((optimize("jump-tables"))) void receiver_forward_pack
             break;
         case LowLatencyMeshRoutingFields::FORWARD_NORTH:
             if constexpr (my_direction == NORTH) {
-                execute_chip_unicast_to_local_chip(packet_start, payload_size_bytes, transaction_id, rx_channel_id);
+                // execute_chip_unicast_to_local_chip(packet_start, payload_size_bytes, transaction_id, rx_channel_id);
+                if (packet_start->dst_start_mesh_id == routing_table->my_mesh_id) {
+                    execute_chip_unicast_to_local_chip(packet_start, payload_size_bytes, transaction_id, rx_channel_id);
+                } else {
+                    forward_to_next_mesh();
+                }
             } else {
                 constexpr auto edm_index = get_downstream_edm_interface_index<rx_channel_id, NORTH>();
                 forward_payload_to_downstream_edm<enable_deadlock_avoidance, vc1_has_different_downstream_dest, false>(
@@ -840,7 +894,12 @@ FORCE_INLINE __attribute__((optimize("jump-tables"))) void receiver_forward_pack
             break;
         case LowLatencyMeshRoutingFields::FORWARD_SOUTH:
             if constexpr (my_direction == SOUTH) {
-                execute_chip_unicast_to_local_chip(packet_start, payload_size_bytes, transaction_id, rx_channel_id);
+                // execute_chip_unicast_to_local_chip(packet_start, payload_size_bytes, transaction_id, rx_channel_id);
+                if (packet_start->dst_start_mesh_id == routing_table->my_mesh_id) {
+                    execute_chip_unicast_to_local_chip(packet_start, payload_size_bytes, transaction_id, rx_channel_id);
+                } else {
+                    forward_to_next_mesh();
+                }
             } else {
                 constexpr auto edm_index = get_downstream_edm_interface_index<rx_channel_id, SOUTH>();
                 forward_payload_to_downstream_edm<enable_deadlock_avoidance, vc1_has_different_downstream_dest, false>(

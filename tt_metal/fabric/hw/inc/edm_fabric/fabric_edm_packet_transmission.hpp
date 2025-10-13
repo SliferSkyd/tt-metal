@@ -126,12 +126,19 @@ __attribute__((optimize("jump-tables")))
 #ifndef FABRIC_2D
 FORCE_INLINE
 #endif
-    void
+    bool
     execute_chip_unicast_to_local_chip(
         tt_l1_ptr PACKET_HEADER_TYPE* const packet_start,
         uint16_t payload_size_bytes,
         uint32_t transaction_id,
         uint8_t rx_channel_id) {
+    // #ifdef FABRIC_2D
+    //     const auto* routing_table =
+    //         reinterpret_cast<tt_l1_ptr tt::tt_fabric::fabric_router_l1_config_t*>(ROUTING_TABLE_BASE);
+    //     if (packet_start->dst_start_mesh_id != routing_table->my_mesh_id) {
+    //         return false;
+    //     }
+    // #endif
     const auto& header = *packet_start;
     uint32_t payload_start_address = reinterpret_cast<size_t>(packet_start) + sizeof(PACKET_HEADER_TYPE);
 
@@ -228,6 +235,7 @@ FORCE_INLINE
             ASSERT(false);
         } break;
     };
+    return true;
 }
 
 FORCE_INLINE void update_packet_header_for_next_hop(
