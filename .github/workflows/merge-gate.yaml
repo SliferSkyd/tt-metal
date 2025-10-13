@@ -95,21 +95,48 @@ jobs:
         uses: tenstorrent/tt-metal/.github/actions/find-changed-files@main
 
   build:
-    if: ${{ github.ref_name == 'main' ||
-            needs.find-changes.outputs.cmake-changed == 'true' ||
-            needs.find-changes.outputs.any-code-changed == 'true' ||
-            needs.find-changes.outputs.docs-changed == 'true'
-        }}
-    needs: find-changes
+    # if: ${{ github.ref_name == 'main' ||
+    #         needs.find-changes.outputs.cmake-changed == 'true' ||
+    #         needs.find-changes.outputs.any-code-changed == 'true' ||
+    #         needs.find-changes.outputs.docs-changed == 'true'
+    #     }}
+    # needs: find-changes
+    # uses: ./.github/workflows/build-artifact.yaml
+    # permissions:
+    #   packages: write
+    # secrets: inherit
+    # with:
+    #   build-type: Release
+    #   build-wheel: true
+    #   version: 22.04
+    #   skip-tt-train: false
     uses: ./.github/workflows/build-artifact.yaml
     permissions:
       packages: write
     secrets: inherit
     with:
-      build-type: Release
+      build-type: ${{ inputs.build-type || 'Release' }}
       build-wheel: true
-      version: 22.04
+      version: ${{ inputs.version || '22.04' }}
       skip-tt-train: false
+    
+  galaxy-apc-fast-tests:
+    if: ${{ github.event.pull_request.head.repo.fork == false }}
+    needs: build
+    secrets: inherit
+    strategy:
+      fail-fast: false
+      matrix:
+        test-group: [
+          { arch: wormhole_b0, runner-label: in-service, topology: topology-6u },
+        ]
+    uses: ./.github/workflows/galaxy-apc-fast-tests-impl.yaml
+    with:
+      docker-image: ${{ needs.build.outputs.dev-docker-image }}
+      wheel-artifact-name: ${{ needs.build.outputs.wheel-artifact-name }}
+      build-artifact-name: ${{ needs.build.outputs.build-artifact-name }}
+      runner-label: ${{ matrix.test-group.runner-label }}
+      topology: ${{ matrix.test-group.topology }}
 
   build-docs:
     if: ${{ needs.find-changes.outputs.any-code-changed == 'true' ||
