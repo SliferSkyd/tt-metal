@@ -12,7 +12,7 @@ on:
       timeout:
         required: false
         type: number
-        default: 35
+        default: 100
       docker-image:
         required: true
         type: string
@@ -96,7 +96,7 @@ jobs:
     runs-on: >-
       ${{
         (inputs.runner-label == 'P100' || inputs.runner-label == 'P150') && fromJSON(format('["in-service", "cloud-virtual-machine", "{0}"]', inputs.runner-label))
-        || ((inputs.runner-label == 'N300' && matrix.test-group.name == 'tools') && format('tt-ubuntu-2204-{0}-metal', inputs.runner-label))
+        || ((inputs.runner-label == 'N300' && matrix.test-group.name == 'tools') && format('tt-ubuntu-2204-{0}-viommu-metal', inputs.runner-label))
         || format('tt-ubuntu-2204-{0}-viommu-metal', inputs.runner-label)
       }}
     steps:
