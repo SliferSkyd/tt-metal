@@ -290,10 +290,7 @@ void MAIN {
                     if (tilize_stick_counter == TILE_HEIGHT) {
                         PACK((pack_untilize_uninit(pre_tilize_cb_id)));
 
-                        // Workaround until #27504 is not closed
-                        tensix_sync();
-                        unary_op_init_common(pre_tilize_cb_id, out_cb_id);
-                        tensix_sync();
+                        pack_reconfig_data_format(out_cb_id);
 
                         fast_tilize_init(pre_tilize_cb_id, in_ntiles_c, out_cb_id);
                         fast_tilize_block(pre_tilize_cb_id, in_ntiles_c, out_cb_id);
@@ -302,9 +299,7 @@ void MAIN {
                         cb_push_back(out_cb_id, in_ntiles_c);
 
                         if constexpr (is_output_block_format) {
-                            tensix_sync();
-                            unary_op_init_common(in_cb_id_0, pre_tilize_cb_id);
-                            tensix_sync();
+                            pack_reconfig_data_format(pre_tilize_cb_id);
                         }
 
                         tilize_stick_counter = 0;
