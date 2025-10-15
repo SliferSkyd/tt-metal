@@ -29,6 +29,10 @@
 
 namespace NAMESPACE {
 
+ALWI void unary_op_init_common_x(uint32_t icb, uint32_t ocb) {
+    //    PACK((llk_pack_hw_configure_disaggregated<DST_ACCUM_MODE, false>(ocb)));
+}
+
 template <uint32_t topk_output_tiles, uint32_t data_dst_idx, uint32_t index_dst_idx, uint32_t topk_cb_tile_idx>
 ALWI void tilize_dest_function(uint32_t curr_in_cb_id, uint32_t curr_in_idx_cb_id) {
     tilize_init_short_with_dt_no_pack(curr_in_cb_id, curr_in_idx_cb_id, topk_output_tiles);
@@ -289,8 +293,13 @@ void MAIN {
 
                     if (tilize_stick_counter == TILE_HEIGHT) {
                         PACK((pack_untilize_uninit(pre_tilize_cb_id)));
-                        UNPACK(llk_unpack_tilizeA_B_uninit(pre_tilize_cb_id));
                         pack_reconfig_data_format(out_cb_id);
+                        // tensix_sync();
+                        //  unary_op_init_common_x(pre_tilize_cb_id, out_cb_id);
+                        // UNPACK((llk_unpack_A_hw_configure_disaggregated<DST_ACCUM_MODE, StochRndType::None, true>(
+                        //    pre_tilize_cb_id)));
+                        UNPACK(llk_unpack_tilizeA_B_uninit(pre_tilize_cb_id));
+                        // tensix_sync();
 
                         fast_tilize_init(pre_tilize_cb_id, in_ntiles_c, out_cb_id);
                         fast_tilize_block(pre_tilize_cb_id, in_ntiles_c, out_cb_id);
@@ -299,6 +308,9 @@ void MAIN {
                         cb_push_back(out_cb_id, in_ntiles_c);
 
                         if constexpr (is_output_block_format) {
+                            // tensix_sync();
+                            // unary_op_init_common(in_cb_id_0, pre_tilize_cb_id);
+                            // tensix_sync();
                             pack_reconfig_data_format(pre_tilize_cb_id);
                         }
 
