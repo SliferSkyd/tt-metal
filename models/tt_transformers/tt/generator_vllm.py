@@ -484,6 +484,7 @@ class MultiModalProcessor(BaseMultiModalProcessor):
         # WORKAROUND
         # When using /v1/chat/completions endpoint prompt is already tokenized
         # Processor requires text, so we decode tokens back to text
+        # Same as a workaround in vllm.model_executor.models.transformers.py::MultiModalProcessor::apply from commit 2226d5b
         if isinstance(prompt, list) and prompt and isinstance(prompt[0], int):
             # Use the processor's tokenizer to decode tokens back to text
             tokenizer = (
@@ -512,6 +513,35 @@ class MultiModalProcessor(BaseMultiModalProcessor):
             mm_hashes={},
             mm_placeholders={},
         )
+
+        if mm_data:
+            # Set encoder prompt length based on the number of vision tokens so block manager allocates enough blocks.
+            hf_config = self.info.get_hf_config()
+            vision_config = hf_config.vision_config
+            image_token = input_processor.image_token
+
+            if hf_config.model_type == "qwen2_5_vl":
+                # Qwen supports only one image at a time
+                image_token_id = hf_config.image_token_id
+                patch_size = vision_config.patch_size
+                merge_size = vision_config.spatial_merge_size
+                image_width = mm_data["image"][0].width
+                image_height = mm_data["image"][0].height
+                num_patches = (image_width // patch_size) * (image_height // patch_size)
+                tokens_per_image = num_patches // (merge_size**2)
+                num_images = 1
+            elif hf_config.model_type == "gemma3":
+                image_token_id = hf_config.image_token_index
+                tokens_per_image = hf_config.mm_tokens_per_image
+                num_images = processed_inputs["pixel_values"].shape[0]
+            else:
+                raise ValueError(f"Model type {hf_config.model_type} not supported")
+
+            num_vision_tokens = tokens_per_image * num_images
+
+            mm_inputs["encoder_prompt_token_ids"] = [image_token_id] * num_vision_tokens
+            mm_inputs["encoder_prompt"] = image_token * num_vision_tokens
+
         return mm_inputs
 
 
