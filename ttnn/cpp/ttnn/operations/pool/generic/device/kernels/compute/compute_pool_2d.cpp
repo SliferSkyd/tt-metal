@@ -289,7 +289,7 @@ void MAIN {
 
                     if (tilize_stick_counter == TILE_HEIGHT) {
                         PACK((pack_untilize_uninit(pre_tilize_cb_id)));
-
+                        UNPACK(llk_unpack_tilizeA_B_uninit(pre_tilize_cb_id));
                         pack_reconfig_data_format(out_cb_id);
 
                         fast_tilize_init(pre_tilize_cb_id, in_ntiles_c, out_cb_id);
