@@ -18,7 +18,7 @@ on:
       timeout:
         required: false
         type: number
-        default: 45
+        default: 90
       enable-watcher:
         required: false
         type: boolean
@@ -44,7 +44,7 @@ jobs:
     runs-on: >-
       ${{
         (inputs.runner-label == 'P100') && fromJSON(format('["in-service", "cloud-virtual-machine", "{0}"]', inputs.runner-label))
-        || ((inputs.runner-label == 'N300') && format('tt-ubuntu-2204-{0}-metal', inputs.runner-label))
+        || ((inputs.runner-label == 'N300') && format('tt-ubuntu-2204-{0}-viommu-metal', inputs.runner-label))
         || format('tt-ubuntu-2204-{0}-viommu-metal', inputs.runner-label)
       }}
     container:
