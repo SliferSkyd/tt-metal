@@ -10,7 +10,6 @@
 #include <tt_backend_api_types.hpp>
 #include <cstddef>
 #include <filesystem>
-#include <functional>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -26,7 +25,6 @@
 #include "jit_build_options.hpp"
 #include "jit_build_settings.hpp"
 #include <tt-logger/tt-logger.hpp>
-#include "impl/context/metal_context.hpp"
 #include "impl/kernels/kernel_impl.hpp"
 
 enum class UnpackToDestMode : uint8_t;
@@ -67,10 +65,16 @@ void jit_build_genfiles_kernel_include(
     // Note: assumes dirs (and descriptors) already created
     log_trace(tt::LogBuildKernels, "Generating defines for BRISC/NCRISC/ERISC user kernel");
 
-    string out_dir = env.get_out_kernel_root_path() + settings.get_full_kernel_name() + "/";
-    string kernel_header = out_dir + "kernel_includes.hpp";
+    std::string out_dir = env.get_out_kernel_root_path() + settings.get_full_kernel_name() + "/";
+    std::string kernel_header = out_dir + "kernel_includes.hpp";
 
-    const string& kernel_src_to_include = get_kernel_source_to_include(kernel_src);
+    if (fs::exists(kernel_header)) {
+        // This generated .hpp file is covered by the hash, so if it exists,
+        // there's no need to regenerate.
+        return;
+    }
+
+    std::string kernel_src_to_include = get_kernel_source_to_include(kernel_src);
 
     gen_kernel_cpp(kernel_src_to_include, kernel_header);
 }
@@ -80,18 +84,17 @@ void jit_build_genfiles_triscs_src(
     // Note: assumes dirs (and descriptors) already created
     log_trace(tt::LogBuildKernels, "Generating defines for TRISCs");
 
-    string out_dir = env.get_out_kernel_root_path() + settings.get_full_kernel_name() + "/";
-    string unpack_base = out_dir + "chlkc_unpack";
-    string math_base = out_dir + "chlkc_math";
-    string pack_base = out_dir + "chlkc_pack";
-    string unpack_cpp = unpack_base + ".cpp";
-    string unpack_llk_args_h = unpack_base + "_llk_args.h";
-    string math_cpp = math_base + ".cpp";
-    string math_llk_args_h = math_base + "_llk_args.h";
-    string pack_cpp = pack_base + ".cpp";
-    string pack_llk_args_h = pack_base + "_llk_args.h";
+    std::string out_dir = env.get_out_kernel_root_path() + settings.get_full_kernel_name() + "/";
+    std::string unpack_cpp = out_dir + "chlkc_unpack.cpp";
+    std::string math_cpp = out_dir + "chlkc_math.cpp";
+    std::string pack_cpp = out_dir + "chlkc_pack.cpp";
+    if (fs::exists(unpack_cpp) && fs::exists(math_cpp) && fs::exists(pack_cpp)) {
+        // These generated .cpp files are covered by the hash, so if they exist,
+        // there's no need to regenerate.
+        return;
+    }
 
-    const string& kernel_src_to_include = get_kernel_source_to_include(kernel_src);
+    std::string kernel_src_to_include = get_kernel_source_to_include(kernel_src);
 
     vector<string> unpack_prolog;
     unpack_prolog.push_back("#define TRISC_UNPACK\n");
@@ -411,6 +414,11 @@ void jit_build_genfiles_descriptors(const JitBuildEnv& env, JitBuildOptions& opt
     //ZoneScoped;
     //const std::string tracyPrefix = "generate_descriptors_";
     //ZoneName((tracyPrefix + options.name).c_str(), options.name.length() + tracyPrefix.length());
+    if (fs::is_directory(options.path)) {
+        // All generated content should be covered by the hash, so if the hashed directory exists,
+        // there's no need to regenerate.
+        return;
+    }
     fs::create_directories(options.path);
     try {
         std::thread td( [&]() { generate_data_format_descriptors(options, env.get_arch()); } );

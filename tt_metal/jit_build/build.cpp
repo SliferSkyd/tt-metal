@@ -553,11 +553,8 @@ void JitBuildState::generate_makefile(std::ostream& mkfile, const JitBuildSettin
     mkfile << "DEFINES=" << defines_;
     if (settings) {
         // Append user args
-        if (process_defines_at_compile_) {
-            settings->process_defines([&mkfile](const string& define, const string& value) {
-                fmt::print(mkfile, "-D{}='{}' ", define, value);
-            });
-        }
+        settings->process_defines(
+            [&mkfile](const string& define, const string& value) { fmt::print(mkfile, "-D{}='{}' ", define, value); });
 
         settings->process_compile_time_args([&mkfile](const std::vector<uint32_t>& values) {
             if (values.empty()) {
