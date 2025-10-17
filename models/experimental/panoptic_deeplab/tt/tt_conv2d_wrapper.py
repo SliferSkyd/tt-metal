@@ -206,7 +206,7 @@ class TtConv2d:
             return ttnn.Conv2dConfig(
                 weights_dtype=ttnn.bfloat8_b,
                 shard_layout=None,
-                deallocate_activation=False,
+                deallocate_activation_in_L1=False,
                 enable_act_double_buffer=False,
                 enable_weights_double_buffer=False,
                 output_layout=ttnn.TILE_LAYOUT,

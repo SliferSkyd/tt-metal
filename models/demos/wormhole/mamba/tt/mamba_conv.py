@@ -51,7 +51,7 @@ class MambaConv:
         self.conv1d_config = ttnn.Conv1dConfig(
             weights_dtype=self.config.weights_dtype,
             shard_layout=ttnn.TensorMemoryLayout.HEIGHT_SHARDED,
-            deallocate_activation=True,
+            deallocate_activation_in_L1=True,
         )
         self.conv1d_compute_config = ttnn.init_device_compute_kernel_config(
             self.device.arch(),

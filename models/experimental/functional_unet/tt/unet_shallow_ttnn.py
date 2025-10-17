@@ -172,7 +172,7 @@ class UNetConv2D:
         self.conv_config = ttnn.Conv2dConfig(
             weights_dtype=weights_dtype,
             shard_layout=shard_layout,
-            deallocate_activation=True,
+            deallocate_activation_in_L1=True,
             enable_act_double_buffer=(
                 conv.use_activation_double_buffer if "use_activation_double_buffer" in conv else False
             ),

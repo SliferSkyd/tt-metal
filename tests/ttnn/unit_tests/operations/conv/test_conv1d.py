@@ -76,7 +76,7 @@ def run_conv(
     conv_config = ttnn.Conv1dConfig(
         weights_dtype=weights_dtype,
         shard_layout=shard_layout,
-        deallocate_activation=deallocate_activation,
+        deallocate_activation_in_L1=deallocate_activation,
     )
     compute_config = ttnn.init_device_compute_kernel_config(
         device.arch(),
@@ -415,7 +415,7 @@ def test_with_prepare_weights(
     conv_config = ttnn.Conv1dConfig(
         weights_dtype=ttnn.bfloat16,
         shard_layout=None,
-        deallocate_activation=False,
+        deallocate_activation_in_L1=False,
     )
 
     tt_output_tensor_on_device, out_length = ttnn.conv1d(

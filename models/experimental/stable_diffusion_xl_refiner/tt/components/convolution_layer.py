@@ -53,7 +53,7 @@ class ConvConfig:
         if self.conv2d_config is None:
             self.conv2d_config = ttnn.Conv2dConfig(
                 weights_dtype=self.conv_w_dtype,
-                deallocate_activation=self.deallocate_activation,
+                deallocate_activation_in_L1=self.deallocate_activation,
                 act_block_w_div=self.act_block_w_div,
                 act_block_h_override=self.act_block_h_override,
             )

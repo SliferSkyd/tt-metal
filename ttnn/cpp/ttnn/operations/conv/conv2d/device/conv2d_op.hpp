@@ -27,10 +27,10 @@ struct Conv2dConfig {
     // Fused activation function as UnaryWithParam
     std::optional<ttnn::operations::unary::UnaryWithParam> activation = std::nullopt;
 
-    // If user tensor will be deallocated if it's on device.
-    bool deallocate_activation = false;
+    // If user tensor will be deallocated if it's on device in L1 memory.
+    bool deallocate_activation_in_L1 = false;
 
-    // If true && dellocate_activation is true, then after halo device op is done,
+    // If true && deallocate_activation_in_L1 is true, then after halo device op is done,
     // the output tensor of halo will be reallocated.
     bool reallocate_halo_output = true;
 
@@ -121,7 +121,7 @@ struct Conv2dConfig {
     static constexpr auto attribute_names = std::make_tuple(
         "weights_dtype",
         "activation",
-        "deallocate_activation",
+        "deallocate_activation_in_L1",
         "reallocate_halo_output",
         "config_tensors_in_dram",
         "act_block_h_override",
@@ -143,7 +143,7 @@ struct Conv2dConfig {
         return std::make_tuple(
             std::cref(this->weights_dtype),
             std::cref(this->activation),
-            std::cref(this->deallocate_activation),
+            std::cref(this->deallocate_activation_in_L1),
             std::cref(this->reallocate_halo_output),
             std::cref(this->config_tensors_in_dram),
             std::cref(this->act_block_h_override),

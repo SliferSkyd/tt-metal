@@ -45,7 +45,7 @@ class Conv:
             activation=self.activation,
             shard_layout=self.shard_layout,
             reshard_if_not_optimal=self.reshard,
-            deallocate_activation=self.deallocate,
+            deallocate_activation_in_L1=self.deallocate,
             reallocate_halo_output=True,
             enable_act_double_buffer=True,
             enable_weights_double_buffer=True,

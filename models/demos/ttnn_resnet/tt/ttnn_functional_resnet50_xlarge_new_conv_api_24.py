@@ -178,7 +178,7 @@ class resnet50Bottleneck:
                     shard_layout=ttnn.TensorMemoryLayout.HEIGHT_SHARDED
                     if height_sharding
                     else ttnn.TensorMemoryLayout.BLOCK_SHARDED,
-                    deallocate_activation=True,
+                    deallocate_activation_in_L1=True,
                     reallocate_halo_output=True,
                     reshard_if_not_optimal=reshard_if_not_optimal,
                 ),
@@ -288,7 +288,7 @@ class resnet50Bottleneck:
             conv_config=ttnn.Conv2dConfig(
                 weights_dtype=self.model_config["WEIGHTS_DTYPE"],
                 activation="relu",
-                deallocate_activation=True,
+                deallocate_activation_in_L1=True,
                 reallocate_halo_output=reallocate_halo_output,
                 act_block_h_override=act_block_h_override,
                 shard_layout=ttnn.TensorMemoryLayout.HEIGHT_SHARDED
@@ -522,7 +522,7 @@ class resnet50:
             conv_config=ttnn.Conv2dConfig(
                 weights_dtype=self.model_config["WEIGHTS_DTYPE"],
                 activation="relu",
-                deallocate_activation=True,
+                deallocate_activation_in_L1=True,
                 act_block_h_override=act_block_h_override,
             ),
             compute_config=ttnn.init_device_compute_kernel_config(
@@ -852,7 +852,7 @@ class resnet50:
             conv_config=ttnn.Conv2dConfig(
                 weights_dtype=self.model_config["WEIGHTS_DTYPE"],
                 activation="relu",
-                deallocate_activation=True,
+                deallocate_activation_in_L1=True,
                 act_block_h_override=act_block_h_override,
             ),
             compute_config=ttnn.init_device_compute_kernel_config(

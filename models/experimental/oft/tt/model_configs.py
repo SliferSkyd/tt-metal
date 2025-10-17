@@ -113,7 +113,7 @@ class ModelOptimizations:
         self.conv_configs["DEFAULT"] = ttnn.Conv2dConfig(
             weights_dtype=conv_w_dtype,
             shard_layout=None,
-            deallocate_activation=False,
+            deallocate_activation_in_L1=False,
             enable_act_double_buffer=False,
             reshard_if_not_optimal=True,
             act_block_w_div=1,
@@ -124,7 +124,7 @@ class ModelOptimizations:
         self.conv_configs["HS_ABH_32_TILE"] = ttnn.Conv2dConfig(
             weights_dtype=conv_w_dtype,
             shard_layout=ttnn.TensorMemoryLayout.HEIGHT_SHARDED,
-            deallocate_activation=False,
+            deallocate_activation_in_L1=False,
             enable_act_double_buffer=False,
             reshard_if_not_optimal=True,
             act_block_w_div=1,
@@ -135,7 +135,7 @@ class ModelOptimizations:
         self.conv_configs["HS_ABH_32_TILE_DEALLOC"] = ttnn.Conv2dConfig(
             weights_dtype=conv_w_dtype,
             shard_layout=ttnn.TensorMemoryLayout.HEIGHT_SHARDED,
-            deallocate_activation=True,
+            deallocate_activation_in_L1=True,
             enable_act_double_buffer=False,
             reshard_if_not_optimal=True,
             act_block_w_div=1,
@@ -146,7 +146,7 @@ class ModelOptimizations:
         self.conv_configs["HS_ABH_64_RM"] = ttnn.Conv2dConfig(
             weights_dtype=conv_w_dtype,
             shard_layout=ttnn.TensorMemoryLayout.HEIGHT_SHARDED,
-            deallocate_activation=False,  # cannot deallocate if in dram
+            deallocate_activation_in_L1=False,  # cannot deallocate if in dram
             enable_act_double_buffer=False,
             reshard_if_not_optimal=True,
             act_block_w_div=1,
@@ -157,7 +157,7 @@ class ModelOptimizations:
         self.conv_configs["DEALLOC_RM"] = ttnn.Conv2dConfig(
             weights_dtype=conv_w_dtype,
             shard_layout=ttnn.TensorMemoryLayout.HEIGHT_SHARDED,
-            deallocate_activation=True,
+            deallocate_activation_in_L1=True,
             enable_act_double_buffer=False,
             reshard_if_not_optimal=True,
             act_block_w_div=1,

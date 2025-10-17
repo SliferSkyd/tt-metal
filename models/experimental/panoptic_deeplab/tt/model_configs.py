@@ -21,7 +21,7 @@ class ModelOptimisations:
         self.conv_configs["DEFAULT"] = ttnn.Conv2dConfig(
             weights_dtype=conv_w_dtype,
             shard_layout=None,
-            deallocate_activation=False,
+            deallocate_activation_in_L1=False,
             enable_act_double_buffer=False,
             reshard_if_not_optimal=True,
             act_block_w_div=1,

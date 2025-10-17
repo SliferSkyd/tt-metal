@@ -76,7 +76,7 @@ class TtConv:
             weights_dtype=ttnn.bfloat16,
             activation=None,
             shard_layout=ttnn.TensorMemoryLayout.HEIGHT_SHARDED,
-            deallocate_activation=False,
+            deallocate_activation_in_L1=False,
             enable_act_double_buffer=self.enable_act_double_buffer,
             output_layout=self.output_layout,
             reallocate_halo_output=False,

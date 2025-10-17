@@ -49,7 +49,7 @@ class Conv:
             weights_dtype=ttnn.bfloat16,
             activation=self.activation,
             shard_layout=self.shard_layout,
-            deallocate_activation=self.deallocate,
+            deallocate_activation_in_L1=self.deallocate,
             enable_act_double_buffer=True,
             enable_weights_double_buffer=True,
         )

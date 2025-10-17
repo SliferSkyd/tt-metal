@@ -76,7 +76,7 @@ class TtConv2d:
         conv_config = ttnn.Conv2dConfig(
             weights_dtype=self.dtype,
             shard_layout=self.shard_layout,
-            deallocate_activation=self.deallocate,
+            deallocate_activation_in_L1=self.deallocate,
             activation=self.activation,
         )
         compute_config = ttnn.init_device_compute_kernel_config(

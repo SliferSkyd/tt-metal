@@ -46,7 +46,7 @@ class OpenPDNMnistConv2D:
             weights_dtype=weights_dtype,
             activation=activation,
             shard_layout=shard_layout,
-            deallocate_activation=self.deallocate_activation,
+            deallocate_activation_in_L1=self.deallocate_activation,
             output_layout=ttnn.TILE_LAYOUT,
         )
         if num_cores_nhw is not None:

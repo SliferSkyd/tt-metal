@@ -247,7 +247,7 @@ def run_conv(
     conv_config = ttnn.Conv2dConfig(
         weights_dtype=weights_dtype,
         shard_layout=shard_layout if not auto_shard else None,
-        deallocate_activation=deallocate_activation,
+        deallocate_activation_in_L1=deallocate_activation,
         enable_act_double_buffer=enable_act_double_buffer,
         enable_weights_double_buffer=enable_weights_double_buffer,
         output_layout=output_layout,
@@ -964,7 +964,7 @@ def test_conv_ws(
     conv_config = ttnn.Conv2dConfig(
         weights_dtype=weights_dtype,
         shard_layout=ttnn.TensorMemoryLayout.WIDTH_SHARDED if not auto_shard else None,
-        deallocate_activation=deallocate_activation,
+        deallocate_activation_in_L1=deallocate_activation,
         enable_act_double_buffer=enable_act_double_buffer,
         enable_weights_double_buffer=enable_weights_double_buffer,
         reshard_if_not_optimal=True,
@@ -4077,7 +4077,7 @@ def test_conv2d_act_dealloc(
 
     conv_config = ttnn.Conv2dConfig(
         weights_dtype=weights_dtype,
-        deallocate_activation=True,
+        deallocate_activation_in_L1=True,
         output_layout=output_layout,
         enable_kernel_stride_folding=enable_fenable_kernel_stride_folding,
     )
@@ -4106,7 +4106,12 @@ def test_conv2d_act_dealloc(
         slice_config=slice_config,
         dtype=output_dtype,
     )
-    assert not tt_input_tensor.is_allocated(), "Input tensor is allocated"
+    if shard_layout is not None:
+        # Input is in L1 (sharded), so it should be deallocated
+        assert not tt_input_tensor.is_allocated(), "L1 input tensor should be deallocated"
+    else:
+        # Input is in DRAM, so it should NOT be deallocated
+        assert tt_input_tensor.is_allocated(), "DRAM input tensor should not be deallocated"
 
 
 @pytest.mark.parametrize("device_params", [{"l1_small_size": 16384}], indirect=True)

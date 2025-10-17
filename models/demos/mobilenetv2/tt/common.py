@@ -60,7 +60,7 @@ class TtMobileNetV2Conv2D:
             activation=self.activation,
             shard_layout=self.shard_layout,
             act_block_w_div=1,
-            deallocate_activation=self.deallocate_activation,
+            deallocate_activation_in_L1=self.deallocate_activation,
             enable_act_double_buffer=self.enable_act_double_buffer,
             output_layout=self.output_layout,
             reallocate_halo_output=False,

@@ -151,7 +151,7 @@ class Conv:
         conv_config = ttnn.Conv2dConfig(
             weights_dtype=self.weights_dtype,
             shard_layout=self.shard_layout,
-            deallocate_activation=self.deallocate,
+            deallocate_activation_in_L1=self.deallocate,
             activation=self.activation,
             # reshard_if_not_optimal=True,
             output_layout=self.output_layout,

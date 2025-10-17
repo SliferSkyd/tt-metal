@@ -63,7 +63,7 @@ class TtYOLOv7Conv2D:
             reshard_if_not_optimal=True if self.use_1d_systolic_array else False,
             enable_act_double_buffer=True,
             enable_weights_double_buffer=True,
-            deallocate_activation=self.deallocate_activation,
+            deallocate_activation_in_L1=self.deallocate_activation,
         )
         compute_config = ttnn.init_device_compute_kernel_config(
             device.arch(),

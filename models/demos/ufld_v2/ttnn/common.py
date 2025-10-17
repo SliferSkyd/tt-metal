@@ -43,7 +43,7 @@ class TtnnUFLDV2Conv2D:
         self.conv_config = ttnn.Conv2dConfig(
             weights_dtype=weights_dtype,
             shard_layout=shard_layout,
-            deallocate_activation=dealloc_act,
+            deallocate_activation_in_L1=dealloc_act,
             enable_act_double_buffer=True if is_blk else False,
             enable_weights_double_buffer=True if is_blk else False,
             reshard_if_not_optimal=True,

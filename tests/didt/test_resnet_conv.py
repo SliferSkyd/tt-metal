@@ -205,7 +205,7 @@ def test_resnet_conv(mesh_device, didt_workload_iterations, determinism_check_in
     conv_config = ttnn.Conv2dConfig(
         weights_dtype=weights_dtype,
         shard_layout=shard_layout,
-        deallocate_activation=False,
+        deallocate_activation_in_L1=False,
         enable_act_double_buffer=True,
     )
     # This sets subblocks to [2, 4] in underlying matmul

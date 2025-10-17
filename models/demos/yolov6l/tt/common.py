@@ -56,7 +56,7 @@ class Yolov6l_Conv2D:
         self.conv_config = ttnn.Conv2dConfig(
             weights_dtype=weights_dtype,
             shard_layout=shard_layout if not auto_shard else None,
-            deallocate_activation=self.deallocate_activation,
+            deallocate_activation_in_L1=self.deallocate_activation,
             enable_act_double_buffer=True,
             enable_weights_double_buffer=True if shard_layout == BS else False,
             reshard_if_not_optimal=True if self.use_1d_systolic_array else False,
@@ -179,7 +179,7 @@ class Yolov6x_Conv_T_2D:
         self.conv_config = ttnn.Conv2dConfig(
             weights_dtype=weights_dtype,
             shard_layout=shard_layout,
-            deallocate_activation=False,
+            deallocate_activation_in_L1=False,
             enable_act_double_buffer=False,
             output_layout=ttnn.TILE_LAYOUT,
             reshard_if_not_optimal=True,

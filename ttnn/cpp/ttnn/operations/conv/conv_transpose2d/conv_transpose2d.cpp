@@ -165,7 +165,7 @@ Result conv_transpose2d(
             parallel_config.shard_orientation == ShardOrientation::COL_MAJOR,
             input_tensor_post_tm.memory_config());
 
-        if (conv_config.deallocate_activation) {
+        if (conv_config.deallocate_activation_in_L1 && input_tensor_post_tm.memory_config().is_l1()) {
             input_tensor_post_tm.deallocate(/*force*/ true);
             log_debug(tt::LogOp, "Deallocate Input Tensor");
         }

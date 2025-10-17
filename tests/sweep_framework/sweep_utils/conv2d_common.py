@@ -121,7 +121,7 @@ def run_conv2d_full_sweep(
     conv_config = ttnn.Conv2dConfig(
         weights_dtype=weights_dtype,
         shard_layout=None,
-        deallocate_activation=deallocate_activation,
+        deallocate_activation_in_L1=deallocate_activation,
         override_sharding_config=override_sharding_config,
         output_layout=output_layout,
         enable_act_double_buffer=enable_act_double_buffer,

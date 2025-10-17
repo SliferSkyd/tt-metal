@@ -177,7 +177,7 @@ class resnet50Bottleneck:
                     shard_layout=ttnn.TensorMemoryLayout.HEIGHT_SHARDED
                     if height_sharding
                     else ttnn.TensorMemoryLayout.BLOCK_SHARDED,
-                    deallocate_activation=True,
+                    deallocate_activation_in_L1=True,
                     reallocate_halo_output=True,
                     reshard_if_not_optimal=reshard_if_not_optimal,
                 ),

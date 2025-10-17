@@ -52,7 +52,7 @@ class Yolov11Conv2D:
         self.conv_config = ttnn.Conv2dConfig(
             weights_dtype=weights_dtype,
             shard_layout=shard_layout,
-            deallocate_activation=self.deallocate_activation,
+            deallocate_activation_in_L1=self.deallocate_activation,
             enable_act_double_buffer=True,
             reshard_if_not_optimal=True if self.reshard else False,
             activation=self.activation,

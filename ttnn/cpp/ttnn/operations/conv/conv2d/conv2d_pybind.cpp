@@ -324,7 +324,7 @@ void py_bind_conv2d(py::module& module) {
         py::kw_only(),
         py::arg("weights_dtype") = std::nullopt,
         py::arg("activation") = std::nullopt,
-        py::arg("deallocate_activation") = false,
+        py::arg("deallocate_activation_in_L1") = false,
         py::arg("reallocate_halo_output") = true,
         py::arg("config_tensors_in_dram") = false,
         py::arg("act_block_h_override") = 0,
@@ -357,10 +357,11 @@ void py_bind_conv2d(py::module& module) {
         Supported activation functions include:
         RELU, SILU, GELU, SIGMOID, TANH, etc.
     )doc");
-    py_conv_config.def_readwrite("deallocate_activation", &Conv2dConfig::deallocate_activation, R"doc(
-        Boolean that indicates whether the activation tensor should be deallocated after the conv op is done.
-        If true, the activation tensor will be deallocated after the halo micro-op is done.
+    py_conv_config.def_readwrite("deallocate_activation_in_L1", &Conv2dConfig::deallocate_activation_in_L1, R"doc(
+        Boolean that indicates whether the activation tensor should be deallocated after the conv op is done, if the input originated in L1 memory.
+        If true, the activation tensor will be deallocated after the halo micro-op is done, but only if it was in L1 (not DRAM).
         Should not be used if the input to the conv op is used by another op.
+        This flag will not deallocate inputs that are in DRAM memory.
         )doc");
     py_conv_config.def_readwrite("reallocate_halo_output", &Conv2dConfig::reallocate_halo_output, R"doc(
         reallocate_halo_output is a boolean that indicates whether the halo output tensor should be moved to reduce memory fragmentation, before the conv micro-op is called.

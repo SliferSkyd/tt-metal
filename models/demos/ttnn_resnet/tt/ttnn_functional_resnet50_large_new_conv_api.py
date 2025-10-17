@@ -178,7 +178,7 @@ class resnet50Bottleneck:
                 conv_config=ttnn.Conv2dConfig(
                     weights_dtype=self.model_config["WEIGHTS_DTYPE"],
                     shard_layout=shard_layout,
-                    deallocate_activation=True,
+                    deallocate_activation_in_L1=True,
                     reallocate_halo_output=True,
                     reshard_if_not_optimal=reshard_if_not_optimal,
                 ),
@@ -292,7 +292,7 @@ class resnet50Bottleneck:
             conv_config=ttnn.Conv2dConfig(
                 weights_dtype=self.model_config["WEIGHTS_DTYPE"],
                 activation="relu",
-                deallocate_activation=True,
+                deallocate_activation_in_L1=True,
                 reallocate_halo_output=reallocate_halo_output,
                 act_block_h_override=act_block_h_override,
                 shard_layout=(
@@ -529,7 +529,7 @@ class resnet50:
             conv_config=ttnn.Conv2dConfig(
                 weights_dtype=self.model_config["WEIGHTS_DTYPE"],
                 activation="relu",
-                deallocate_activation=True,
+                deallocate_activation_in_L1=True,
                 act_block_h_override=act_block_h_override,
             ),
             slice_config=ttnn.Conv2dL1FullSliceConfig,
@@ -829,7 +829,7 @@ class resnet50:
             conv_config=ttnn.Conv2dConfig(
                 weights_dtype=self.model_config["WEIGHTS_DTYPE"],
                 activation="relu",
-                deallocate_activation=True,
+                deallocate_activation_in_L1=True,
                 act_block_h_override=act_block_h_override,
             ),
             slice_config=ttnn.Conv2dL1FullSliceConfig,

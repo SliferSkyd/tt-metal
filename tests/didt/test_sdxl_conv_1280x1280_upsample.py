@@ -221,7 +221,7 @@ def test_sdxl_conv(mesh_device, didt_workload_iterations, determinism_check_inte
     conv_config = ttnn.Conv2dConfig(
         weights_dtype=weights_dtype,
         shard_layout=shard_layout,
-        deallocate_activation=False,
+        deallocate_activation_in_L1=False,
         reallocate_halo_output=False,
         enable_act_double_buffer=False,
         enable_weights_double_buffer=True,

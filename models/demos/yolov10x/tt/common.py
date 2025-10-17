@@ -74,7 +74,7 @@ class TtYolov10Conv2D:
         self.conv_config = ttnn.Conv2dConfig(
             weights_dtype=weights_dtype,
             shard_layout=shard_layout,
-            deallocate_activation=self.deallocate_activation,
+            deallocate_activation_in_L1=self.deallocate_activation,
             reshard_if_not_optimal=True if self.use_1d_systolic_array else False,
             activation=activation,
             output_layout=ttnn.TILE_LAYOUT,

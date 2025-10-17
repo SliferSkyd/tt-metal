@@ -83,7 +83,7 @@ class Conv:
             activation=activation,
             shard_layout=self.shard_layout,
             reshard_if_not_optimal=True if self.use_1d_systolic_array else False,
-            deallocate_activation=self.deallocate_activation,
+            deallocate_activation_in_L1=self.deallocate_activation,
             reallocate_halo_output=False,
             enable_act_double_buffer=True,
             enable_weights_double_buffer=True,

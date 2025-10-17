@@ -61,7 +61,7 @@ class Conv:
             activation=self.activation,
             shard_layout=self.shard_layout,
             reshard_if_not_optimal=self.reshard,
-            deallocate_activation=self.deallocate,
+            deallocate_activation_in_L1=self.deallocate,
             output_layout=self.output_layout,
             reallocate_halo_output=self.reallocate_halo_output,
             enable_act_double_buffer=self.enable_act_double_buffer,
@@ -145,7 +145,7 @@ class ConvTranspose:
             weights_dtype=ttnn.bfloat16,
             shard_layout=self.shard_layout,
             reshard_if_not_optimal=self.reshard,
-            deallocate_activation=self.deallocate,
+            deallocate_activation_in_L1=self.deallocate,
             output_layout=self.output_layout,
         )
         if self.act_block_h is not None:
@@ -236,7 +236,7 @@ class ConvSplit:
             activation=self.activation,
             shard_layout=self.shard_layout,
             reshard_if_not_optimal=self.reshard,
-            deallocate_activation=self.deallocate,
+            deallocate_activation_in_L1=self.deallocate,
             output_layout=ttnn.TILE_LAYOUT,
         )
         if self.act_block_h is not None:
