@@ -89,7 +89,7 @@ def ttnn_vgg16(
             conv_config = ttnn.Conv2dConfig(
                 weights_dtype=model_config["WEIGHTS_DTYPE"],
                 activation=ttnn.UnaryWithParam(ttnn.UnaryOpType.RELU),
-                deallocate_activation=False,
+                deallocate_activation_in_L1=False,
                 reallocate_halo_output=False,
                 shard_layout=(
                     ttnn.TensorMemoryLayout.HEIGHT_SHARDED if h_sharding else ttnn.TensorMemoryLayout.BLOCK_SHARDED
@@ -243,7 +243,7 @@ def ttnn_vgg11(
             conv_config = ttnn.Conv2dConfig(
                 weights_dtype=model_config["WEIGHTS_DTYPE"],
                 activation=ttnn.UnaryWithParam(ttnn.UnaryOpType.RELU),
-                deallocate_activation=False,
+                deallocate_activation_in_L1=False,
                 reallocate_halo_output=False,
                 shard_layout=(
                     ttnn.TensorMemoryLayout.HEIGHT_SHARDED if h_sharding else ttnn.TensorMemoryLayout.BLOCK_SHARDED

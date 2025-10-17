@@ -171,7 +171,7 @@ class resnet50Bottleneck:
                         if height_sharding and input_height != 28
                         else ttnn.TensorMemoryLayout.BLOCK_SHARDED
                     ),
-                    deallocate_activation=True,
+                    deallocate_activation_in_L1=True,
                     reallocate_halo_output=True,
                     reshard_if_not_optimal=reshard_if_not_optimal,
                     enable_act_double_buffer=(
@@ -285,7 +285,7 @@ class resnet50Bottleneck:
             "conv_config": ttnn.Conv2dConfig(
                 weights_dtype=self.model_config["WEIGHTS_DTYPE"],
                 activation=ttnn.UnaryWithParam(ttnn.UnaryOpType.RELU),
-                deallocate_activation=True,
+                deallocate_activation_in_L1=True,
                 reallocate_halo_output=not is_wormhole_b0(),
                 act_block_h_override=act_block_h_override,
                 shard_layout=(
@@ -495,7 +495,7 @@ class resnet50:
         self.conv1_config = ttnn.Conv2dConfig(
             weights_dtype=self.model_config["WEIGHTS_DTYPE"],
             activation=ttnn.UnaryWithParam(ttnn.UnaryOpType.RELU),
-            deallocate_activation=dealloc_input,
+            deallocate_activation_in_L1=dealloc_input,
             act_block_h_override=act_block_h_override,
             enable_act_double_buffer=True,
             shard_layout=ttnn.TensorMemoryLayout.HEIGHT_SHARDED,

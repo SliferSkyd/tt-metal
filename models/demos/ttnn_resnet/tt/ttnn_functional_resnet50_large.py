@@ -346,7 +346,7 @@ class resnet50Bottleneck:
             "conv_config": ttnn.Conv2dConfig(
                 weights_dtype=self.model_config["WEIGHTS_DTYPE"],
                 activation=ttnn.UnaryWithParam(ttnn.UnaryOpType.RELU),
-                deallocate_activation=True,
+                deallocate_activation_in_L1=True,
                 reallocate_halo_output=reallocate_halo_output,
                 act_block_h_override=act_block_h_override,
                 shard_layout=ttnn.TensorMemoryLayout.HEIGHT_SHARDED
@@ -600,7 +600,7 @@ class resnet50:
             "conv_config": ttnn.Conv2dConfig(
                 weights_dtype=self.model_config["WEIGHTS_DTYPE"],
                 activation=ttnn.UnaryWithParam(ttnn.UnaryOpType.RELU),
-                deallocate_activation=True,
+                deallocate_activation_in_L1=True,
                 reallocate_halo_output=True,
                 act_block_h_override=act_block_h_override,
             ),
@@ -938,7 +938,7 @@ class resnet50:
             "conv_config": ttnn.Conv2dConfig(
                 weights_dtype=self.model_config["WEIGHTS_DTYPE"],
                 activation=ttnn.UnaryWithParam(ttnn.UnaryOpType.RELU),
-                deallocate_activation=True,
+                deallocate_activation_in_L1=True,
                 act_block_h_override=act_block_h_override,
             ),
         }

@@ -233,7 +233,7 @@ class Conv:
             packer_l1_accum_enabled=False,
             transpose_shards=False,
             reshard_if_not_optimal=self.reshard,
-            deallocate_activation=self.deallocate,
+            deallocate_activation_in_L1=self.deallocate,
             reallocate_halo_output=False,
         )
         if self.act_block_h is not None:

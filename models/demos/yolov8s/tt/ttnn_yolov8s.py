@@ -140,7 +140,6 @@ class TtConv:
             shard_layout=ttnn.TensorMemoryLayout.HEIGHT_SHARDED,
             act_block_w_div=1,
             transpose_shards=False,
-            deallocate_activation=False,
             enable_act_double_buffer=self.enable_act_double_buffer,
             output_layout=self.output_layout,
             reallocate_halo_output=False,
@@ -148,7 +147,7 @@ class TtConv:
         )
 
         if self.deallocate_activation:
-            conv_config.deallocate_activation = self.deallocate_activation
+            conv_config.deallocate_activation_in_L1 = self.deallocate_activation
 
         if self.change_shard:
             conv_config.shard_layout = None

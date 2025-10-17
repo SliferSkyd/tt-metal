@@ -458,7 +458,7 @@ def to_conv2d_config(configuration: Conv2dConfiguration):
     return ttnn.Conv2dConfig(
         weights_dtype=configuration.weights_dtype,
         shard_layout=configuration.sharding_strategy.get_tensor_memory_layout(),
-        deallocate_activation=configuration.deallocate_activation,
+        deallocate_activation_in_L1=configuration.deallocate_activation,
         enable_act_double_buffer=configuration.enable_act_double_buffer,
         activation=configuration.activation,
         output_layout=configuration.output_layout,
