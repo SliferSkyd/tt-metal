@@ -583,6 +583,14 @@ if(WITH_PYTHON_BINDINGS)
     target_compile_definitions(ttnn PUBLIC "$<$<CXX_COMPILER_ID:GNU>:DISABLE_NAMESPACE_STATIC_ASSERT>")
     TT_ENABLE_UNITY_BUILD(ttnn)
 
+    # Get Python extension suffix for proper module naming
+    execute_process(
+        COMMAND
+            ${Python3_EXECUTABLE} -c "import sysconfig; print(sysconfig.get_config_var('EXT_SUFFIX'))"
+        OUTPUT_VARIABLE PYTHON_EXT_SUFFIX
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+
     set_target_properties(
         ttnn
         PROPERTIES
@@ -590,6 +598,8 @@ if(WITH_PYTHON_BINDINGS)
                 Python
             PREFIX
                 "_"
+            SUFFIX
+                "${PYTHON_EXT_SUFFIX}"
             BUILD_RPATH
                 "${PROJECT_BINARY_DIR}/tt_metal;${PROJECT_BINARY_DIR}/ttnn"
             INSTALL_RPATH
