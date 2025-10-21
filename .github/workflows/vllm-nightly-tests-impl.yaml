@@ -207,14 +207,18 @@ jobs:
 
           # vLLM environment variables
           export VLLM_RPC_TIMEOUT=300000
+          NUM_SCHEDULER_STEPS=10
           if [[ "${{ matrix.test-group.use-vllm-v1 }}" == "true" ]]; then
             export VLLM_USE_V1=1
+            NUM_SCHEDULER_STEPS=1
           fi
+
 
           python3 vllm/examples/server_example_tt.py \
             --model ${{ matrix.test-group.model }} \
             ${{ matrix.test-group.additional-args }} \
             "${OVERRIDE_TT_CONFIG[@]}" \
+            --num_scheduler_steps $NUM_SCHEDULER_STEPS \
             > "${FILE_SERVER_LOG}" 2>&1 &
 
           # Store server's pid for cleanup
