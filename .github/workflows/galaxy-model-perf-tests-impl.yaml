@@ -20,6 +20,10 @@ on:
         required: false
         type: string
         default: "topology-6u"
+      arch:
+        required: false
+        type: string
+        default: "wormhole_b0"
 
 jobs:
   galaxy-model-perf-tests:
@@ -29,16 +33,16 @@ jobs:
         test-group: [
           {
             name: "Galaxy CNN model perf tests",
+            runs-on: ["arch-wormhole", "topology-6u", "${{ inputs.extra-tag }}"]
             model-type: "CNN",
-            arch: wormhole_b0,
             save-perf-data: false,
             timeout: 60,
             cmd: 'TT_METAL_CORE_GRID_OVERRIDE_TODEPRECATE="7,7" ./tests/scripts/run_tests.sh --tt-arch wormhole_b0 --pipeline-type cnn_model_perf_tg_device --dispatch-mode ""'
           },  # Pavle Josipovic
           {
             name: "Galaxy Llama 70B model perf tests", #see GH issue #26295
+            runs-on: ["arch-blackhole", "topology-6u", "${{ inputs.extra-tag }}"]
             model-type: "Llama-70B",
-            arch: wormhole_b0,
             save-perf-data: true,
             timeout: 60,
             cmd: './tests/scripts/run_tests.sh --tt-arch wormhole_b0 --pipeline-type tg_llama_model_perf_tg_device --dispatch-mode ""',
@@ -46,7 +50,7 @@ jobs:
           },
           {
             name: "Llama Galaxy Perf Unit Tests",
-            arch: wormhole_b0,
+            runs-on: ["arch-blackhole", "topology-6u", "${{ inputs.extra-tag }}"]
             cmd: 'LLAMA_DIR=/mnt/MLPerf/tt_dnn-models/llama/Llama3.3-70B-Instruct/ pytest models/demos/llama3_70b_galaxy/tests/tg_perf_unit_tests',
             timeout: 100,
             tracy: true,
@@ -55,8 +59,8 @@ jobs:
           },
           {
             name: "Galaxy Llama 70B prefill perf tests",
+            runs-on: ["arch-blackhole", "topology-6u", "${{ inputs.extra-tag }}"]
             model-type: "Llama-70B",
-            arch: wormhole_b0,
             save-perf-data: true,
             timeout: 60,
             cmd: './tests/scripts/run_tests.sh --tt-arch wormhole_b0 --pipeline-type tg_llama_prefill_model_perf_tg_device --dispatch-mode ""',
@@ -64,8 +68,8 @@ jobs:
           },
           {
             name: "Galaxy DiT SD3.5 model perf tests",
+            runs-on: ["arch-blackhole", "topology-6u", "${{ inputs.extra-tag }}"]
             model-type: "SD3.5",
-            arch: wormhole_b0,
             save-perf-data: true,
             timeout: 60,
             cmd: 'TT_MM_THROTTLE_PERF=5 pytest models/experimental/tt_dit/tests/models/test_performance_sd35.py -k "4x8cfg1sp0tp1"',
@@ -73,7 +77,7 @@ jobs:
           },
           {
             name: "Galaxy Sentence Bert tests",
-            arch: wormhole_b0,
+            runs-on: ["arch-blackhole", "topology-6u", "${{ inputs.extra-tag }}"]
             model-type: "sentence_bert",
             save-perf-data: false,
             cmd: './tests/scripts/run_tests.sh --tt-arch wormhole_b0 --pipeline-type tg_sentence_bert_model_perf_tg_device --dispatch-mode ""',
@@ -83,15 +87,12 @@ jobs:
         ]
     name: ${{ matrix.test-group.name }}
     env:
-      ARCH_NAME: ${{ matrix.test-group.arch }}
+      ARCH_NAME: ${{ inputs.arch }}
       LOGURU_LEVEL: INFO
       LD_LIBRARY_PATH: ${{ github.workspace }}/build/lib
       TT_METAL_HOME: ${{ github.workspace }}
       PYTHONPATH: ${{ github.workspace }}
-    runs-on:
-      - arch-wormhole_b0
-      - ${{ inputs.topology }}
-      - ${{ inputs.extra-tag }}
+    runs-on: ${{ matrix.test-group.runs-on }}
     steps:
       - name: ⬇️ Checkout
         uses: actions/checkout@v4
