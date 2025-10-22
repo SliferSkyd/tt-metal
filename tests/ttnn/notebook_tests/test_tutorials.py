@@ -93,13 +93,14 @@ def setup_once(model_location_generator):
 
 
 # Tests
-# @skip_for_blackhole("Fails on BH. Issue #25579")
+@skip_for_blackhole("Fails on BH. Issue #25579")
 # @pytest.mark.parametrize("notebook_path", collect_ttnn_tutorials(path=TUTORIALS_NOTEBOOK_PATH, extension="*.ipynb"))
-# def test_ttnn_notebook_tutorials(notebook_path):
-#     with open(notebook_path) as f:
-#         notebook = nbformat.read(f, as_version=4)
-#         ep = ExecutePreprocessor(timeout=180, kernel_name="python3")
-#         ep.preprocess(notebook)
+def test_ttnn_notebook_tutorials():
+    notebook_path = "ttnn/tutorials/2025_dx_rework/ttnn_clip_zero_shot_classification.ipynb"
+    with open(notebook_path) as f:
+        notebook = nbformat.read(f, as_version=4)
+        ep = ExecutePreprocessor(timeout=180, kernel_name="python3")
+        ep.preprocess(notebook)
 
 
 @skip_for_blackhole("Fails on BH. Issue #25579")
