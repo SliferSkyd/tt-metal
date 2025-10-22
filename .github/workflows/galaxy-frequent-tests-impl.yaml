@@ -20,6 +20,10 @@ on:
         required: false
         type: string
         default: "topology-6u"
+      arch:
+        required: false
+        type: string
+        default: "wormhole_b0"
 
 jobs:
   galaxy-frequent-tests:
@@ -27,16 +31,12 @@ jobs:
       fail-fast: false
       matrix:
         test-group: [
-          { name: "Galaxy Llama3 frequent tests", arch: wormhole_b0, model: llama3, timeout: 90, owner_id: U053W15B6JF}, # Djordje Ivanovic
-          { name: "Galaxy resnet50 frequent tests", arch: wormhole_b0, model: resnet50, timeout: 90, owner_id: U052J2QDDKQ}, # Pavle Josipovic
-          { name: "Galaxy unit/distributed frequent tests", arch: wormhole_b0, model: unit, timeout: 90, owner_id: UBHPP2NDP}, # Joseph Chu #See issue #30017
-          { name: "Galaxy SD3.5 frequent tests", arch: wormhole_b0, model: sd35, timeout: 90, owner_id: U03FJB5TM5Y}, # Colman Glagovich
+          { name: "Galaxy Llama3 frequent tests", runs-on: ["arch-blackhole", "topology-6u", "${{ inputs.extra-tag }}"], model: llama3, timeout: 90, owner_id: U053W15B6JF}, # Djordje Ivanovic
+          { name: "Galaxy resnet50 frequent tests", runs-on: ["arch-blackhole", "topology-6u", "${{ inputs.extra-tag }}"], model: resnet50, timeout: 90, owner_id: U052J2QDDKQ}, # Pavle Josipovic
+          { name: "Galaxy unit/distributed frequent tests", runs-on: ["arch-blackhole", "topology-6u", "${{ inputs.extra-tag }}"], model: unit, timeout: 90, owner_id: UBHPP2NDP}, # Joseph Chu #See issue #30017
+          { name: "Galaxy SD3.5 frequent tests", model: sd35, runs-on: ["arch-wormhole", "topology-6u", "${{ inputs.extra-tag }}"], timeout: 90, owner_id: U03FJB5TM5Y}, # Colman Glagovich
         ]
     name: ${{ matrix.test-group.name }}
-    runs-on:
-      - arch-wormhole_b0
-      - ${{ inputs.topology }}
-      - ${{ inputs.extra-tag }}
     container:
       image: ${{ inputs.docker-image || 'docker-image-unresolved!' }}
       env:
@@ -44,8 +44,9 @@ jobs:
         PYTHONPATH: /work
         LD_LIBRARY_PATH: /work/build/lib
         LOGURU_LEVEL: INFO
-        ARCH_NAME: ${{ matrix.test-group.arch }}
+        ARCH_NAME: ${{ inputs.arch }}
         GITHUB_ACTIONS: true
+      runs-on: ${{ matrix.test-group.runs-on }}
       volumes:
         - ${{ github.workspace }}/docker-job:/work # Subdir to workaround https://github.com/actions/runner/issues/691
         - /dev/hugepages-1G:/dev/hugepages-1G
