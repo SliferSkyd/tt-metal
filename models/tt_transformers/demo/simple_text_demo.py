@@ -719,12 +719,6 @@ def test_demo_text(
         if num_devices == 8 and data_parallel > 1 and not (is_32_1b or is_31_8b) and is_wormhole_b0():
             pytest.skip("CI only runs hybrid Llama3 1b and 8b on T3K")
 
-    # if is_ci_v2_env:
-    #     hf_model = os.getenv("HF_MODEL", "")
-    #     model_location = model_location_generator(hf_model, download_if_ci_v2=True, ci_v2_timeout_in_s=900)
-    #     # update env var HF_MODEL to the model location
-    #     os.environ["HF_MODEL"] = str(model_location)
-
     if not stop_at_eos:
         logger.info(f"The decode generation will only stop at the max_generated_tokens limit == {max_generated_tokens}")
 
