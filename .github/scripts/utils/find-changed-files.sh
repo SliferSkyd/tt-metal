@@ -24,11 +24,7 @@ while IFS= read -r FILE; do
         CMakeLists.txt|**/CMakeLists.txt|**/*.cmake)
             CMAKE_CHANGED=true
             ;;
-	tt_metal/sfpi-info.sh)
-	    # Read in by a cmake file
-            CMAKE_CHANGED=true
-            ;;
-	tt_metal/sfpi-version)
+	tt_metal/sfpi-version.sh)
 	    # Read in by a cmake file
             CMAKE_CHANGED=true
             ;;
