@@ -20,7 +20,7 @@ from models.demos.llama3_70b_galaxy.tests.test_prefill_device_perf import (
     build_duration_per_instance_dict,
     merge_device_rows,
 )
-from models.perf.benchmarking_utils import BenchmarkData, BenchmarkProfiler
+from models.perf.benchmarking_utils import BenchmarkProfiler
 from models.perf.device_perf_utils import run_device_perf
 from models.tt_transformers.tt.ccl import TT_CCL
 
@@ -161,7 +161,7 @@ def load_targets(filename, device_type):
 
 
 def compare_with_target(kernel_duration_per_instance_averaged_dict, perf_targets, profiler):
-    benchmark_data = BenchmarkData()
+    # benchmark_data = BenchmarkData()
     step_name = "gemma_vision_cross_attention_transformer_op_to_op_perf"
     passing = True
     for op_index, op_code_with_id in enumerate(kernel_duration_per_instance_averaged_dict.keys()):
@@ -170,8 +170,8 @@ def compare_with_target(kernel_duration_per_instance_averaged_dict, perf_targets
 
             avg_kernel_duration = kernel_duration_per_instance_averaged_dict[op_code_with_id]
 
-            # average
-            benchmark_data.add_measurement(profiler, 0, step_name, op_name + "-model-kernel-avg", avg_kernel_duration)
+            # # average
+            # benchmark_data.add_measurement(profiler, 0, step_name, op_name + "-model-kernel-avg", avg_kernel_duration)
 
             # Verify kernel duration is within tolerance
             upper_limit = perf_targets[op_code_with_id] + 0.05 * perf_targets[op_code_with_id]
