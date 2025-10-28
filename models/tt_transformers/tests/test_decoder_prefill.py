@@ -178,10 +178,9 @@ def test_decoder_inference(
 
         # Reference model
         attn_mask = torch.triu(torch.full((max_seq_len, max_seq_len), torch.finfo(torch.float32).min), diagonal=1)
-        logger.info(f"DEBUG PRINT: model_args.sliding_window: {model_args.sliding_window}")
-        logger.info(f"DEBUG PRINT: reference_model.attention_type: {reference_model.attention_type}")
         if model_args.sliding_window > 0 and (
-            hasattr(reference_model, "attention_type") and reference_model.attention_type == "sliding_attention"
+            hasattr(reference_model.decoder, "attention_type")
+            and reference_model.decoder.attention_type == "sliding_attention"
         ):
             attn_mask += torch.tril(
                 torch.full((max_seq_len, max_seq_len), -float("inf")), diagonal=-model_args.sliding_window
