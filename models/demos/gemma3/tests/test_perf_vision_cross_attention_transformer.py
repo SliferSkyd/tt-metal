@@ -5,12 +5,12 @@
 import json
 import os
 
+import pytest
 import pandas as pd
 import torch
 from loguru import logger
 from tracy.process_model_log import get_latest_ops_log_filename
 
-import pytest
 import ttnn
 from models.demos.gemma3.tt.gemma_vision_model import TtGemmaTransformerVision
 from models.demos.gemma3.tt.model_config import ModelArgs

@@ -4,10 +4,10 @@
 
 import os
 
+import pytest
 import torch
 from loguru import logger
 
-import pytest
 import ttnn
 from models.common.utility_functions import comp_allclose, comp_pcc
 from models.demos.gemma3.tt.gemma_vision_model import TtGemmaTransformerVision
