@@ -249,6 +249,12 @@ def model_location_generator(is_ci_v2_env):
         has_internal_weka = internal_weka_path.exists()
 
         download_from_ci_v2 = download_if_ci_v2 and is_ci_v2_env
+        logger.info(
+            f"DEBUG PRINT: model_version: {model_version}, model_subdir: {model_subdir}, download_if_ci_v2: {download_if_ci_v2}, is_ci_v2_env: {is_ci_v2_env}"
+        )
+        logger.info(
+            f"DEBUG PRINT: model_folder: {model_folder}, internal_weka_path: {internal_weka_path}, has_internal_weka: {has_internal_weka}"
+        )
 
         if download_from_ci_v2:
             assert (
