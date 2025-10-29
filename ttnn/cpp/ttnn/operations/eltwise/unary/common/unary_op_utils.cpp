@@ -1084,8 +1084,8 @@ std::array<uint32_t, 2> compute_auto_shard_shape(
         }
         case TensorMemoryLayout::HEIGHT_SHARDED: {
             // HEIGHT_SHARDED: Distribute height across cores, width stays on each core
-            uint32_t shard_height = tt::div_up(tensor_height, total_num_cores);
-            uint32_t shard_width = tensor_width;
+            uint32_t shard_height = tt::div_up(squeezed_tensor_hw[0], total_num_cores);
+            uint32_t shard_width = squeezed_tensor_hw[1];
 
             // For TILE layout, round up to tile boundaries
             if (layout == Layout::TILE) {

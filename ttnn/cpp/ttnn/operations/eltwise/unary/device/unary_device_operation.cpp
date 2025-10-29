@@ -168,7 +168,7 @@ spec_return_value_t UnaryDeviceOperation::compute_output_specs(
             output_shape,
             core_grid,
             output_memory_config.memory_layout(),
-            Layout::TILE);
+            tensor_args.input.layout());
 
         // Create shard spec and update memory config
         ShardSpec shard_spec(core_grid, auto_shard_shape);
