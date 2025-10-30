@@ -430,7 +430,7 @@ tests:
       large number of get_noc_addr(stick_id, s0) calls. Without them, we get ~14.3B/cycle, compared
       to the expected ~18B/cycle. The same reasoning as in the previous test applies here.
   319:
-    name: "Atomic Semaphore Adjacent Bandwidth Sweep"
+    name: "Atomic Semaphore Adjacent Increment Value Sweep"
 
   320:
-    name: "Atomic Semaphore Non Adjacent Bandwidth Sweep"
+    name: "Atomic Semaphore Non Adjacent Increment Value Sweep"
