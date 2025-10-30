@@ -69,6 +69,15 @@ void kernel_main() {
     volatile tt_l1_ptr uint32_t* in0_mcast_sender_semaphore_addr_ptr =
         reinterpret_cast<volatile tt_l1_ptr uint32_t*>(in0_mcast_sender_semaphore_addr);
 
+    /* Current expected value of the semaphore ptr */
+    /* Increases after every multicast iteration, wraps around 32 bit */
+    /* in variable and noc transaction*/
+    uint32_t in0_mcast_sender_semaphore_addr_ptr_curr_val;
+    if constexpr (core_in_in0_receiver_mcast_grid) {
+        in0_mcast_sender_semaphore_addr_ptr_curr_val = in0_mcast_num_dests - 1;
+    } else {
+        in0_mcast_sender_semaphore_addr_ptr_curr_val = in0_mcast_num_dests;
+    }
     // L1 array
     constexpr uint32_t cb_l1_array = tt::CBIndex::c_6;
     uint32_t in0_mcast_sender_semaphore_valid_addr = get_write_ptr(cb_l1_array);
@@ -192,14 +201,17 @@ void kernel_main() {
                         // wait until all in0 mcast destinations have atomically incremented the in0 semaphore_addr
                         // (i.e. its value should be in0_mcast_num_dests), then reset the semaphore_addr value back to
                         // zero for the next block
+                        noc_semaphore_wait(
+                            in0_mcast_sender_semaphore_addr_ptr, in0_mcast_sender_semaphore_addr_ptr_curr_val);
                         if constexpr (core_in_in0_receiver_mcast_grid) {
                             // wait for every core in receiver grid EXCLUDING myself
-                            noc_semaphore_wait(in0_mcast_sender_semaphore_addr_ptr, in0_mcast_num_dests - 1);
+                            in0_mcast_sender_semaphore_addr_ptr_curr_val += in0_mcast_num_dests - 1;
                         } else {
                             // wait for every core in receiver grid
-                            noc_semaphore_wait(in0_mcast_sender_semaphore_addr_ptr, in0_mcast_num_dests);
+                            in0_mcast_sender_semaphore_addr_ptr_curr_val += in0_mcast_num_dests;
                         }
-                        noc_semaphore_set(in0_mcast_sender_semaphore_addr_ptr, 0);
+                        /* Not needed since we are using incremntal local semaphore value*/
+                        // noc_semaphore_set(in0_mcast_sender_semaphore_addr_ptr, 0);
 
                         // Now we have the block in the CB address, we can mcast to dests!
                         uint64_t in0_multicast_data_addr = in0_multicast_data_noc | in0_tensor_local_l1_write_addr;
