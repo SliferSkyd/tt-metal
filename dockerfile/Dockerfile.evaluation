@@ -14,4 +14,4 @@ ADD ${BUILD_ARTIFACT_NAME} .
 ADD ${WHEEL_ARTIFACT_NAME} .
 
 RUN tar --zstd -xf ttm_any.tar.zst
-RUN pip3 install "$WHEEL_FILENAME"
+RUN pip3 install "$(ls -1 *.whl)"
