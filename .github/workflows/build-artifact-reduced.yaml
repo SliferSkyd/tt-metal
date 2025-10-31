@@ -2,7 +2,8 @@ name: "Build tt-metal artifacts"
 
 permissions:
   packages: write
-  workflows: write
+  actions: read
+  contents: read
 
 on:
   workflow_call:
