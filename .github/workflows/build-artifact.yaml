@@ -96,7 +96,7 @@ on:
         value: ${{ jobs.build-docker-image.outputs.basic-ttnn-runtime-tag }}
       evaluation-docker-image:
         description: "Docker tag for the evaluation Docker image"
-        value: ghcr.io/${{ github.repository }}/tt-metalium/${{ env.EVALUATION_IMAGE_NAME }}:${{ github.sha }}
+        value: ${{ jobs.build-docker-image.outputs.evaluation-tag }}
       packages-artifact-name:
         description: "Name to give download-artifact to get the packages"
         value: ${{ jobs.build-artifact.outputs.packages-artifact-name }}
@@ -155,9 +155,6 @@ on:
         type: boolean
         default: false
         description: "Build UMD tests"
-
-env:
-  EVALUATION_IMAGE_NAME: ${{ inputs.distro }}-${{ inputs.version }}-evaluation-${{ inputs.architecture }}
 
 jobs:
   build-docker-image:
@@ -443,11 +440,14 @@ jobs:
     runs-on: tt-ubuntu-2204-large-stable
     environment: ${{ github.ref == 'refs/heads/main' && 'mainline' || '' }}
     timeout-minutes: 60
+    outputs:
+      evaluation-tag: ${{ steps.evaluation_image_name.outputs.evaluation_image_name }}
     steps:
       - name: ⬇️ Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
+
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -466,6 +466,11 @@ jobs:
         with:
           name: ${{ jobs.build-wheel.outputs.wheel_artifact_name }}
           path: .
+
+      - name: Set evaluation image name
+        id: evaluation_image_name
+        run: |
+          echo "EVALUATION_IMAGE_NAME=${{ inputs.distro }}-${{ inputs.version }}-evaluation-${{ inputs.architecture }}" >> $GITHUB_OUTPUT
 
       - name: Build and push Evaluation image
         uses: docker/build-push-action@v6
