@@ -54,8 +54,8 @@ set(SOURCES
     ops/softmax_test.cpp
     ops/silu_op_test.cpp
     ops/sdpa_fw_op_test.cpp
-    ops/layer_norm_op_fused_test.cpp
-    ops/layernorm_fw_op_test.cpp
+    ops/layernorm_bw_fused_op_test.cpp
+    ops/layernorm_fw_fused_op_test.cpp
     padding_test_minimal.cpp
 )
 
