@@ -10,15 +10,13 @@ from typing import TYPE_CHECKING
 import torch
 import ttnn
 from loguru import logger
+from models.demos.qwen25_vl.tt.common import multimodal_rope_from_hf, preprocess_inputs_prefill
 from models.demos.qwen25_vl.tt.model import Transformer
 from models.tt_transformers.tt.model_config import DecodersPrecision, ModelArgs
 from transformers import PreTrainedTokenizerBase, Qwen2_5_VLForConditionalGeneration, Qwen2Tokenizer
 
-from ...parallel.config import EncoderParallelConfig
-from ...parallel.manager import CCLManager
-
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Sequence
 
 
 class Qwen25VlTokenizerEncoderPair:
@@ -26,24 +24,17 @@ class Qwen25VlTokenizerEncoderPair:
         self,
         checkpoint: str,
         *,
-        tokenizer_subfolder: str | None = None,
-        encoder_subfolder: str | None = None,
         max_batch_size: int,
         max_sequence_length: int,
         device: ttnn.MeshDevice,
-        ccl_manager: CCLManager,
-        parallel_config: EncoderParallelConfig,
         use_torch: bool,
     ) -> None:
         self._device = device
-        self._ccl_manager = ccl_manager
-        self._parallel_config = parallel_config
 
-        self._tokenizer = Qwen2Tokenizer.from_pretrained(checkpoint, subfolder=tokenizer_subfolder)
-        self._encoder = self._load_encoder(
+        self._tokenizer = Qwen2Tokenizer.from_pretrained(checkpoint)
+        self._torch_encoder, self._encoder, self._model_args = self._load_encoder(
             checkpoint,
-            subfolder=encoder_subfolder,
-            use_torch=use_torch,
+            torch_only=use_torch,
             max_batch_size=max_batch_size,
             max_sequence_length=max_sequence_length,
         )
@@ -52,30 +43,31 @@ class Qwen25VlTokenizerEncoderPair:
         self,
         checkpoint: str,
         *,
-        subfolder: str | None = None,
-        use_torch: bool,
+        torch_only: bool,
         max_batch_size: int,
         max_sequence_length: int,
-    ) -> Qwen2_5_VLForConditionalGeneration | Transformer:
-        torch_model = Qwen2_5_VLForConditionalGeneration.from_pretrained(checkpoint, subfolder=subfolder)
-
-        if use_torch:
-            return torch_model
+    ) -> tuple[Qwen2_5_VLForConditionalGeneration, Transformer | None, ModelArgs | None]:
+        if torch_only:
+            return Qwen2_5_VLForConditionalGeneration.from_pretrained(checkpoint), None, None
 
         logger.info("creating encoder on device...")
 
         os.environ["HF_MODEL"] = checkpoint
         model_args = ModelArgs(
             self._device,
+            instruct=True,
             max_batch_size=max_batch_size,
-            # optimizations=lambda model_args: DecodersPrecision.performance(model_args.n_layers, model_args.model_name),
+            optimizations=lambda model_args: DecodersPrecision.performance(model_args.n_layers, model_args.model_name),
             max_seq_len=max_sequence_length,
+            cache_hf=True,
         )
         state_dict = model_args.load_state_dict()
+        torch_model = model_args.cached_hf_model
+        assert isinstance(torch_model, Qwen2_5_VLForConditionalGeneration)
 
-        dtype = ttnn.bfloat16
+        dtype = ttnn.bfloat8_b
 
-        return Transformer(
+        model = Transformer(
             args=model_args,
             mesh_device=self._device,
             dtype=dtype,
@@ -83,12 +75,16 @@ class Qwen25VlTokenizerEncoderPair:
             weight_cache_path=model_args.weight_cache_path(dtype),
         )
 
-    def encode(self, prompts: Iterable[str], *, num_images_per_prompt: int) -> tuple[torch.Tensor, torch.Tensor]:
+        return torch_model, model, model_args
+
+    def encode(self, prompts: Sequence[str], *, num_images_per_prompt: int) -> tuple[torch.Tensor, torch.Tensor]:
         return _get_qwen_prompt_embeds(
             prompts=prompts,
             num_images_per_prompt=num_images_per_prompt,
             tokenizer=self._tokenizer,
             text_encoder=self._encoder,
+            model_args=self._model_args,
+            torch_text_encoder=self._torch_encoder,
             max_sequence_length=512,
             mesh_device=self._device,
         )
@@ -96,13 +92,17 @@ class Qwen25VlTokenizerEncoderPair:
 
 # adapted from https://github.com/huggingface/diffusers/blob/v0.35.2/src/diffusers/pipelines/qwenimage/pipeline_qwenimage.py#L188
 def _get_qwen_prompt_embeds(
-    prompts: Iterable[str],
-    text_encoder: Qwen2_5_VLForConditionalGeneration | Transformer,
+    prompts: Sequence[str],
+    text_encoder: Transformer | None,
+    model_args: ModelArgs | None,
+    torch_text_encoder: Qwen2_5_VLForConditionalGeneration,
     tokenizer: PreTrainedTokenizerBase,
     mesh_device: ttnn.MeshDevice | None,
     max_sequence_length: int,
     num_images_per_prompt: int,
 ) -> tuple[torch.Tensor, torch.Tensor]:
+    assert len(prompts) == 1, "only batch size 1 is supported by the transformer model in prefill mode"
+
     template = "<|im_start|>system\nDescribe the image by detailing the color, shape, size, texture, quantity, text, spatial relationships of the objects and background:<|im_end|>\n<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n"
     drop_idx = 34
 
@@ -128,36 +128,44 @@ def _get_qwen_prompt_embeds(
     if untruncated_tokens.shape[-1] >= tokens.shape[-1] and not torch.equal(tokens, untruncated_tokens):
         logger.warning("input text was truncated")
 
-    if isinstance(text_encoder, Transformer):
+    if text_encoder is not None:
         assert mesh_device is not None
+        assert model_args is not None
 
-        tt_tokens = ttnn.from_torch(
-            tokens,
-            layout=ttnn.TILE_LAYOUT,
-            dtype=ttnn.uint32,
-            device=mesh_device,
-            mesh_mapper=ttnn.replicate_tensor_to_mesh_mapper(mesh_device),
+        pad_token_id = tokenizer.pad_token_id
+
+        input_embeds = torch_text_encoder.model.language_model.embed_tokens(tokens)
+        pad_embedding = torch_text_encoder.model.language_model.embed_tokens(torch.tensor(pad_token_id))
+
+        input_prefill_pt, _decoding_pos, _prefill_lens = preprocess_inputs_prefill(
+            input_embeds,
+            model_args,
+            attention_mask,
+            pad_embedding=pad_embedding,
         )
-        tt_attention_mask = (
-            ttnn.from_torch(
-                attention_mask[:, None, None, :],
-                layout=ttnn.TILE_LAYOUT,
-                dtype=ttnn.bfloat16,
-                device=mesh_device,
-                mesh_mapper=ttnn.replicate_tensor_to_mesh_mapper(mesh_device),
-            )
-            if attention_mask is not None
-            else None
+
+        rope = multimodal_rope_from_hf(
+            tokenizer_out, input_embeds, torch_text_encoder, model_args, pad_token_id=pad_token_id
         )
-        tt_output = text_encoder(prompt=tt_tokens, attention_mask=tt_attention_mask, device=mesh_device)
-        tt_hidden_states = tt_output[-1]
+
+        prefill_input, rot_mats_prefill, page_table_tt, _ = text_encoder.prepare_inputs_prefill(
+            input_prefill_pt, rot_mats=rope
+        )
+
+        tt_hidden_states = text_encoder.ttnn_prefill_forward(
+            prefill_input,
+            rot_mats_global=rot_mats_prefill,
+            page_table=page_table_tt,
+        )
+        tt_hidden_states = text_encoder.norm(tt_hidden_states, mode="prefill")
 
         hidden_states = ttnn.to_torch(ttnn.get_device_tensors(tt_hidden_states)[0])
+        hidden_states = hidden_states[:, :, : tokens.shape[1], :].squeeze(1)
     else:
-        tokens = tokens.to(device=text_encoder.device)
+        tokens = tokens.to(device=torch_text_encoder.device)
 
         with torch.no_grad():
-            output = text_encoder.forward(
+            output = torch_text_encoder.forward(
                 tokens,
                 attention_mask=attention_mask,
                 output_hidden_states=True,
