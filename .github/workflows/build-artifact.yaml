@@ -73,6 +73,11 @@ on:
         type: string
         default: ""
         description: 'Commit SHA to test (default: HEAD)'
+      build-evaluation-image:
+        required: false
+        type: boolean
+        default: false
+        description: "Build evaluation Docker image with build artifacts and wheel installed"
     outputs:
       ci-build-docker-image:
         description: "Docker tag for the CI Build Docker image for building TT-Metalium et al"
@@ -89,6 +94,9 @@ on:
       basic-ttnn-runtime-docker-image:
         description: "Docker tag for the basic TTNN runtime Docker image for running TTNN"
         value: ${{ jobs.build-docker-image.outputs.basic-ttnn-runtime-tag }}
+      evaluation-docker-image:
+        description: "Docker tag for the evaluation Docker image"
+        value: ghcr.io/${{ github.repository }}/tt-metalium/${{ env.EVALUATION_IMAGE_NAME }}:${{ github.sha }}
       packages-artifact-name:
         description: "Name to give download-artifact to get the packages"
         value: ${{ jobs.build-artifact.outputs.packages-artifact-name }}
@@ -148,6 +156,8 @@ on:
         default: false
         description: "Build UMD tests"
 
+env:
+  EVALUATION_IMAGE_NAME: ${{ inputs.distro }}-${{ inputs.version }}-evaluation-${{ inputs.architecture }}
 
 jobs:
   build-docker-image:
@@ -426,3 +436,44 @@ jobs:
           name: ${{ steps.set_wheel_artifact_name.outputs.wheel_artifact_name }}
           path: wheelhouse
           if-no-files-found: error
+
+  build-evaluation-image:
+    name: "📦 Build Evaluation Docker Image"
+    needs: [build-artifact, build-wheel]
+    runs-on: tt-ubuntu-2204-large-stable
+    environment: ${{ github.ref == 'refs/heads/main' && 'mainline' || '' }}
+    timeout-minutes: 60
+    steps:
+      - name: ⬇️ Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: https://ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 📦 Download Build Artifact
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0
+        with:
+          name: ${{ jobs.build-artifact.outputs.build_artifact_name }}
+          path: .
+
+      - name: 🧪 Download Python Wheel
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0
+        with:
+          name: ${{ jobs.build-wheel.outputs.wheel_artifact_name }}
+          path: .
+
+      - name: Build and push Evaluation image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ github.workspace }}
+          file: dockerfile/Dockerfile.evaluation
+          push: true
+          tags: ghcr.io/${{ github.repository }}/tt-metalium/${{ env.EVALUATION_IMAGE_NAME }}:${{ github.sha }}
+          build-args: UBUNTU_VERSION=${{ inputs.version }},BASE_IMAGE=ghcr.io/${{ github.repository }}/tt-metalium/${{ needs.build-docker-image.outputs.ci-build-tag || 'docker-image-unresolved!' }},BUILD_ARTIFACT_NAME=${{ needs.build-artifact.outputs.build_artifact_name }},WHEEL_ARTIFACT_NAME=${{ needs.build-wheel.outputs.wheel_artifact_name }}
+          cache-to: type=inline
+          pull: true

@@ -1,0 +1,17 @@
+# TT-Metalium Dockerfile
+
+#############################################################
+
+# Accept an argument to specify the Ubuntu version
+ARG UBUNTU_VERSION=22.04
+ARG BASE_IMAGE
+ARG BUILD_ARTIFACT_NAME
+ARG WHEEL_ARTIFACT_NAME
+
+FROM ${BASE_IMAGE}
+
+ADD ${BUILD_ARTIFACT_NAME} .
+ADD ${WHEEL_ARTIFACT_NAME} .
+
+RUN tar --zstd -xf ttm_any.tar.zst
+RUN pip3 install "$WHEEL_FILENAME"
