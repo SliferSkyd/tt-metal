@@ -158,6 +158,7 @@ on:
 
 jobs:
   build-docker-image:
+    if: 1 == 0
     uses: ./.github/workflows/build-docker-artifact.yaml
     secrets: inherit
     with:
@@ -166,6 +167,7 @@ jobs:
       architecture: ${{ inputs.architecture }}
 
   build-artifact:
+    if: 1 == 0
     name: "🛠️ Build ${{ inputs.build-type }} ${{ inputs.distro }} ${{ inputs.version }}"
     needs: build-docker-image
     timeout-minutes: 100
@@ -336,7 +338,7 @@ jobs:
           compression-level: 0
 
   build-wheel:
-    if: ${{ inputs.build-wheel }}
+    if: 1 == 0
     name: 🐍 Build wheel (Python ${{ inputs.version == '22.04' && '3.10' || '3.12' }})
     needs: build-docker-image
     timeout-minutes: 30
@@ -436,7 +438,6 @@ jobs:
 
   build-evaluation-image:
     name: "📦 Build Evaluation Docker Image"
-    needs: [build-artifact, build-wheel]
     runs-on: tt-ubuntu-2204-large-stable
     environment: ${{ github.ref == 'refs/heads/main' && 'mainline' || '' }}
     timeout-minutes: 60
@@ -458,13 +459,13 @@ jobs:
       - name: 📦 Download Build Artifact
         uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0
         with:
-          name: ${{ needs.build-artifact.outputs.build_artifact_name }}
+          name: TTMetal_build_any_22.04_amd64_x86_64-linux-clang-17-libstdcpp_profiler_9729f88590e76e5329a306b379cdb1c16de98068_18974520816
           path: .
 
       - name: 🧪 Download Python Wheel
         uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0
         with:
-          name: ${{ needs.build-wheel.outputs.wheel_artifact_name }}
+          name: eager-dist-cp310-ubuntu-22.04-any-profiler-9729f88590e76e5329a306b379cdb1c16de98068-18974520816
           path: .
 
       - name: Set evaluation image name
@@ -478,7 +479,7 @@ jobs:
           context: ${{ github.workspace }}
           file: dockerfile/Dockerfile.evaluation
           push: true
-          tags: ghcr.io/${{ github.repository }}/tt-metalium/${{ env.EVALUATION_IMAGE_NAME }}:${{ github.sha }}
-          build-args: UBUNTU_VERSION=${{ inputs.version }},BASE_IMAGE=ghcr.io/${{ github.repository }}/tt-metalium/${{ needs.build-docker-image.outputs.ci-build-tag || 'docker-image-unresolved!' }},BUILD_ARTIFACT_NAME=${{ needs.build-artifact.outputs.build_artifact_name }},WHEEL_ARTIFACT_NAME=${{ needs.build-wheel.outputs.wheel_artifact_name }}
+          tags: ghcr.io/${{ github.repository }}/tt-metalium/${{ steps.evaluation_image_name.outputs.evaluation_image_name }}:${{ github.sha }}
+          build-args: UBUNTU_VERSION=${{ inputs.version }},BASE_IMAGE=ghcr.io/${{ github.repository }}/tt-metalium/ubuntu-22.04-ci-build-amd64:bc276e0341c7650fe1cfd95aaa3c08a56455d08c,BUILD_ARTIFACT_NAME=${{ needs.build-artifact.outputs.build_artifact_name }},WHEEL_ARTIFACT_NAME=${{ needs.build-wheel.outputs.wheel_artifact_name }}
           cache-to: type=inline
           pull: true
