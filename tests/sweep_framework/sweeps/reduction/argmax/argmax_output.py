@@ -52,7 +52,6 @@ parameters = {
         "input_a_memory_config": [ttnn.DRAM_MEMORY_CONFIG, ttnn.L1_MEMORY_CONFIG],
         "output_memory_config": [ttnn.DRAM_MEMORY_CONFIG, ttnn.L1_MEMORY_CONFIG],
     },
-
     # Traced configurations from real model tests (e.g., EfficientNet)
     # Automatically loaded - just add the suite!
     "model_traced": model_traced_params,
@@ -150,8 +149,13 @@ def test_nightly(device, params):
 # The runner will call this run function with each test vector, and the returned results from this function will be stored.
 # If you defined a mesh_device_fixture above, the object you yielded will be passed into this function as 'device'. Otherwise, it will be the default ttnn device opened by the infra.
 def run(
-    input_shape, dim, input_a_dtype, output_dtype, input_layout, input_a_memory_config, output_memory_config, *, device
-,
+    input_shape,
+    dim,
+    input_a_dtype,
+    output_dtype,
+    input_layout,
+    input_a_memory_config,
+    output_memory_config,
     traced_config_name=None,
     *,
     device,

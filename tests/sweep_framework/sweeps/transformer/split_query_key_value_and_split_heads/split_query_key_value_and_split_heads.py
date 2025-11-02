@@ -8,11 +8,11 @@ from functools import partial
 import torch
 import random
 import ttnn
-from tests.sweep_framework.sweep_utils.utils import (
 
 # Import master config loader for traced model configurations
 from tests.sweep_framework.master_config_loader import MasterConfigLoader, unpack_traced_config
 
+from tests.sweep_framework.sweep_utils.utils import (
     gen_shapes,
     sanitize_shape_rm,
     gen_rand_integers,
@@ -57,7 +57,6 @@ parameters = {
         "input_a_memory_config": [ttnn.DRAM_MEMORY_CONFIG, ttnn.L1_MEMORY_CONFIG],
         "output_memory_config": [ttnn.DRAM_MEMORY_CONFIG, ttnn.L1_MEMORY_CONFIG],
     },
-
     # Traced configurations from real model tests (e.g., EfficientNet)
     # Automatically loaded - just add the suite!
     "model_traced": model_traced_params,

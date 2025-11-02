@@ -17,7 +17,11 @@ from models.common.utility_functions import torch_random
 from tests.sweep_framework.sweep_utils.roofline_utils import get_run_return
 
 # Import master config loader for traced model configurations
-from tests.sweep_framework.master_config_loader import MasterConfigLoader, unpack_traced_config, unpack_binary_traced_config
+from tests.sweep_framework.master_config_loader import (
+    MasterConfigLoader,
+    unpack_traced_config,
+    unpack_binary_traced_config,
+)
 
 
 TIMEOUT = 5
@@ -46,11 +50,10 @@ parameters = {
         "input_a_memory_config": [ttnn.DRAM_MEMORY_CONFIG],
         "output_memory_config": [ttnn.DRAM_MEMORY_CONFIG],
         "core_grid": [None],
+        # Traced configurations from real model tests (e.g., EfficientNet)
+        # Automatically loaded - just add the suite!
+        "model_traced": model_traced_params,
     }
-
-    # Traced configurations from real model tests (e.g., EfficientNet)
-    # Automatically loaded - just add the suite!
-    "model_traced": model_traced_params,
 }
 
 

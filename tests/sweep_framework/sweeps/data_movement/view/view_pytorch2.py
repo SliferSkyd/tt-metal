@@ -70,7 +70,6 @@ def parse_md_file_simple_no_regex(file_path):
     return view_specs
 
 
-
 # Load traced configurations from real model tests
 # Simply initialize the loader and get parameters for your operation
 loader = MasterConfigLoader()
@@ -83,11 +82,10 @@ parameters = {
         "view_specs": parse_md_file_simple_no_regex("tests/sweep_framework/sweeps/data_movement/view/view_trace.md"),
         "dtype": [ttnn.bfloat16],
         "layout": [ttnn.ROW_MAJOR_LAYOUT, ttnn.TILE_LAYOUT],
+        # Traced configurations from real model tests (e.g., EfficientNet)
+        # Automatically loaded - just add the suite!
+        "model_traced": model_traced_params,
     }
-
-    # Traced configurations from real model tests (e.g., EfficientNet)
-    # Automatically loaded - just add the suite!
-    "model_traced": model_traced_params,
 }
 
 

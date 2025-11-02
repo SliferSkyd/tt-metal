@@ -47,11 +47,10 @@ parameters = {
         "value": [0, 3],
         "dtype": [ttnn.int32, ttnn.uint32, ttnn.bfloat16],
         "layout": [ttnn.ROW_MAJOR_LAYOUT, ttnn.TILE_LAYOUT],
+        # Traced configurations from real model tests (e.g., EfficientNet)
+        # Automatically loaded - just add the suite!
+        "model_traced": model_traced_params,
     }
-
-    # Traced configurations from real model tests (e.g., EfficientNet)
-    # Automatically loaded - just add the suite!
-    "model_traced": model_traced_params,
 }
 
 

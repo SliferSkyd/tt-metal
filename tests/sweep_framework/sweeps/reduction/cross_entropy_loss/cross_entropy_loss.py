@@ -8,7 +8,6 @@ import torch
 from tests.sweep_framework.master_config_loader import MasterConfigLoader, unpack_traced_config
 
 
-
 # Load traced configurations from real model tests
 # Simply initialize the loader and get parameters for your operation
 loader = MasterConfigLoader()
@@ -21,8 +20,7 @@ parameters = {
         "predictions_shape": [
             (3, 5),
         ],
-    }
-
+    },
     # Traced configurations from real model tests (e.g., EfficientNet)
     # Automatically loaded - just add the suite!
     "model_traced": model_traced_params,
@@ -40,7 +38,8 @@ def cross_entropy_loss_ttnn(predictions, labels, reduction_constant):
     return final_loss
 
 
-def run(predictions_shape, device,
+def run(
+    predictions_shape,
     traced_config_name=None,
     *,
     device,

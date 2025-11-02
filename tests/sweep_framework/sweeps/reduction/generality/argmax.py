@@ -34,14 +34,15 @@ model_traced_params = loader.get_suite_parameters("argmax")
 # To run all combinations: loader.get_suite_parameters("argmax", all_cases=True)
 
 parameters = {
-    f"rank_{rank}": {
-        "tensor_shape": list(itertools.product(DIM_SIZES, repeat=rank)),
-        "dim": [None] + [rank, -1] if rank > 0 else [],
-        "keepdim": [True, False],
-        "use_multicore": [True, False],
-    }
-    for rank in range(5)
-
+    **{
+        f"rank_{rank}": {
+            "tensor_shape": list(itertools.product(DIM_SIZES, repeat=rank)),
+            "dim": [None] + [rank, -1] if rank > 0 else [],
+            "keepdim": [True, False],
+            "use_multicore": [True, False],
+        }
+        for rank in range(5)
+    },
     # Traced configurations from real model tests (e.g., EfficientNet)
     # Automatically loaded - just add the suite!
     "model_traced": model_traced_params,

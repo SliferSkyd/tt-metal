@@ -29,7 +29,16 @@ model_traced_params = loader.get_suite_parameters("slice_pytorch2_rm")
 parameters = {
     "nightly": {
         "slice_specs": [
-            {"dims": [1, 4], "dim": 1, "start": 0, "end": -1, "step": 4},
+            {
+                "dims": [1, 4],
+                "dim": 1,
+                "start": 0,
+                "end": -1,
+                "step": 4,
+                # Traced configurations from real model tests (e.g., EfficientNet)
+                # Automatically loaded - just add the suite!
+                "model_traced": model_traced_params,
+            },
             {"dims": [1, 1, 1, 10], "dim": 3, "start": 0, "end": -1},
             {"dims": [1, 1, 1, 15], "dim": 3, "start": 0, "end": -1},
             {"dims": [1, 1, 1, 19], "dim": 3, "start": 0, "end": -1},
@@ -187,10 +196,6 @@ parameters = {
         "dtype": [ttnn.bfloat16],
         "layout": [ttnn.ROW_MAJOR_LAYOUT],
     }
-
-    # Traced configurations from real model tests (e.g., EfficientNet)
-    # Automatically loaded - just add the suite!
-    "model_traced": model_traced_params,
 }
 
 

@@ -33,7 +33,13 @@ model_traced_params = loader.get_suite_parameters("interleaved_to_sharded_e2e")
 parameters = {
     "nightly": {
         "shard_specs": [
-            {"shape": [1, 1, 1, 16], "shard_shape": None},
+            {
+                "shape": [1, 1, 1, 16],
+                "shard_shape": None,
+                # Traced configurations from real model tests (e.g., EfficientNet)
+                # Automatically loaded - just add the suite!
+                "model_traced": model_traced_params,
+            },
             {"shape": [1, 1, 32, 16], "shard_shape": None},
             {"shape": [1, 1, 16, 32], "shard_shape": None},
             {"shape": [1, 1, 128, 32], "shard_shape": None},
@@ -60,10 +66,6 @@ parameters = {
         "input_buffer_type": [ttnn.L1_MEMORY_CONFIG, ttnn.DRAM_MEMORY_CONFIG],
         "output_buffer_type": [ttnn.L1_MEMORY_CONFIG, ttnn.DRAM_MEMORY_CONFIG],
     }
-
-    # Traced configurations from real model tests (e.g., EfficientNet)
-    # Automatically loaded - just add the suite!
-    "model_traced": model_traced_params,
 }
 
 

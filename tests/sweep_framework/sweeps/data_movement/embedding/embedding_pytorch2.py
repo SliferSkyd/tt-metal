@@ -30,7 +30,13 @@ model_traced_params = loader.get_suite_parameters("embedding_pytorch2")
 parameters = {
     "nightly": {
         "embedding_specs": [
-            {"weight_shape": [1, 768], "indices_shape": [1, 10]},
+            {
+                "weight_shape": [1, 768],
+                "indices_shape": [1, 10],
+                # Traced configurations from real model tests (e.g., EfficientNet)
+                # Automatically loaded - just add the suite!
+                "model_traced": model_traced_params,
+            },
             {"weight_shape": [1024, 768], "indices_shape": [1, 7]},
             {"weight_shape": [2, 1024], "indices_shape": [1, 256]},
             {"weight_shape": [2, 128], "indices_shape": [1, 12]},
@@ -111,10 +117,6 @@ parameters = {
         "weight_layout": [ttnn.ROW_MAJOR_LAYOUT, ttnn.TILE_LAYOUT],
         "output_layout": [ttnn.ROW_MAJOR_LAYOUT, ttnn.TILE_LAYOUT],
     }
-
-    # Traced configurations from real model tests (e.g., EfficientNet)
-    # Automatically loaded - just add the suite!
-    "model_traced": model_traced_params,
 }
 
 

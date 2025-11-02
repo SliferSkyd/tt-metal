@@ -15,7 +15,6 @@ from models.common.utility_functions import torch_random
 from tests.sweep_framework.master_config_loader import MasterConfigLoader, unpack_traced_config
 
 
-
 TIMEOUT = 20  # longer timeout since permute calls transpose recursively
 random.seed(0)
 
@@ -24,7 +23,6 @@ def generate_transpose_shape(num_samples):
     for _ in range(num_samples):
         shape = [random.randint(1, 96) for _ in range(4)]
         yield shape
-
 
 
 # Load traced configurations from real model tests
@@ -41,11 +39,10 @@ parameters = {
         "dim1": [-4, -3, -2, -1, 0, 1, 2, 3],
         "layout": [ttnn.ROW_MAJOR_LAYOUT, ttnn.TILE_LAYOUT],
         "dtype": [ttnn.bfloat16, ttnn.bfloat8_b],
+        # Traced configurations from real model tests (e.g., EfficientNet)
+        # Automatically loaded - just add the suite!
+        "model_traced": model_traced_params,
     }
-
-    # Traced configurations from real model tests (e.g., EfficientNet)
-    # Automatically loaded - just add the suite!
-    "model_traced": model_traced_params,
 }
 
 

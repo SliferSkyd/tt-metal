@@ -53,7 +53,6 @@ def generate_unsqueeze_config(num_samples=10):
         }
 
 
-
 # Load traced configurations from real model tests
 # Simply initialize the loader and get parameters for your operation
 loader = MasterConfigLoader()
@@ -64,7 +63,13 @@ model_traced_params = loader.get_suite_parameters("unsqueeze_pytorch2")
 parameters = {
     "nightly": {
         "unsqueeze_specs": [
-            {"shape": [0], "dim": 1},
+            {
+                "shape": [0],
+                "dim": 1,
+                # Traced configurations from real model tests (e.g., EfficientNet)
+                # Automatically loaded - just add the suite!
+                "model_traced": model_traced_params,
+            },
             {"shape": [1, 1, 1, 16], "dim": 4},
             {"shape": [1, 1, 10], "dim": 2},
             {"shape": [1, 1, 12], "dim": 2},
@@ -279,10 +284,6 @@ parameters = {
         "dtype": [ttnn.bfloat16],
         "layout": [ttnn.ROW_MAJOR_LAYOUT, ttnn.TILE_LAYOUT],
     }
-
-    # Traced configurations from real model tests (e.g., EfficientNet)
-    # Automatically loaded - just add the suite!
-    "model_traced": model_traced_params,
 }
 
 

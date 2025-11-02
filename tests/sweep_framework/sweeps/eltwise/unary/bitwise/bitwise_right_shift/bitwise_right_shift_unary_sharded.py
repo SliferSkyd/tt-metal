@@ -11,11 +11,11 @@ import random
 import ttnn
 import math
 from tests.sweep_framework.sweep_utils.utils import gen_shapes, sanitize_shape_rm
-from tests.sweep_framework.sweep_utils.sharding_utils import (
 
 # Import master config loader for traced model configurations
 from tests.sweep_framework.master_config_loader import MasterConfigLoader, unpack_traced_config
 
+from tests.sweep_framework.sweep_utils.sharding_utils import (
     gen_sharded_spec_unary,
     parse_sharding_spec,
     invalidate_vector_sharding,
@@ -49,7 +49,6 @@ parameters = {
         "shift_bits": list(range(1, 31)),
         "input_a_dtype": [ttnn.int32],
     },
-
     # Traced configurations from real model tests (e.g., EfficientNet)
     # Automatically loaded - just add the suite!
     "model_traced": model_traced_params,

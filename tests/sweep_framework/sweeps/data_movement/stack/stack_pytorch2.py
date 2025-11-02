@@ -30,7 +30,13 @@ model_traced_params = loader.get_suite_parameters("stack_pytorch2")
 parameters = {
     "nightly": {
         "stack_specs": [
-            {"tensors_shapes": [[0, 1], [0, 1], [0, 1], [0, 1]], "dim": 2},
+            {
+                "tensors_shapes": [[0, 1], [0, 1], [0, 1], [0, 1]],
+                "dim": 2,
+                # Traced configurations from real model tests (e.g., EfficientNet)
+                # Automatically loaded - just add the suite!
+                "model_traced": model_traced_params,
+            },
             {"tensors_shapes": [[0, 2], [0, 2]], "dim": 2},
             {"tensors_shapes": [[0], [0], [0], [0]], "dim": 1},
             {"tensors_shapes": [[1, 1, 16, 16], [1, 1, 16, 16]], "dim": -1},
@@ -81,10 +87,6 @@ parameters = {
         "dtype": [ttnn.bfloat16],
         "layout": [ttnn.ROW_MAJOR_LAYOUT, ttnn.TILE_LAYOUT],
     }
-
-    # Traced configurations from real model tests (e.g., EfficientNet)
-    # Automatically loaded - just add the suite!
-    "model_traced": model_traced_params,
 }
 
 

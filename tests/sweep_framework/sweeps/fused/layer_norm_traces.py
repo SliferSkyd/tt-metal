@@ -117,11 +117,10 @@ parameters = {
             ((2, 7, 512), [512], 1e-05),
             ((920, 1, 256), [256], 1e-05),
         ],
+        # Traced configurations from real model tests (e.g., EfficientNet)
+        # Automatically loaded - just add the suite!
+        "model_traced": model_traced_params,
     }
-
-    # Traced configurations from real model tests (e.g., EfficientNet)
-    # Automatically loaded - just add the suite!
-    "model_traced": model_traced_params,
 }
 
 

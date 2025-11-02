@@ -47,8 +47,17 @@ parameters = {
         "dtype": [ttnn.bfloat16, ttnn.bfloat8_b],
         "ceil_mode": [True, False],
     }
-    for idx, shape_ in enumerate(input_shapes)
-
+    ** {
+        f"shape_{idx}": {
+            "shape": [shape_],
+            "kernel_size": kernel_sizes,
+            "padding": paddings,
+            "stride": strides,
+            "sharding": shardings,
+            "dtype": dtypes,
+        }
+        for idx, shape_ in enumerate(input_shapes)
+    },
     # Traced configurations from real model tests (e.g., EfficientNet)
     # Automatically loaded - just add the suite!
     "model_traced": model_traced_params,

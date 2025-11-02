@@ -8,11 +8,10 @@ import torch
 import random
 import ttnn
 
-from tests.ttnn.utils_for_testing import (
-
 # Import master config loader for traced model configurations
 from tests.sweep_framework.master_config_loader import MasterConfigLoader, unpack_traced_config
 
+from tests.ttnn.utils_for_testing import (
     check_with_pcc,
     start_measuring_time,
     stop_measuring_time,
@@ -69,7 +68,6 @@ parameter_tiled = {
         "output_mem_config": [ttnn.DRAM_MEMORY_CONFIG],
     }
 }
-
 
 
 # Load traced configurations from real model tests

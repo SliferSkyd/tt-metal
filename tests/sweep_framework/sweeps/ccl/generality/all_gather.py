@@ -11,11 +11,11 @@ import ttnn
 
 from tests.ttnn.utils_for_testing import start_measuring_time, stop_measuring_time
 from loguru import logger
-from tests.sweep_framework.sweep_utils.ccl_common import (
 
 # Import master config loader for traced model configurations
 from tests.sweep_framework.master_config_loader import MasterConfigLoader, unpack_traced_config
 
+from tests.sweep_framework.sweep_utils.ccl_common import (
     device_context,
     get_mem_configs,
     get_serializable_shard_specs,
@@ -122,7 +122,6 @@ parameters = {
         "topology": [ttnn.Topology.Linear, ttnn.Topology.Ring],
         "num_iters": [1],
     },
-
     # Traced configurations from real model tests (e.g., EfficientNet)
     # Automatically loaded - just add the suite!
     "model_traced": model_traced_params,

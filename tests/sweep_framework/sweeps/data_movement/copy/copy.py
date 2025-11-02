@@ -16,7 +16,6 @@ from models.common.utility_functions import torch_random
 from tests.sweep_framework.master_config_loader import MasterConfigLoader, unpack_traced_config
 
 
-
 TIMEOUT = 15
 
 
@@ -102,11 +101,10 @@ parameters = {
         ],
         "layout": [ttnn.ROW_MAJOR_LAYOUT, ttnn.TILE_LAYOUT],
         "dtype": [ttnn.bfloat16],
+        # Traced configurations from real model tests (e.g., EfficientNet)
+        # Automatically loaded - just add the suite!
+        "model_traced": model_traced_params,
     }
-
-    # Traced configurations from real model tests (e.g., EfficientNet)
-    # Automatically loaded - just add the suite!
-    "model_traced": model_traced_params,
 }
 
 

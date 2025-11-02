@@ -14,11 +14,11 @@ import torch
 import ttnn
 
 from tests.sweep_framework.sweep_utils.utils import gen_pytest_parametrize_args
-from tests.ttnn.utils_for_testing import (
 
 # Import master config loader for traced model configurations
 from tests.sweep_framework.master_config_loader import MasterConfigLoader, unpack_traced_config
 
+from tests.ttnn.utils_for_testing import (
     get_per_core_size_and_num_cores,
     start_measuring_time,
     stop_measuring_time,
@@ -44,7 +44,6 @@ def get_block_sharded_specs(
                 k_size, num_cores_choices, max_per_core_size=1024
             ):
                 yield (batch_sizes, m_size, k_size, per_core_height, per_core_width, num_cores_height, num_cores_width)
-
 
 
 # Load traced configurations from real model tests
@@ -76,8 +75,16 @@ parameters = {
         "input_layout": [ttnn.TILE_LAYOUT],
         "compute_kernel_config": [None],
     }
-    for n in range(0, 4096, 384)
-
+    ** {
+        f"n_{n}": {
+            "n": [n],
+            "input_dtype": [ttnn.bfloat16],
+            "output_dtype": [ttnn.bfloat16],
+            "input_layout": [ttnn.TILE_LAYOUT],
+            "compute_kernel_config": [None],
+        }
+        for n in range(0, 4096, 384)
+    },
     # Traced configurations from real model tests (e.g., EfficientNet)
     # Automatically loaded - just add the suite!
     "model_traced": model_traced_params,

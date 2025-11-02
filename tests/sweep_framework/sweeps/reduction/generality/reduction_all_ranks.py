@@ -28,7 +28,6 @@ DIM_SIZES = [0, 32]
 """Possible tensor dimensions are picked from this list"""
 
 
-
 # Load traced configurations from real model tests
 # Simply initialize the loader and get parameters for your operation
 loader = MasterConfigLoader()
@@ -37,23 +36,24 @@ model_traced_params = loader.get_suite_parameters("reduction_all_ranks")
 # To run all combinations: loader.get_suite_parameters("reduction_all_ranks", all_cases=True)
 
 parameters = {
-    f"rank_{rank}": {
-        "tensor_shape": list(itertools.product(DIM_SIZES, repeat=rank)),
-        "dim": list(range(-rank, rank)) if rank > 0 else [None],  # Rank 0 has no dimensions
-        "keepdim": [True, False],
-        # Reduction operations to test
-        "op": [
-            "sum",
-            "mean",
-            "max",
-            "min",
-            "std",
-            "var",
-        ],
-        "dtype": [torch.bfloat16, torch.float32],
-    }
-    for rank in range(5)
-
+    **{
+        f"rank_{rank}": {
+            "tensor_shape": list(itertools.product(DIM_SIZES, repeat=rank)),
+            "dim": list(range(-rank, rank)) if rank > 0 else [None],  # Rank 0 has no dimensions
+            "keepdim": [True, False],
+            # Reduction operations to test
+            "op": [
+                "sum",
+                "mean",
+                "max",
+                "min",
+                "std",
+                "var",
+            ],
+            "dtype": [torch.bfloat16, torch.float32],
+        }
+        for rank in range(5)
+    },
     # Traced configurations from real model tests (e.g., EfficientNet)
     # Automatically loaded - just add the suite!
     "model_traced": model_traced_params,

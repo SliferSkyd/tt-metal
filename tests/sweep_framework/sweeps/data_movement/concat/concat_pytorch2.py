@@ -8,11 +8,10 @@ import torch
 import random
 import ttnn
 
-from tests.ttnn.utils_for_testing import (
-
 # Import master config loader for traced model configurations
 from tests.sweep_framework.master_config_loader import MasterConfigLoader, unpack_traced_config
 
+from tests.ttnn.utils_for_testing import (
     check_with_pcc,
     start_measuring_time,
     stop_measuring_time,
@@ -41,7 +40,13 @@ model_traced_params = loader.get_suite_parameters("concat_pytorch2")
 parameters = {
     "nightly": {
         "concat_specs": [
-            {"dim": 1, "shapes": [[1, 1, 1024], [1, 196, 1024]]},
+            {
+                "dim": 1,
+                "shapes": [[1, 1, 1024], [1, 196, 1024]],
+                # Traced configurations from real model tests (e.g., EfficientNet)
+                # Automatically loaded - just add the suite!
+                "model_traced": model_traced_params,
+            },
             {"dim": 1, "shapes": [[1, 1, 1024], [1, 49, 1024]]},
             {"dim": 1, "shapes": [[1, 1, 1280], [1, 1369, 1280]]},
             {"dim": -1, "shapes": [[1, 1, 16, 32], [1, 1, 16, 32]]},
@@ -4172,10 +4177,6 @@ parameters = {
         "dtype": [ttnn.bfloat16, ttnn.uint32, ttnn.int32],
         "layout": [ttnn.ROW_MAJOR_LAYOUT, ttnn.TILE_LAYOUT],
     }
-
-    # Traced configurations from real model tests (e.g., EfficientNet)
-    # Automatically loaded - just add the suite!
-    "model_traced": model_traced_params,
 }
 
 

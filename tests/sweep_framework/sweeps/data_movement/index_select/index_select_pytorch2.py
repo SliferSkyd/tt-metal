@@ -28,14 +28,19 @@ model_traced_params = loader.get_suite_parameters("index_select_pytorch2")
 
 parameters = {
     "nightly": {
-        "index_select_specs": [{"shape": [2050, 1024], "dim": 0, "index": [19]}],
+        "index_select_specs": [
+            {
+                "shape": [2050, 1024],
+                "dim": 0,
+                "index": [19],
+                # Traced configurations from real model tests (e.g., EfficientNet)
+                # Automatically loaded - just add the suite!
+                "model_traced": model_traced_params,
+            }
+        ],
         "dtype": [ttnn.bfloat16],
         "layout": [ttnn.ROW_MAJOR_LAYOUT, ttnn.TILE_LAYOUT],
     }
-
-    # Traced configurations from real model tests (e.g., EfficientNet)
-    # Automatically loaded - just add the suite!
-    "model_traced": model_traced_params,
 }
 
 

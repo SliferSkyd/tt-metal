@@ -30,7 +30,13 @@ model_traced_params = loader.get_suite_parameters("expand_pytorch2")
 parameters = {
     "nightly": {
         "expand_specs": [
-            {"shape": [1, 1, 1, 16, 1], "size": [1, 1, 1, 16, 2]},
+            {
+                "shape": [1, 1, 1, 16, 1],
+                "size": [1, 1, 1, 16, 2],
+                # Traced configurations from real model tests (e.g., EfficientNet)
+                # Automatically loaded - just add the suite!
+                "model_traced": model_traced_params,
+            },
             {"shape": [1, 1, 1, 16], "size": [1, 12, 16, 16]},
             {"shape": [1, 1, 1, 19], "size": [1, 1, 19, 19]},
             {"shape": [1, 1, 1, 24], "size": [1, 1, 1, 24]},
@@ -301,10 +307,6 @@ parameters = {
         "dtype": [ttnn.bfloat16, ttnn.int32],
         "layout": [ttnn.ROW_MAJOR_LAYOUT, ttnn.TILE_LAYOUT],
     }
-
-    # Traced configurations from real model tests (e.g., EfficientNet)
-    # Automatically loaded - just add the suite!
-    "model_traced": model_traced_params,
 }
 
 

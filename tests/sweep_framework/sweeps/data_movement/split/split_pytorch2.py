@@ -32,7 +32,14 @@ model_traced_params = loader.get_suite_parameters("split_pytorch2")
 parameters = {
     "nightly": {
         "split_specs": [
-            {"shape": [1, 1, 32], "split_size": 16, "dim": -1},
+            {
+                "shape": [1, 1, 32],
+                "split_size": 16,
+                "dim": -1,
+                # Traced configurations from real model tests (e.g., EfficientNet)
+                # Automatically loaded - just add the suite!
+                "model_traced": model_traced_params,
+            },
             {"shape": [1, 1, 4, 768], "split_size": 256, "dim": -1},
             {"shape": [1, 1024, 5120], "split_size": 2560, "dim": -1},
             {"shape": [1, 14, 2], "split_size": 1, "dim": -1},
@@ -56,10 +63,6 @@ parameters = {
         "dtype": [ttnn.bfloat16],
         "layout": [ttnn.ROW_MAJOR_LAYOUT, ttnn.TILE_LAYOUT],
     }
-
-    # Traced configurations from real model tests (e.g., EfficientNet)
-    # Automatically loaded - just add the suite!
-    "model_traced": model_traced_params,
 }
 
 

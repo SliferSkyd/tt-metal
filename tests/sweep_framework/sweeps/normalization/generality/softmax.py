@@ -34,16 +34,17 @@ model_traced_params = loader.get_suite_parameters("softmax")
 # To run all combinations: loader.get_suite_parameters("softmax", all_cases=True)
 
 parameters = {
-    f"rank_{rank}": {
-        "tensor_shape": list(itertools.product(DIM_SIZES, repeat=rank)),
-        "dim": list(range(-rank, rank)) if rank > 0 else [0, -1],  # Rank 0 has no dimensions
-        # normalization operations to test
-        "op": [
-            "softmax",
-        ],
-    }
-    for rank in range(5)
-
+    **{
+        f"rank_{rank}": {
+            "tensor_shape": list(itertools.product(DIM_SIZES, repeat=rank)),
+            "dim": list(range(-rank, rank)) if rank > 0 else [0, -1],  # Rank 0 has no dimensions
+            # normalization operations to test
+            "op": [
+                "softmax",
+            ],
+        }
+        for rank in range(5)
+    },
     # Traced configurations from real model tests (e.g., EfficientNet)
     # Automatically loaded - just add the suite!
     "model_traced": model_traced_params,

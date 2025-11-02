@@ -31,7 +31,13 @@ model_traced_params = loader.get_suite_parameters("repeat_pytorch2")
 parameters = {
     "nightly": {
         "repeat_specs": [
-            {"shape": [1, 1, 1], "repeats": [1, 1, 1]},
+            {
+                "shape": [1, 1, 1],
+                "repeats": [1, 1, 1],
+                # Traced configurations from real model tests (e.g., EfficientNet)
+                # Automatically loaded - just add the suite!
+                "model_traced": model_traced_params,
+            },
             {"shape": [1, 1, 2048, 2048], "repeats": [1, 1, 1, 1]},
             {"shape": [1, 1, 256], "repeats": [1, 1, 1]},
             {"shape": [1, 128, 256], "repeats": [1, 1, 1]},
@@ -50,10 +56,6 @@ parameters = {
         "dtype": [ttnn.bfloat16, ttnn.int32, ttnn.uint32],
         "layout": [ttnn.ROW_MAJOR_LAYOUT, ttnn.TILE_LAYOUT],
     }
-
-    # Traced configurations from real model tests (e.g., EfficientNet)
-    # Automatically loaded - just add the suite!
-    "model_traced": model_traced_params,
 }
 
 
