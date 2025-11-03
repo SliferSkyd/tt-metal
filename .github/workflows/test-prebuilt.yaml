@@ -59,7 +59,7 @@ jobs:
     with:
       arch: ${{ matrix.test-group.arch }}
       runner-label: ${{ matrix.test-group.runner-label }}
-      docker-image: ${{ needs.build-artifact.outputs.dev-docker-image }}
+      docker-image: ${{ needs.build-artifact.outputs.evaluation-docker-image }}
       build-artifact-name: "aint-needed"
       wheel-artifact-name: "aint-needed"
       gtest_filter: "*-*NIGHTLY_*"

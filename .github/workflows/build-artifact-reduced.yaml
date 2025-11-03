@@ -93,7 +93,7 @@ on:
         value: ${{ jobs.build-docker-image.outputs.basic-ttnn-runtime-tag }}
       evaluation-docker-image:
         description: "Docker tag for the evaluation Docker image"
-        value: ${{ jobs.build-evaluation-image.outputs.evaluation-tag }}
+        value: ${{ jobs.build-evaluation-image.outputs.evaluation-image-tag }}
       packages-artifact-name:
         description: "Name to give download-artifact to get the packages"
         value: ${{ jobs.build-artifact.outputs.packages-artifact-name }}
@@ -160,7 +160,7 @@ jobs:
     environment: ${{ github.ref == 'refs/heads/main' && 'mainline' || '' }}
     timeout-minutes: 60
     outputs:
-      evaluation-tag: ${{ steps.image_names.outputs.evaluation-image-name }}
+      evaluation-tag: ${{ steps.image_names.outputs.evaluation-image-tag }}
     steps:
       - name: ⬇️ Checkout
         uses: actions/checkout@v4
@@ -194,6 +194,7 @@ jobs:
         id: image_names
         env:
           CI_BUILD_IMAGE_NAME: ${{ inputs.distro }}-${{ inputs.version }}-ci-build-${{ inputs.architecture }}
+          EVALUATION_IMAGE_NAME: ${{ inputs.distro }}-${{ inputs.version }}-evaluation-${{ inputs.architecture }}
         run: |
           HASH=$(cat \
             .github/workflows/build-docker-artifact.yaml \
@@ -207,7 +208,7 @@ jobs:
             scripts/ttexalens_ref.txt \
             tools/triage/requirements.txt \
             | sha1sum | cut -d' ' -f1)
-          echo "evaluation-image-name=${{ inputs.distro }}-${{ inputs.version }}-evaluation-${{ inputs.architecture }}" >> $GITHUB_OUTPUT
+          echo "evaluation-image-tag=ghcr.io/${{ github.repository }}/tt-metalium/${{ env.EVALUATION_IMAGE_NAME }}:${{ github.sha }}" >> $GITHUB_OUTPUT
           echo "ci-build-tag=ghcr.io/${{ github.repository }}/tt-metalium/${{ env.CI_BUILD_IMAGE_NAME }}:${HASH}" >> $GITHUB_OUTPUT
 
       - name: Build and push Evaluation image
@@ -216,9 +217,9 @@ jobs:
           context: ${{ github.workspace }}
           file: dockerfile/Dockerfile.evaluation
           push: true
-          tags: ghcr.io/${{ github.repository }}/tt-metalium/${{ steps.image_names.outputs.evaluation-image-name }}:${{ github.sha }}
+          tags: ${{ steps.image_names.outputs.evaluation-image-tag }}
           build-args: |
             "UBUNTU_VERSION=${{ inputs.version }}"
-            "BASE_IMAGE=${{ steps.image_names.outputs.ci-build-tag }}"
+            "BASE_IMAGE=harbor.ci.tenstorrent.net/${{ steps.image_names.outputs.ci-build-tag }}"
           cache-to: type=inline
           pull: true
