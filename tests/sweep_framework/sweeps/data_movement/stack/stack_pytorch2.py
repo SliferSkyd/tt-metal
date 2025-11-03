@@ -29,8 +29,6 @@ parameters = {
             {
                 "tensors_shapes": [[0, 1], [0, 1], [0, 1], [0, 1]],
                 "dim": 2,
-                # Traced configurations from real model tests (e.g., EfficientNet)
-                # Automatically loaded - just add the suite!
                 "model_traced": model_traced_params,
             },
             {"tensors_shapes": [[0, 2], [0, 2]], "dim": 2},

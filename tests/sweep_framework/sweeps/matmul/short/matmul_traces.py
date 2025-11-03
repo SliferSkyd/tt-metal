@@ -2625,8 +2625,6 @@ parameters = {
         "dtype": [ttnn.float32, ttnn.bfloat16],
         "test_bias": [True, False],
     },
-    # Traced configurations from real model tests (e.g., EfficientNet)
-    # Automatically loaded - just add the suite!
     "model_traced": model_traced_params,
 }
 

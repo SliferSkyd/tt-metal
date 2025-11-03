@@ -31,8 +31,6 @@ parameters = {
                 "start": 0,
                 "end": -1,
                 "step": 4,
-                # Traced configurations from real model tests (e.g., EfficientNet)
-                # Automatically loaded - just add the suite!
                 "model_traced": model_traced_params,
             },
             {"dims": [1, 1, 1, 10], "dim": 3, "start": 0, "end": -1},

@@ -77,8 +77,6 @@ parameters = {
         "input_a_sharded_memory_config_specs": [TensorMemoryConfigs.HEIGHT_Y7_X7_USE_H_W.name],
         "input_b_sharded_memory_config_specs": [TensorMemoryConfigs.HEIGHT_Y7_X7_USE_H_W.name],
     },
-    # Traced configurations from real model tests (e.g., EfficientNet)
-    # Automatically loaded - just add the suite!
     "model_traced": model_traced_params,
 }
 # Add the rest of the parameters.

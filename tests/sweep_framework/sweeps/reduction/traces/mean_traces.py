@@ -114,8 +114,6 @@ parameters = {
             ((1, 960, 7, 7), (-1, -2), True),
             ((1, 960, 7, 7), (2, 3), True),
         ],
-        # Traced configurations from real model tests (e.g., EfficientNet)
-        # Automatically loaded - just add the suite!
         "model_traced": model_traced_params,
     }
 }

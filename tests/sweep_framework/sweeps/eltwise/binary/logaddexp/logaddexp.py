@@ -37,8 +37,6 @@ parameters = {
         "input_a_memory_config": [ttnn.DRAM_MEMORY_CONFIG, ttnn.L1_MEMORY_CONFIG],
         "input_b_memory_config": [ttnn.DRAM_MEMORY_CONFIG, ttnn.L1_MEMORY_CONFIG],
     },
-    # Traced configurations from real model tests (e.g., EfficientNet)
-    # Automatically loaded - just add the suite!
     "model_traced": model_traced_params,
 }
 

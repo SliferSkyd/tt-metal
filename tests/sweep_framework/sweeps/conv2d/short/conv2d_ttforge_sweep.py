@@ -529,11 +529,7 @@ parameters = {
             [2, 320, 960, 64, 64, 3, 3, 1, 1, 1, 1, 1, 1, 1, False, [int(ttnn.ROW_MAJOR_LAYOUT), "dram", int(ttnn.float32)], [int(ttnn.ROW_MAJOR_LAYOUT), "system_memory", int(ttnn.float32)], [int(ttnn.TILE_LAYOUT), "dram", int(ttnn.float32)]],
             [1, 1280, 3, 518, 518, 14, 14, 14, 14, 0, 0, 1, 1, 1, False, [int(ttnn.ROW_MAJOR_LAYOUT), "dram", int(ttnn.bfloat16)], [int(ttnn.ROW_MAJOR_LAYOUT), "system_memory", int(ttnn.bfloat16)], [int(ttnn.TILE_LAYOUT), "dram", int(ttnn.bfloat16)]], #Added from Issue 29981
        ],
-        "is_conv1d": [False], },
-
-    # Traced configurations from real model tests (e.g., EfficientNet)
-    # Automatically loaded - just add the suite!
-    "model_traced": model_traced_params,
+        "is_conv1d": [False], },"model_traced": model_traced_params,
     }
 # fmt: on
 

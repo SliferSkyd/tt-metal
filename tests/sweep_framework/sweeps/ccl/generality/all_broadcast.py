@@ -74,8 +74,6 @@ parameters = {
     "generality_suite": GENERALITY_PARAMETERS | {"fabric_config": FABRIC_CONFIGS},
     "generality_suite_fabric_1d": GENERALITY_PARAMETERS | {"fabric_config": FABRIC_CONFIGS_1D},
     "generality_suite_fabric_2d": GENERALITY_PARAMETERS | {"fabric_config": FABRIC_CONFIGS_2D},
-    # Traced configurations from real model tests (e.g., EfficientNet)
-    # Automatically loaded - just add the suite!
     "model_traced": model_traced_params,
 }
 

@@ -30,8 +30,6 @@ parameters = {
         "output_memory_config": [ttnn.DRAM_MEMORY_CONFIG],
         "layout": [ttnn.TILE_LAYOUT, ttnn.ROW_MAJOR_LAYOUT],
     },
-    # Traced configurations from real model tests (e.g., EfficientNet)
-    # Automatically loaded - just add the suite!
     "model_traced": model_traced_params,
 }
 

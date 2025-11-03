@@ -38,8 +38,6 @@ parameters = {
         "layout": [ttnn.TILE_LAYOUT, ttnn.ROW_MAJOR_LAYOUT],
         "coeff": [(3.6, 23.6, 1.7, 4.6), (9.4, 4.2, 3.3, 9.0)],
     },
-    # Traced configurations from real model tests (e.g., EfficientNet)
-    # Automatically loaded - just add the suite!
     "model_traced": model_traced_params,
 }
 

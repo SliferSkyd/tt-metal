@@ -60,8 +60,6 @@ parameters = {
         "output_dtype": [ttnn.bfloat8_b],
         "input_layout": [ttnn.TILE_LAYOUT],
         "compute_kernel_config": [None],
-        # Traced configurations from real model tests (e.g., EfficientNet)
-        # Automatically loaded - just add the suite!
         "model_traced": model_traced_params,
     }
 }

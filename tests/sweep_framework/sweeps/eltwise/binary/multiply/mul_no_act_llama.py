@@ -38,8 +38,6 @@ parameters = {
         "input_a_layout": [ttnn.TILE_LAYOUT],
         "input_b_layout": [ttnn.TILE_LAYOUT],
     },
-    # Traced configurations from real model tests (e.g., EfficientNet)
-    # Automatically loaded - just add the suite!
     "model_traced": model_traced_params,
 }
 

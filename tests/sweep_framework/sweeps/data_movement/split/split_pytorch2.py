@@ -32,8 +32,6 @@ parameters = {
                 "shape": [1, 1, 32],
                 "split_size": 16,
                 "dim": -1,
-                # Traced configurations from real model tests (e.g., EfficientNet)
-                # Automatically loaded - just add the suite!
                 "model_traced": model_traced_params,
             },
             {"shape": [1, 1, 4, 768], "split_size": 256, "dim": -1},

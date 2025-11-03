@@ -44,8 +44,6 @@ parameters = {
         "input_b_dtype": [ttnn.bfloat16, ttnn.bfloat8_b],
         "output_dtype": [ttnn.bfloat16, ttnn.bfloat8_b],
     },
-    # Traced configurations from real model tests (e.g., EfficientNet)
-    # Automatically loaded - just add the suite!
     "model_traced": model_traced_params,
 }
 

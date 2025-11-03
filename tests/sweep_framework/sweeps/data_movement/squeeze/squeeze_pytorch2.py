@@ -63,8 +63,6 @@ parameters = {
             {
                 "shape": [1, 1, 25088],
                 "dim": 0,
-                # Traced configurations from real model tests (e.g., EfficientNet)
-                # Automatically loaded - just add the suite!
                 "model_traced": model_traced_params,
             },
             {"shape": [1, 1, 480, 640], "dim": 1},

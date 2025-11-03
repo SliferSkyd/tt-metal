@@ -32,8 +32,6 @@ parameters = {
             {
                 "shape": [1, 1, 1, 16],
                 "shard_shape": None,
-                # Traced configurations from real model tests (e.g., EfficientNet)
-                # Automatically loaded - just add the suite!
                 "model_traced": model_traced_params,
             },
             {"shape": [1, 1, 32, 16], "shard_shape": None},

@@ -54,8 +54,6 @@ parameters = {
         "in1_dtype": [ttnn.bfloat4_b],
         "core_grid": [(3, 4)],
     },
-    # Traced configurations from real model tests (e.g., EfficientNet)
-    # Automatically loaded - just add the suite!
     "model_traced": model_traced_params,
 }
 

@@ -45,8 +45,6 @@ parameters = {
         "input_a_dtype": [ttnn.bfloat16, ttnn.bfloat8_b],
         "negative_slope": [-0.5, 0, 0.01, 0.5],
     },
-    # Traced configurations from real model tests (e.g., EfficientNet)
-    # Automatically loaded - just add the suite!
     "model_traced": model_traced_params,
 }
 

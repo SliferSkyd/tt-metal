@@ -63,8 +63,6 @@ parameters = {
             [1, 96, 112, 112, 3, 3, 2, 2, 1, 1, 1, 1, False],
         ],
     },
-    # Traced configurations from real model tests (e.g., EfficientNet)
-    # Automatically loaded - just add the suite!
     "model_traced": model_traced_params,
 }
 

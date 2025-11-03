@@ -35,8 +35,6 @@ parameters = {
         "transpose_specs": processed_transpose_specs,  # use the processed specs
         "dtype": [ttnn.bfloat16],
         "layout": [ttnn.ROW_MAJOR_LAYOUT, ttnn.TILE_LAYOUT],
-        # Traced configurations from real model tests (e.g., EfficientNet)
-        # Automatically loaded - just add the suite!
         "model_traced": model_traced_params,
     }
 }
