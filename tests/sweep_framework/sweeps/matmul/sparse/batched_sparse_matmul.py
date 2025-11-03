@@ -135,13 +135,13 @@ def test_sparse_matmul(device, m, kn, num_experts, tile_h, tile_w, in1_dtype, co
 
 
 def run(
-    m,
-    kn,
-    num_experts,
-    tile_h,
-    tile_w,
-    in1_dtype,
-    core_grid,
+    m=None,
+    kn=None,
+    num_experts=None,
+    tile_h=None,
+    tile_w=None,
+    in1_dtype=None,
+    core_grid=None,
     traced_config_name=None,
     *,
     device,

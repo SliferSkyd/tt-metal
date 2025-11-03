@@ -1602,13 +1602,7 @@ def invalidate_vector(test_vector) -> Tuple[bool, Optional[str]]:
     return False, None
 
 
-def run(
-    input_specs,
-    is_conv1d=False,
-    traced_config_name=None,
-    *,
-    device,
-) -> list:
+def run(input_specs=None, is_conv1d=False, traced_config_name=None, *, device) -> list:
     if is_conv1d:
         return run_conv1d_short_sweep(input_specs, device)
     else:

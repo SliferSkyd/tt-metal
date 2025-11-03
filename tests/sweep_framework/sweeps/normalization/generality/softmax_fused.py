@@ -139,13 +139,7 @@ def test_normalization(
     assert result, error_msg
 
 
-def run(
-    tensor_shape,
-    op,
-    traced_config_name=None,
-    *,
-    device,
-) -> list:
+def run(tensor_shape=None, op=None, traced_config_name=None, *, device) -> list:
     return run_softmax(
         device,
         tensor_shape,

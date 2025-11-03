@@ -67,13 +67,7 @@ def invalidate_vector(test_vector) -> Tuple[bool, Optional[str]]:
 # The runner will call this run function with each test vector, and the returned results from this function will be stored.
 # If you defined a device_mesh_fixture above, the object you yielded will be passed into this function as 'device'. Otherwise, it will be the default ttnn device opened by the infra.
 def run(
-    input_spec,
-    input_a_dtype,
-    input_b_dtype,
-    output_dtype,
-    traced_config_name=None,
-    *,
-    device,
+    input_spec=None, input_a_dtype=None, input_b_dtype=None, output_dtype=None, traced_config_name=None, *, device
 ) -> list:
     data_seed = random.randint(0, 20000000)
     torch.manual_seed(data_seed)

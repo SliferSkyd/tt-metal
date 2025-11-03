@@ -145,10 +145,5 @@ def test_layer_norm(device, params):
     run_layer_norm(device, params)
 
 
-def run(
-    params,
-    traced_config_name=None,
-    *,
-    device,
-) -> list:
+def run(params=None, traced_config_name=None, *, device) -> list:
     return run_layer_norm(device, params)

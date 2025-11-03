@@ -289,14 +289,7 @@ def test_matmul(
     assert result, error_msg
 
 
-def run(
-    shapes,
-    transpose_a,
-    transpose_b,
-    traced_config_name=None,
-    *,
-    device,
-) -> tuple:
+def run(shapes=None, transpose_a=None, transpose_b=None, traced_config_name=None, *, device) -> tuple:
     return run_matmul(
         device,
         shapes,

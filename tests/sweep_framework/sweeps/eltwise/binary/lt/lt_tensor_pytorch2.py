@@ -39,14 +39,14 @@ parameters = {
 
 
 def run(
-    input_shape_a,
-    input_shape_b,
-    input_a_dtype,
-    input_b_dtype,
-    input_a_layout,
-    input_b_layout,
-    input_a_memory_config,
-    input_b_memory_config,
+    input_shape_a=None,
+    input_shape_b=None,
+    input_a_dtype=None,
+    input_b_dtype=None,
+    input_a_layout=None,
+    input_b_layout=None,
+    input_a_memory_config=None,
+    input_b_memory_config=None,
     traced_config_name=None,
     *,
     device,

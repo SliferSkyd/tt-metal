@@ -50,11 +50,11 @@ parameters = {
 
 
 def run(
-    input_shape,
-    input_dtype,
-    input_layout,
-    input_memory_config,
-    output_memory_config,
+    input_shape=None,
+    input_dtype=None,
+    input_layout=None,
+    input_memory_config=None,
+    output_memory_config=None,
     traced_config_name=None,
     *,
     device,

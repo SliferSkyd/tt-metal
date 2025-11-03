@@ -143,13 +143,13 @@ def test_nightly(device, params):
 # The runner will call this run function with each test vector, and the returned results from this function will be stored.
 # If you defined a mesh_device_fixture above, the object you yielded will be passed into this function as 'device'. Otherwise, it will be the default ttnn device opened by the infra.
 def run(
-    input_shape,
-    dim,
-    input_a_dtype,
-    output_dtype,
-    input_layout,
-    input_a_memory_config,
-    output_memory_config,
+    input_shape=None,
+    dim=None,
+    input_a_dtype=None,
+    output_dtype=None,
+    input_layout=None,
+    input_a_memory_config=None,
+    output_memory_config=None,
     traced_config_name=None,
     *,
     device,

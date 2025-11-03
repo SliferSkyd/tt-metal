@@ -126,14 +126,7 @@ def test_normalization(
     assert result, error_msg
 
 
-def run(
-    tensor_shape,
-    dim,
-    op,
-    traced_config_name=None,
-    *,
-    device,
-) -> tuple:
+def run(tensor_shape=None, dim=None, op=None, traced_config_name=None, *, device) -> tuple:
     return run_softmax(
         device,
         tensor_shape,

@@ -117,17 +117,17 @@ DEVICE_PARAMS = {"dispatch_core_axis": ttnn.DispatchCoreAxis.COL}
 
 
 def run(
-    mesh_shape,
-    fabric_config,
-    input_shape,
-    experts,
-    select_experts_k,
-    cluster_axis,
-    num_links,
-    input_dtype,
-    mem_config,
-    num_iters,
-    topology,
+    mesh_shape=None,
+    fabric_config=None,
+    input_shape=None,
+    experts=None,
+    select_experts_k=None,
+    cluster_axis=None,
+    num_links=None,
+    input_dtype=None,
+    mem_config=None,
+    num_iters=None,
+    topology=None,
     traced_config_name=None,
     *,
     device,  # unused

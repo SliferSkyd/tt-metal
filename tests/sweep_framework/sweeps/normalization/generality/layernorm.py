@@ -148,13 +148,7 @@ def test_normalization(
     assert result, error_msg
 
 
-def run(
-    tensor_shape,
-    op,
-    traced_config_name=None,
-    *,
-    device,
-) -> tuple:
+def run(tensor_shape=None, op=None, traced_config_name=None, *, device) -> tuple:
     return run_normalization(
         device,
         tensor_shape,

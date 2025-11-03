@@ -88,13 +88,13 @@ def invalidate_vector(test_vector) -> Tuple[bool, Optional[str]]:
 
 
 def run(
-    input_shape,
-    repeats,
-    dim,
-    input_a_dtype,
-    input_a_layout,
-    input_a_memory_config,
-    output_memory_config,
+    input_shape=None,
+    repeats=None,
+    dim=None,
+    input_a_dtype=None,
+    input_a_layout=None,
+    input_a_memory_config=None,
+    output_memory_config=None,
     traced_config_name=None,
     *,
     device,

@@ -48,12 +48,12 @@ def invalidate_vector(test_vector) -> Tuple[bool, Optional[str]]:
 # The runner will call this run function with each test vector, and the returned results from this function will be stored.
 # If you defined a device_mesh_fixture above, the object you yielded will be passed into this function as 'device'. Otherwise, it will be the default ttnn device opened by the infra.
 def run(
-    batch_sizes,
-    height,
-    width,
-    input_dtype,
-    output_memory_config,
-    layout,
+    batch_sizes=None,
+    height=None,
+    width=None,
+    input_dtype=None,
+    output_memory_config=None,
+    layout=None,
     traced_config_name=None,
     *,
     device,

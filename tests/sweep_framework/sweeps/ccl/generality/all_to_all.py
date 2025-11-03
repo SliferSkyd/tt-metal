@@ -131,17 +131,17 @@ def _get_tensors(input_shape, in_dim, out_dim, mesh_shape, dtype, layout, device
 
 
 def run(
-    mesh_shape,
-    fabric_config,
-    input_shape,
-    in_dim,
-    out_dim,
-    num_links,
-    input_dtype,
-    layout,
-    mem_config,
-    num_iters,
-    topology,
+    mesh_shape=None,
+    fabric_config=None,
+    input_shape=None,
+    in_dim=None,
+    out_dim=None,
+    num_links=None,
+    input_dtype=None,
+    layout=None,
+    mem_config=None,
+    num_iters=None,
+    topology=None,
     traced_config_name=None,
     *,
     device,  # unused

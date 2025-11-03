@@ -118,13 +118,7 @@ def run_softmax_sharded(
 
 # Entry point for the sweep framework.
 # Takes one test vector (as defined above) as the input.
-def run(
-    input_spec,
-    input_a_dtype,
-    traced_config_name=None,
-    *,
-    device,
-) -> list:
+def run(input_spec=None, input_a_dtype=None, traced_config_name=None, *, device) -> list:
     return run_softmax_sharded(input_spec, input_a_dtype, device)
 
 

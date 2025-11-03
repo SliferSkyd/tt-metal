@@ -135,16 +135,7 @@ def test_reduction(
         logger.info(f"E2E Performance: {e2e_perf}")
 
 
-def run(
-    tensor_shape,
-    dim,
-    keepdim,
-    op,
-    dtype,
-    traced_config_name=None,
-    *,
-    device,
-) -> list:
+def run(tensor_shape=None, dim=None, keepdim=None, op=None, dtype=None, traced_config_name=None, *, device) -> list:
     return run_reduction(
         device,
         tensor_shape,

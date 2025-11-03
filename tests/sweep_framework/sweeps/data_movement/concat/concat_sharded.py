@@ -265,11 +265,11 @@ def invalidate_vector(test_vector) -> Tuple[bool, Optional[str]]:
 
 
 def run(
-    concat_specs,
-    dtype,
-    layout,
-    input_mem_config,
-    output_mem_config,
+    concat_specs=None,
+    dtype=None,
+    layout=None,
+    input_mem_config=None,
+    output_mem_config=None,
     traced_config_name=None,
     *,
     device,

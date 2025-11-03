@@ -672,10 +672,5 @@ def test_forge(device, params):
         logger.info(f"E2E Performance: {e2e_perf}")
 
 
-def run(
-    params,
-    traced_config_name=None,
-    *,
-    device,
-) -> list:
+def run(params=None, traced_config_name=None, *, device) -> list:
     return run_sum(device, params)
