@@ -31,16 +31,27 @@ operations_with_configs = loader.get_operations_with_configs()
 # Create parameters for all operations in a single suite
 parameters = {"model_traced_all": {}}
 
-# Collect all operation + config combinations
+# Collect all operation + config combinations directly from master data
 all_configs = []
-for operation_name, config_count in operations_with_configs.items():
-    # Get the suite parameters for this operation
-    op_params = loader.get_suite_parameters(operation_name)
+loader.load_master_data()  # Ensure master data is loaded
 
-    if op_params and "model_traced" in op_params:
-        model_traced_configs = op_params["model_traced"]
-        for config in model_traced_configs:
-            all_configs.append({"operation_name": operation_name, "traced_config_name": config})
+for op_name, op_data in loader.master_data.get("operations", {}).items():
+    # Use base name (remove ttnn:: prefix)
+    base_name = op_name[6:] if op_name.startswith("ttnn::") else op_name
+
+    configs = op_data.get("configurations", [])
+    if configs:
+        # Create traced config names and populate the loader's cache
+        # This allows the unpacking functions to work with string-based lookup
+        for i, config in enumerate(configs):
+            config_name = f"{base_name}_traced_{i}"
+
+            # Populate the loader's cache so get_traced_config can find it
+            loader.traced_configs_cache[config_name] = config
+
+            all_configs.append(
+                {"operation_name": base_name, "traced_config_name": config_name}  # String name for lookup
+            )
 
 # Add all combinations to the parameters
 parameters["model_traced_all"] = {"operation_config": all_configs}
