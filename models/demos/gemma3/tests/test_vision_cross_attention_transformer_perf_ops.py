@@ -1,25 +1,29 @@
-import pytest
+# SPDX-FileCopyrightText: © 2025 Tenstorrent AI ULC
+
+# SPDX-License-Identifier: Apache-2.0
+
+
 import json
+
 import pandas as pd
-import torch
 from loguru import logger
-from models.perf.benchmarking_utils import BenchmarkProfiler
 from tracy.process_model_log import get_latest_ops_log_filename
-from models.perf.device_perf_utils import run_device_perf
+
+import pytest
 from models.demos.llama3_70b_galaxy.tests.test_prefill_device_perf import (
     average_per_instance_dict,
     build_duration_dict,
     build_duration_per_instance_dict,
     merge_device_rows,
 )
+from models.perf.benchmarking_utils import BenchmarkProfiler
+from models.perf.device_perf_utils import run_device_perf
 
-def compare_with_target(kernel_duration_per_instance_averaged_dict, perf_targets, profiler, margins):
-    step_name = "gemma_vision_cross_attention_transformer_op_to_op_perf"
+
+def compare_with_target(kernel_duration_per_instance_averaged_dict, perf_targets, margins):
     passing = True
     for op_index, op_code_with_id in enumerate(kernel_duration_per_instance_averaged_dict.keys()):
         if op_code_with_id in perf_targets:
-            op_name = op_code_with_id
-
             avg_kernel_duration = kernel_duration_per_instance_averaged_dict[op_code_with_id]
 
             # Verify kernel duration is within tolerance
@@ -62,9 +66,9 @@ def test_op_to_op_perf_gemma_vision():
     command = f"pytest models/demos/gemma3/tests/test_vision_cross_attention_transformer.py::test_gemma_vision"
     cols = ["DEVICE FW", "DEVICE KERNEL", "DEVICE BRISC KERNEL"]
     profiler.start("run")
-    profiler.start("PROFILLING OP TO OP")
+    profiler.start("PROFILING OP TO OP")
     post_processed_results = run_device_perf(command, subdir, num_iterations, cols, batch_size, has_signposts=False)
-    profiler.end("PROFILLING OP TO OP")
+    profiler.end("PROFILING OP TO OP")
     profiler.end("run")
 
     filename = get_latest_ops_log_filename(subdir)
@@ -89,4 +93,4 @@ def test_op_to_op_perf_gemma_vision():
         f"models/demos/gemma3/tests/perf_targets/targets_margins_test_perf_vision_cross_attention_op_to_op.json", "r"
     ) as f:
         margins = json.load(f)
-    compare_with_target(kernel_duration_per_instance_averaged_dict, expected_perf_cols, profiler, margins)
+    compare_with_target(kernel_duration_per_instance_averaged_dict, expected_perf_cols, margins)
