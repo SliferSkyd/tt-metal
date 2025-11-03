@@ -48,7 +48,6 @@ class CircularBuffer;
 struct Event;
 class Buffer;
 class GlobalSemaphore;
-struct OpAnalysisData;
 
 // ==================================================
 //                  HOST API: Device management
