@@ -82,7 +82,7 @@ bool run_pcie_read_bw_test(
         "tests/tt_metal/tt_metal/data_movement/pcie_read_bw/kernels/pcie_read_bw.cpp",
         worker_core_range,
         tt_metal::DataMovementConfig{
-            .processor = tt_metal::DataMovementProcessor::RISCV_1, .noc = test_config.noc_id, .defines = defines});
+            .processor = tt_metal::DataMovementProcessor::RISCV_0, .noc = test_config.noc_id, .defines = defines});
 
     tt_metal::SetRuntimeArgs(program, dm0, worker_core_range, {test_config.test_id, test_config.page_size_bytes});
 
@@ -107,13 +107,12 @@ bool run_pcie_read_bw_test(
     distributed::EnqueueMeshWorkload(cq, mesh_workload, false);
     distributed::Finish(cq);
     auto end = std::chrono::system_clock::now();
-
-    auto elapsed_seconds = (end - start);
+    std::chrono::duration<double> elapsed_seconds{};
+    elapsed_seconds = end - start;
 
     float total_bytes =
         (float)test_config.page_count * (float)test_config.page_size_bytes * (float)test_config.iterations;
-    float elapsed_seconds_float = elapsed_seconds.count() / 1e9;
-    float bw = total_bytes / (elapsed_seconds_float * 1000.0 * 1000.0 * 1000.0);
+    float bw = total_bytes / (elapsed_seconds.count() * 1000.0 * 1000.0 * 1000.0);
 
     std::stringstream ss;
     ss << std::fixed << std::setprecision(3) << bw;
@@ -128,14 +127,14 @@ void pcie_read_bw_test(
     PCIeReadBwConfig test_config = {
         .test_id = test_id,
         .worker_core_coord = worker_core_coord,
-        .iterations = 32,
-        .warmup_iterations = 10,
+        .iterations = 1000,
+        .warmup_iterations = 2,
         .page_size_bytes = 65536,
         .batch_size_k = 256,
         .size_bytes = test_config.batch_size_k * 1024,
         .page_count = test_config.size_bytes / test_config.page_size_bytes,
         .l1_data_format = DataFormat::Float32,
-        .noc_id = NOC::RISCV_1_default,
+        .noc_id = NOC::RISCV_0_default,
     };
 
     EXPECT_TRUE(run_pcie_read_bw_test(mesh_device, test_config));

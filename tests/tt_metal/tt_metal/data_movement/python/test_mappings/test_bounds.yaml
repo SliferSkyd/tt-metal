@@ -309,5 +309,5 @@
     riscv_1:
       bandwidth: 42
   wormhole_b0:
-    riscv_1:
-      bandwidth: 3.5
+    riscv_0:
+      bandwidth: 25.7

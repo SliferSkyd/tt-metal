@@ -11,7 +11,7 @@ void kernel_main() {
     cb_reserve_back(0, PAGE_COUNT);
     uint32_t cb_addr = get_write_ptr(0);
     {
-        DeviceZoneScopedN("RISCV1");
+        DeviceZoneScopedN("RISCV0");
         for (int i = 0; i < ITERATIONS; i++) {
             uint32_t read_ptr = cb_addr;
 
