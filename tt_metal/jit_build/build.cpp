@@ -549,6 +549,7 @@ void JitBuildState::extract_zone_src_locations(const string& log_file) const {
             tt::jit_build::utils::create_file(tt::tt_metal::NEW_PROFILER_ZONE_SRC_LOCATIONS_LOG);
         }
 
+#if 0
         // Cache zone src locations to per-kernel location, so this info is not lost
         // next time when the jit build cache is reused (no compile logs to look at).
         auto cached_path = fs::path(log_file).replace_filename("zone_src_locations.txt");
@@ -561,6 +562,9 @@ void JitBuildState::extract_zone_src_locations(const string& log_file) const {
             // tags source location info with it using pragma messages
             cmd = fmt::format("grep KERNEL_PROFILER {} | tee {}", log_file, cached_path.string());
         }
+#else
+        string cmd = "cat " + log_file + " | grep KERNEL_PROFILER";
+#endif
         tt::jit_build::utils::run_command(cmd, tt::tt_metal::NEW_PROFILER_ZONE_SRC_LOCATIONS_LOG, false);
     }
 }
