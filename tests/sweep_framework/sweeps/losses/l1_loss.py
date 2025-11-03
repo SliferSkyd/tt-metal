@@ -66,8 +66,8 @@ def run(
     traced_config_name=None,
     *,
     device,
-) -> list:
     data_seed = random.randint(0, 20000000)
+) -> list:
     torch.manual_seed(data_seed)
 
     torch_input_reference_tensor = gen_func_with_cast_tt(

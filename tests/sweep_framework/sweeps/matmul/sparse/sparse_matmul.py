@@ -58,7 +58,6 @@ parameters = {
 }
 
 
-def run_sparse_matmul(device, mkn, num_experts, num_batches, tile_h, tile_w, in1_dtype, core_grid) -> list:
     m, k, n = mkn
     b, s = num_batches
     in0 = torch.randn((b, s, m, k), dtype=torch.bfloat16)
@@ -164,5 +163,5 @@ def run(
     traced_config_name=None,
     *,
     device,
-) -> list:
     return run_sparse_matmul(device, mkn, num_experts, num_batches, tile_h, tile_w, in1_dtype, core_grid)
+) -> list:

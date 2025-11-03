@@ -153,7 +153,7 @@ def run(
     traced_config_name=None,
     *,
     device,
-) -> list:
     return run_argmax(
         input_shape, dim, input_a_dtype, output_dtype, input_layout, input_a_memory_config, output_memory_config, device
     )
+) -> list:

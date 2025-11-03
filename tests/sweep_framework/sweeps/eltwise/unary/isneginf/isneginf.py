@@ -58,8 +58,8 @@ def run(
     traced_config_name=None,
     *,
     device,
-) -> list:
     data_seed = random.randint(0, 20000000)
+) -> list:
     torch.manual_seed(data_seed)
 
     torch_input_tensor_a = gen_rand_inf(input_shape, low=-100, high=100)

@@ -122,7 +122,6 @@ def run_argmax(
     traced_config_name=None,
     *,
     device,
-) -> list:
     data_seed = random.randint(0, 20000000)
     torch.manual_seed(data_seed)
 
@@ -167,7 +166,6 @@ def run(
     output_memory_config,
     *,
     device,
-) -> list:
     return run_argmax(
         input_shape,
         dim,
@@ -178,6 +176,7 @@ def run(
         output_memory_config,
         device=device,
     )
+) -> list:
 
 
 @pytest.mark.parametrize(**gen_pytest_parametrize_args(parameters, invalidate_vector))

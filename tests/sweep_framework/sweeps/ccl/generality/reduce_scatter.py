@@ -251,8 +251,8 @@ def run(
     traced_config_name=None,
     *,
     device,  # unused
-) -> list:
     logger.info("STARTING SWEEP")
+) -> list:
 
     logger.info(vars())
 

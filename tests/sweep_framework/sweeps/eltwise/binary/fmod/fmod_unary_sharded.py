@@ -13,7 +13,7 @@ import math
 from tests.sweep_framework.sweep_utils.utils import gen_shapes, sanitize_shape_rm
 
 # Import master config loader for traced model configurations
-from tests.sweep_framework.master_config_loader import MasterConfigLoader, unpack_traced_config
+from tests.sweep_framework.master_config_loader import MasterConfigLoader, unpack_binary_traced_config
 
 from tests.sweep_framework.sweep_utils.sharding_utils import (
     gen_sharded_spec_unary,
@@ -79,53 +79,10 @@ def invalidate_vector(test_vector) -> Tuple[bool, Optional[str]]:
 # The run function must take the above-defined parameters as inputs.
 # The runner will call this run function with each test vector, and the returned results from this function will be stored.
 # If you defined a mesh_device_fixture above, the object you yielded will be passed into this function as 'device'. Otherwise, it will be the default ttnn device opened by the infra.
-def run(input_spec=None, unsafe_range=None, input_a_dtype=None, traced_config_name=None, *, device) -> list:
-    data_seed = random.randint(0, 20000000)
-    torch.manual_seed(data_seed)
-
-    (
-        input_shape,
-        core_grid,
-        sharding_strategy,
-        shard_orientation,
-        tensor_hw_as_shard_shape,
-        input_layout,
-        shard_height_mul_of_32,
-    ) = parse_sharding_spec(input_spec)
-
-    if input_layout == ttnn.ROW_MAJOR_LAYOUT:
-        input_shape = sanitize_shape_rm(input_shape)
-
-    torch_input_tensor_a = gen_func_with_cast_tt(
-        partial(torch_random, low=-100, high=100, dtype=torch.float32), input_a_dtype
-    )(input_shape)
-
-    scalar = torch.tensor(1, dtype=torch.bfloat16).uniform_(-100, 100).item()
-    if unsafe_range:
-        while unsafe_range[0] <= scalar <= unsafe_range[1]:
-            scalar = torch.tensor(1, dtype=torch.bfloat16).uniform_(-100, 100).item()
-
-    golden_function = ttnn.get_golden_function(ttnn.fmod)
-    torch_output_tensor = golden_function(torch_input_tensor_a, scalar, device=device)
-
-    sharded_config = ttnn.create_sharded_memory_config_(
-        shape=input_shape,
-        core_grid=core_grid,
-        strategy=sharding_strategy,
-        orientation=shard_orientation,
-        use_height_and_width_as_shard_shape=tensor_hw_as_shard_shape,
-        tile_layout=shard_height_mul_of_32,
-    )
-
-    input_tensor_a = ttnn.from_torch(
-        torch_input_tensor_a,
-        dtype=input_a_dtype,
-        layout=input_layout,
-        device=device,
-        memory_config=sharded_config,
-    )
-
+def run(input_spec=None, unsafe_range=None, input_a_dtype=None, traced_config_name=None, *, device)
+) -> list:
     start_time = start_measuring_time()
+) -> list:
     output_tensor = ttnn.fmod(input_tensor_a, scalar, memory_config=sharded_config)
     e2e_perf = stop_measuring_time(start_time)
     output_tensor = ttnn.to_torch(output_tensor)

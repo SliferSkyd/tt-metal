@@ -133,3 +133,4 @@ def run(tensor_shape=None, dim=None, op=None, traced_config_name=None, *, device
         dim,
         op,
     )
+) -> list:

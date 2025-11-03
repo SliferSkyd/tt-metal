@@ -80,7 +80,6 @@ def run_matmul(
     output_dtype,
     input_layout,
     compute_kernel_config,
-) -> list:
     k_size, per_core_width, num_cores_width = width_sharded_specs
     total_height = functools.reduce(operator.mul, batch_sizes) * m_size
 
@@ -195,7 +194,6 @@ def run(
     traced_config_name=None,
     *,
     device,
-) -> list:
     return run_matmul(
         device,
         batch_sizes,
@@ -212,3 +210,4 @@ def run(
         input_layout,
         compute_kernel_config,
     )
+) -> list:

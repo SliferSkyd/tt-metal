@@ -15,7 +15,7 @@ from tests.ttnn.utils_for_testing import check_with_pcc, start_measuring_time, s
 from models.common.utility_functions import torch_random, is_wormhole_b0
 
 # Import master config loader for traced model configurations
-from tests.sweep_framework.master_config_loader import MasterConfigLoader, unpack_traced_config
+from tests.sweep_framework.master_config_loader import MasterConfigLoader, unpack_binary_traced_config
 
 
 # Override the default timeout in seconds for hang detection.
@@ -90,33 +90,8 @@ def run(
     traced_config_name=None,
     *,
     device,
+)
 ) -> list:
-    data_seed = random.randint(0, 20000000)
-    torch.manual_seed(data_seed)
-
-    if input_layout == ttnn.ROW_MAJOR_LAYOUT:
-        input_shape = sanitize_shape_rm(input_shape)
-
-    torch_input_tensor_a = gen_func_with_cast_tt(
-        partial(torch_random, low=-100, high=100, dtype=torch.float32), input_a_dtype
-    )(input_shape)
-
-    scalar = torch.tensor(1, dtype=torch.bfloat16).uniform_(-100, 100).item()
-    if unsafe_range:
-        while unsafe_range[0] <= scalar <= unsafe_range[1]:
-            scalar = torch.tensor(1, dtype=torch.bfloat16).uniform_(-100, 100).item()
-
-    golden_function = ttnn.get_golden_function(ttnn.remainder)
-    torch_output_tensor = golden_function(torch_input_tensor_a, scalar, device=device)
-
-    input_tensor_a = ttnn.from_torch(
-        torch_input_tensor_a,
-        dtype=input_a_dtype,
-        layout=input_layout,
-        device=device,
-        memory_config=input_a_memory_config,
-    )
-
     start_time = start_measuring_time()
     output_tensor = ttnn.remainder(input_tensor_a, scalar, memory_config=output_memory_config)
     e2e_perf = stop_measuring_time(start_time)

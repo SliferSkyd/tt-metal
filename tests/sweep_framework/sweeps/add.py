@@ -104,8 +104,8 @@ def run(
     traced_config_name=None,
     *,
     device,
-) -> list:
     input_shape_a = (*batch_sizes, height, width)
+) -> list:
     input_shape_b = (*batch_sizes, height, width)
     if broadcast == "hw":
         input_shape_b = (*batch_sizes, 1, 1)

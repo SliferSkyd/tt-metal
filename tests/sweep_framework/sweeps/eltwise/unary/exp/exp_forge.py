@@ -103,8 +103,8 @@ def run(
     traced_config_name=None,
     *,
     device,
-) -> list:
     torch.manual_seed(0)
+) -> list:
 
     torch_input_tensor_a = gen_func_with_cast_tt(
         partial(torch_random, low=-80, high=80, dtype=torch.float32), input_a_dtype

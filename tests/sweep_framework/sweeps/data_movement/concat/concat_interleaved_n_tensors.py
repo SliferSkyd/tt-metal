@@ -147,7 +147,6 @@ def run(
     traced_config_name=None,
     *,
     device,
-) -> list:
     torch_input_tensors = []
     for i in range(0, concat_specs[0]):
         torch_input_tensors.append(torch_random(concat_specs[3][i], -0.1, 0.1, dtype=torch.bfloat16))

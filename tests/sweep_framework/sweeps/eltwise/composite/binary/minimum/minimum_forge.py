@@ -161,8 +161,8 @@ def run(
     traced_config_name=None,
     *,
     device,
-) -> list:
     torch.manual_seed(0)
+) -> list:
     if input_shape["input_dtype"] == "ttnn.bfloat16":
         input_dtype = ttnn.bfloat16
     elif input_shape["input_dtype"] == "ttnn.float32":

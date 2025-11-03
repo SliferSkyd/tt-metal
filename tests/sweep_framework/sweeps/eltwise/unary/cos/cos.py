@@ -64,8 +64,8 @@ def run(
     traced_config_name=None,
     *,
     device,
-) -> list:
     torch.manual_seed(0)
+) -> list:
 
     if use_safe_nums is True:
         torch_input_tensor_a = gen_func_with_cast_tt(

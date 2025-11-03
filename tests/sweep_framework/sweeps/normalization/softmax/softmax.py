@@ -55,7 +55,6 @@ def run_softmax(
     traced_config_name=None,
     *,
     device,
-) -> list:
     data_seed = random.randint(0, 20000000)
     torch.manual_seed(data_seed)
 
@@ -92,10 +91,10 @@ def run(
     output_memory_config,
     *,
     device,
-) -> list:
     return run_softmax(
         input_shape, input_a_dtype, input_a_layout, input_a_memory_config, output_memory_config, device=device
     )
+) -> list:
 
 
 # Entry point for pytest.

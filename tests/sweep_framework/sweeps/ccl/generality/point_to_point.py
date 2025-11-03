@@ -146,8 +146,8 @@ def run(
     traced_config_name=None,
     *,
     device,  # unused
-) -> list:
     logger.info(vars())
+) -> list:
 
     mesh_shape, (coord0, coord1) = mesh_shape_and_coords
 

@@ -115,7 +115,21 @@ def run(
     traced_config_name=None,
     *,
     device,
+)
 ) -> list:
+    # Unpack traced config if provided (for model_traced suite)
+    if traced_config_name:
+        (
+            input_shape,
+            input_a_dtype,
+            input_b_dtype,
+            input_a_layout,
+            input_b_layout,
+            input_a_memory_config,
+            input_b_memory_config,
+        ) = unpack_binary_traced_config(traced_config_name)
+
+ list:
     data_seed = random.randint(0, 20000000)
     torch.manual_seed(data_seed)
 

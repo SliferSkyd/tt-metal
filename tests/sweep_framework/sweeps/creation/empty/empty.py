@@ -65,8 +65,8 @@ def run(
     traced_config_name=None,
     *,
     device,
-) -> list:
     torch.manual_seed(0)
+) -> list:
 
     input_shape = (*batch_sizes, height, width)
 

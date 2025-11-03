@@ -191,7 +191,6 @@ def run(
     traced_config_name=None,
     *,
     device,
-) -> list:
     return run_topk(
         input_shape,
         dim,
@@ -203,3 +202,4 @@ def run(
         output_memory_config,
         device,
     )
+) -> list:

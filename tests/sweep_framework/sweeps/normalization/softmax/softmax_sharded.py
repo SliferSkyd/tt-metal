@@ -12,7 +12,7 @@ import ttnn
 from tests.sweep_framework.sweep_utils.utils import sanitize_shape_rm
 
 # Import master config loader for traced model configurations
-from tests.sweep_framework.master_config_loader import MasterConfigLoader, unpack_traced_config
+from tests.sweep_framework.master_config_loader import MasterConfigLoader, unpack_traced_config_dict
 
 from tests.sweep_framework.sweep_utils.sharding_utils import (
     gen_sharded_spec_unary,
@@ -65,7 +65,6 @@ def run_softmax_sharded(
     input_spec,
     input_a_dtype,
     device,
-) -> list:
     data_seed = random.randint(0, 20000000)
     torch.manual_seed(data_seed)
 
@@ -118,7 +117,25 @@ def run_softmax_sharded(
 
 # Entry point for the sweep framework.
 # Takes one test vector (as defined above) as the input.
-def run(input_spec=None, input_a_dtype=None, traced_config_name=None, *, device) -> list:
+    # Handle traced_config_name parameter (for model_traced suite)
+    # Use the dict unpack function for flexibility with custom signatures
+    if traced_config_name is not None:
+        config = unpack_traced_config_dict(traced_config_name)
+        if config:
+            # For model_traced, we need to construct input_spec from the config
+            # For now, create a simple non-sharded spec as fallback
+            # TODO: Implement proper sharding spec construction from traced config
+            input_spec = {
+                "input_shape": config["shape"],
+                "core_grid": (1, 1),  # Simple fallback
+                "sharding_strategy": "BLOCK",
+                "shard_orientation": "COL_MAJOR",
+                "tensor_hw_as_shard_shape": False,
+                "input_layout": config["layout"],
+                "shard_height_mul_of_32": True,
+            }
+            input_a_dtype = config["dtype"]
+
     return run_softmax_sharded(input_spec, input_a_dtype, device)
 
 

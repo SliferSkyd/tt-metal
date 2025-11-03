@@ -252,3 +252,4 @@ def run(shapes=None, transpose_a=None, transpose_b=None, traced_config_name=None
         transpose_a,
         transpose_b,
     )
+) -> list:

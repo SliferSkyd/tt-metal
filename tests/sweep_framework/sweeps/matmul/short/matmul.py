@@ -67,7 +67,6 @@ def run_matmul(
     input_a_memory_config,
     output_memory_config,
     core_grid,
-) -> list:
     input_shape_a = (*batch_sizes, m_size, k_size)
     input_shape_b = (k_size, n_size)
     if batch_matrix_multiply:
@@ -161,7 +160,6 @@ def run(
     traced_config_name=None,
     *,
     device,
-) -> list:
     return run_matmul(
         device,
         batch_sizes,
@@ -179,3 +177,4 @@ def run(
         output_memory_config,
         core_grid,
     )
+) -> list:

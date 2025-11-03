@@ -54,7 +54,6 @@ parameters = {
 }
 
 
-def run_reduction(device, tensor_shape, dim, keepdim, op, dtype) -> list:
     """
     Test the compatibility of the torch and ttnn output for the given operation and different
     tensor shapes, keepdim, and dim values.
@@ -135,7 +134,6 @@ def test_reduction(
         logger.info(f"E2E Performance: {e2e_perf}")
 
 
-def run(tensor_shape=None, dim=None, keepdim=None, op=None, dtype=None, traced_config_name=None, *, device) -> list:
     return run_reduction(
         device,
         tensor_shape,

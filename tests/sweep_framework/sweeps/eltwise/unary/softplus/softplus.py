@@ -68,8 +68,8 @@ def run(
     traced_config_name=None,
     *,
     device,
-) -> list:
     data_seed = random.randint(0, 20000000)
+) -> list:
     torch.manual_seed(data_seed)
 
     beta = torch.tensor(1, dtype=torch.bfloat16).uniform_(low, high).item()

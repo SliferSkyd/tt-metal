@@ -462,7 +462,6 @@ def run_matmul(
     output_dtype,
     input_layout,
     compute_kernel_config,
-) -> list:
     # Override program_config.in0_block_w with value from in0_block_w (this is safe to do)
     program_config.in0_block_w = in0_block_w
 
@@ -574,7 +573,6 @@ def run(
     traced_config_name=None,
     *,
     device,
-) -> list:
     return run_matmul(
         device,
         input_shapes,
@@ -592,3 +590,4 @@ def run(
         input_layout,
         compute_kernel_config,
     )
+) -> list:

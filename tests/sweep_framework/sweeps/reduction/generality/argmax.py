@@ -43,7 +43,6 @@ parameters = {
 }
 
 
-def run_argmax(device, tensor_shape, dim, keepdim, use_multicore) -> list:
     """
     Test the compatibility of the torch and ttnn output for the given operation and different
     tensor shapes and dim values.
@@ -129,7 +128,6 @@ def test_argmax(
     assert result, error_msg
 
 
-def run(tensor_shape=None, dim=None, keepdim=None, use_multicore=None, traced_config_name=None, *, device) -> list:
     return run_argmax(
         device,
         tensor_shape,

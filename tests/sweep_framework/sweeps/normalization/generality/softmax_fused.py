@@ -47,7 +47,6 @@ parameters = {
 }
 
 
-def run_softmax(device, tensor_shape, op) -> list:
     """
     Test the compatibility of the torch and ttnn output for the given operation and different
     tensor and shapes values.
@@ -139,7 +138,6 @@ def test_normalization(
     assert result, error_msg
 
 
-def run(tensor_shape=None, op=None, traced_config_name=None, *, device) -> list:
     return run_softmax(
         device,
         tensor_shape,

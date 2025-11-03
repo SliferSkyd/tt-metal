@@ -81,8 +81,8 @@ def run(
     traced_config_name=None,
     *,
     device,
-) -> list:
     torch.manual_seed(0)
+) -> list:
 
     if input_layout == ttnn.ROW_MAJOR_LAYOUT:
         input_shape = sanitize_shape_rm(input_shape)

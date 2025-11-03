@@ -130,5 +130,4 @@ def test_softmax(device, params):
     run_softmax(device, params)
 
 
-def run(params=None, traced_config_name=None, *, device) -> list:
     return run_softmax(device, params)

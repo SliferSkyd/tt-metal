@@ -79,7 +79,6 @@ def run_matmul(
     input_a_memory_config,
     input_b_memory_config,
     output_memory_config,
-) -> list:
     (m_size, n_size) = m_n_sizes
     input_a_dtype = dtype
     input_b_dtype = dtype
@@ -163,7 +162,6 @@ def run(
     traced_config_name=None,
     *,
     device,
-) -> list:
     return run_matmul(
         device,
         batch_sizes,
@@ -176,3 +174,4 @@ def run(
         input_b_memory_config,
         output_memory_config,
     )
+) -> list:

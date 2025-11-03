@@ -15,7 +15,7 @@ from tests.ttnn.utils_for_testing import check_with_pcc, start_measuring_time, s
 from models.common.utility_functions import torch_random
 
 # Import master config loader for traced model configurations
-from tests.sweep_framework.master_config_loader import MasterConfigLoader, unpack_traced_config
+from tests.sweep_framework.master_config_loader import MasterConfigLoader, unpack_binary_traced_config
 
 
 # Parameters provided to the test vector generator are defined here.
@@ -53,25 +53,8 @@ def run(
     traced_config_name=None,
     *,
     device,
+)
 ) -> list:
-    torch.manual_seed(0)
-
-    torch_input_tensor = gen_func_with_cast_tt(
-        partial(torch_random, low=-28, high=28, dtype=torch.float32), input_dtype
-    )(input_shape)
-
-    exponent = random.uniform(0.0001, 10)
-    golden_function = ttnn.get_golden_function(ttnn.rpow)
-    torch_output_tensor = golden_function(torch_input_tensor, exponent)
-
-    input_tensor = ttnn.from_torch(
-        torch_input_tensor,
-        dtype=input_dtype,
-        layout=input_layout,
-        device=device,
-        memory_config=input_memory_config,
-    )
-
     start_time = start_measuring_time()
     result = ttnn.rpow(input_tensor, exponent=exponent, memory_config=output_memory_config)
     output_tensor = ttnn.to_torch(result)

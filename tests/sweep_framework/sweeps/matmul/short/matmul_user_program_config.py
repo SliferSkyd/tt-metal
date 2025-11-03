@@ -526,7 +526,6 @@ def run_matmul(
     input_b_dtype,
     output_dtype,
     input_layout,
-) -> list:
     (m_size, k_size, n_size) = input_shapes
     input_shape_a = (*batch_sizes, m_size, k_size)
     input_shape_b = (k_size, n_size)
@@ -624,7 +623,6 @@ def run(
     traced_config_name=None,
     *,
     device,
-) -> list:
     return run_matmul(
         device,
         batch_sizes,
@@ -640,3 +638,4 @@ def run(
         output_dtype,
         input_layout,
     )
+) -> list:

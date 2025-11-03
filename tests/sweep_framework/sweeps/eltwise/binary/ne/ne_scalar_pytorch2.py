@@ -14,7 +14,7 @@ from tests.ttnn.utils_for_testing import check_with_pcc, start_measuring_time, s
 from models.common.utility_functions import torch_random
 
 # Import master config loader for traced model configurations
-from tests.sweep_framework.master_config_loader import MasterConfigLoader, unpack_traced_config
+from tests.sweep_framework.master_config_loader import MasterConfigLoader, unpack_binary_traced_config
 
 
 # Ref: https://github.com/tenstorrent/pytorch2.0_ttnn/blob/main/docs/operations/aten.ne.Scalar.md
@@ -52,24 +52,8 @@ def run(
     traced_config_name=None,
     *,
     device,
+)
 ) -> list:
-    torch.manual_seed(0)
-
-    torch_input_tensor_a = gen_func_with_cast_tt(
-        partial(torch_random, low=-100, high=100, dtype=torch.float32), input_a_dtype
-    )(input_specs["shape"])
-
-    golden_function = ttnn.get_golden_function(ttnn.ne)
-    torch_output_tensor = golden_function(torch_input_tensor_a, input_specs["other"])
-
-    input_tensor_a = ttnn.from_torch(
-        torch_input_tensor_a,
-        dtype=input_a_dtype,
-        layout=input_a_layout,
-        device=device,
-        memory_config=input_a_memory_config,
-    )
-
     start_time = start_measuring_time()
     output_tensor = ttnn.ne(input_tensor_a, input_specs["other"], memory_config=output_memory_config)
     output_tensor = ttnn.to_torch(output_tensor)

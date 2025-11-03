@@ -154,3 +154,4 @@ def run(tensor_shape=None, op=None, traced_config_name=None, *, device) -> tuple
         tensor_shape,
         op,
     )
+) -> list:

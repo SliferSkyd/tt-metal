@@ -399,5 +399,4 @@ def test_forge(device, params, dtype, layout):
         logger.info(f"E2E Performance: {e2e_perf}")
 
 
-def run(params=None, dtype=None, layout=None, traced_config_name=None, *, device) -> list:
     return run_max(device, params, dtype, layout)

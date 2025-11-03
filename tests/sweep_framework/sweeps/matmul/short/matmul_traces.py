@@ -2703,5 +2703,4 @@ def test_trace(device, params, core_grid, dtype, test_bias):
     logger.info(f"e2e_perf: {e2e_perf}")
 
 
-def run(params=None, core_grid=None, dtype=None, test_bias=None, traced_config_name=None, *, device) -> list:
     return run_matmul(device, params, core_grid, dtype, test_bias)

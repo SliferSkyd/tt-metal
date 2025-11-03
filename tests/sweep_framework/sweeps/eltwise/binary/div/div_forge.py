@@ -13,7 +13,7 @@ from tests.ttnn.utils_for_testing import check_with_pcc, start_measuring_time, s
 from models.common.utility_functions import torch_random
 
 # Import master config loader for traced model configurations
-from tests.sweep_framework.master_config_loader import MasterConfigLoader, unpack_traced_config
+from tests.sweep_framework.master_config_loader import MasterConfigLoader, unpack_binary_traced_config
 
 
 # Parameters provided to the test vector generator are defined here.
@@ -229,41 +229,8 @@ def run(
     traced_config_name=None,
     *,
     device,
+)
 ) -> list:
-    torch.manual_seed(0)
-    if input_shape["input_dtype"] == "ttnn.bfloat16":
-        input_dtype = ttnn.bfloat16
-    elif input_shape["input_dtype"] == "ttnn.float32":
-        input_dtype = ttnn.float32
-    elif input_shape["input_dtype"] == "ttnn.int32":
-        input_dtype = ttnn.int32
-
-    torch_input_tensor_a = gen_func_with_cast_tt(
-        partial(torch_random, low=-100, high=100, dtype=torch.float32), input_dtype
-    )(input_shape["self"])
-    torch_input_tensor_b = gen_func_with_cast_tt(
-        partial(torch_random, low=-100, high=100, dtype=torch.float32), input_dtype
-    )(input_shape["other"])
-
-    golden_function = ttnn.get_golden_function(ttnn.div)
-    torch_output_tensor = golden_function(torch_input_tensor_a, torch_input_tensor_b)
-
-    input_tensor_a = ttnn.from_torch(
-        torch_input_tensor_a,
-        dtype=input_dtype,
-        layout=input_a_layout,
-        device=device,
-        memory_config=input_a_memory_config,
-    )
-
-    input_tensor_b = ttnn.from_torch(
-        torch_input_tensor_b,
-        dtype=input_dtype,
-        layout=input_b_layout,
-        device=device,
-        memory_config=input_b_memory_config,
-    )
-
     start_time = start_measuring_time()
     result = ttnn.div(input_tensor_a, input_tensor_b, memory_config=output_memory_config)
     # ToDo: Update it once the tensor layout support with rank < 2 is supported in mid of Jan

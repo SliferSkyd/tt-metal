@@ -270,11 +270,11 @@ def run(
     traced_config_name=None,
     *,
     device,  # unused
-) -> list:
     """
     The main run function for the all_reduce sweep test.
     """
     logger.info("STARTING All-Reduce SWEEP")
+) -> list:
 
     with device_context(mesh_shape, fabric_config) as (device, device_err):
         if device_err is not None:

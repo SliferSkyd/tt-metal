@@ -170,7 +170,6 @@ def run(
     traced_config_name=None,
     *,
     device,
-) -> list:
     return run_batch_norm(
         input_shape,
         input_dtype,
@@ -185,6 +184,7 @@ def run(
         momentum,
         device,
     )
+) -> list:
 
 
 param_keys = parameters["BN_Testing"].keys()

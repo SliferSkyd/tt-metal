@@ -61,8 +61,8 @@ def run(
     traced_config_name=None,
     *,
     device,
-) -> list:
     torch.manual_seed(0)
+) -> list:
     torch_input_tensor_a = gen_func_with_cast_tt(
         partial(torch_random, low=-10, high=10, dtype=torch.bfloat16), input_a_dtype
     )(input_shape["shape"])

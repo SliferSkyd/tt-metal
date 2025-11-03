@@ -77,8 +77,8 @@ def invalidate_vector(test_vector) -> Tuple[bool, Optional[str]]:
 # If you defined a mesh_device_fixture above, the object you yielded will be passed into this function as 'device'. Otherwise, it will be the default ttnn device opened by the infra.
 def run(
     input_spec=None, use_safe_range=None, grad_dtype=None, input_a_dtype=None, traced_config_name=None, *, device
-) -> list:
     data_seed = random.randint(0, 20000000)
+) -> list:
     torch.manual_seed(data_seed)
 
     (

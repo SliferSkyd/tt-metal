@@ -61,5 +61,4 @@ def test_pytorch(device, params):
         logger.info(f"E2E Performance: {e2e_perf}")
 
 
-def run(params=None, traced_config_name=None, *, device) -> list:
     return run_topk(device, params)

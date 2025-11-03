@@ -4198,7 +4198,6 @@ def random_torch_tensor(dtype, shape):
     return torch.rand(shape).bfloat16().float()
 
 
-def run(concat_specs=None, dtype=None, layout=None, traced_config_name=None, *, device) -> list:
     torch_input_tensors = [random_torch_tensor(dtype, shape) for shape in concat_specs["shapes"]]
     torch_output_tensor = torch.concat(torch_input_tensors, dim=concat_specs["dim"])
 

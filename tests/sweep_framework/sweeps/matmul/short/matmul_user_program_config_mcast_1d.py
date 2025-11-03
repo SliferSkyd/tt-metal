@@ -312,7 +312,6 @@ def run_matmul(
     output_dtype,
     input_layout,
     compute_kernel_config,
-) -> list:
     program_config.in0_block_w = in0_block_w
 
     if input_a_memory_config == TensorMemoryConfigs.CUSTOM_MEMORY_CONFIG:
@@ -430,7 +429,6 @@ def run(
     traced_config_name=None,
     *,
     device,
-) -> list:
     return run_matmul(
         device,
         input_shapes,
@@ -448,3 +446,4 @@ def run(
         input_layout,
         compute_kernel_config,
     )
+) -> list:

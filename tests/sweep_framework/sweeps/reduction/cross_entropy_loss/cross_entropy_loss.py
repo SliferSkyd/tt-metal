@@ -32,7 +32,6 @@ def cross_entropy_loss_ttnn(predictions, labels, reduction_constant):
     return final_loss
 
 
-def run(predictions_shape=None, traced_config_name=None, *, device) -> list:
     torch.manual_seed(0)
     predictions = torch.randn(predictions_shape)
     target_indices = torch.empty(3, dtype=torch.long).random_(5)

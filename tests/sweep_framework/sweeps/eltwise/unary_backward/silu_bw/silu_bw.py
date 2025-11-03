@@ -66,8 +66,8 @@ def run(
     traced_config_name=None,
     *,
     device,
-) -> list:
     torch.manual_seed(0)
+) -> list:
 
     torch_grad_tensor = gen_func_with_cast_tt(
         partial(torch_random, low=-100, high=100, dtype=torch.float32), grad_dtype

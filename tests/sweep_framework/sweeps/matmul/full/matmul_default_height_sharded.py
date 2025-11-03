@@ -88,7 +88,6 @@ def run_matmul(
     output_dtype,
     input_layout,
     compute_kernel_config,
-) -> list:
     batch_sizes, m_size, per_core_height, num_cores_height = height_sharded_specs
 
     core_grid = device.compute_with_storage_grid_size()
@@ -199,7 +198,6 @@ def run(
     traced_config_name=None,
     *,
     device,
-) -> list:
     return run_matmul(
         device,
         height_sharded_specs,
@@ -215,3 +213,4 @@ def run(
         input_layout,
         compute_kernel_config,
     )
+) -> list:

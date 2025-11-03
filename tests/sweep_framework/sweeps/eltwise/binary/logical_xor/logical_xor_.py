@@ -15,7 +15,7 @@ from tests.ttnn.utils_for_testing import assert_equal, start_measuring_time, sto
 from models.common.utility_functions import torch_random
 
 # Import master config loader for traced model configurations
-from tests.sweep_framework.master_config_loader import MasterConfigLoader, unpack_traced_config
+from tests.sweep_framework.master_config_loader import MasterConfigLoader, unpack_binary_traced_config
 
 
 # Override the default timeout in seconds for hang detection.
@@ -69,7 +69,21 @@ def run(
     traced_config_name=None,
     *,
     device,
+)
 ) -> list:
+    # Unpack traced config if provided (for model_traced suite)
+    if traced_config_name:
+        (
+            input_shape,
+            input_a_dtype,
+            input_b_dtype,
+            input_a_layout,
+            input_b_layout,
+            input_a_memory_config,
+            input_b_memory_config,
+        ) = unpack_binary_traced_config(traced_config_name)
+
+ list:
     data_seed = random.randint(0, 20000000)
     torch.manual_seed(data_seed)
 

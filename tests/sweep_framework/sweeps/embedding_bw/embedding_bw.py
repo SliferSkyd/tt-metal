@@ -93,8 +93,8 @@ def run(
     traced_config_name=None,
     *,
     device,
-) -> list:
     torch.manual_seed(0)
+) -> list:
 
     batch_size, seq_length, embeddings_dim, num_embeddings = embedding_args
 

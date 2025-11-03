@@ -114,10 +114,10 @@ def run(
     traced_config_name=None,
     *,
     device,
-) -> list:
     return run_sum(
         input_shape, dim, keepdim, input_a_dtype, input_a_layout, input_a_memory_config, output_memory_config, device
     )
+) -> list:
 
 
 import pytest

@@ -136,41 +136,8 @@ def run(
     traced_config_name=None,
     *,
     device,
+)
 ) -> list:
-    torch.manual_seed(0)
-
-    input_shape = input_specs["shape"]
-    torch_input_tensor_a = gen_func_with_cast_tt(
-        partial(torch_random, low=-100, high=100, dtype=torch.float32), input_a_dtype
-    )(input_shape)
-
-    other = input_specs["other"]
-    if isinstance(other, (int, float)):
-        torch_other_tensor = torch.tensor(other, dtype=torch.float32)
-    else:
-        torch_other_tensor = gen_func_with_cast_tt(
-            partial(torch_random, low=-100, high=100, dtype=torch.float32), input_b_dtype
-        )(other)
-
-    golden_function = ttnn.get_golden_function(ttnn.sub)
-    torch_output_tensor = golden_function(torch_input_tensor_a, torch_other_tensor)
-
-    input_tensor_a = ttnn.from_torch(
-        torch_input_tensor_a,
-        dtype=input_a_dtype,
-        layout=input_a_layout,
-        device=device,
-        memory_config=input_a_memory_config,
-    )
-
-    input_tensor_b = ttnn.from_torch(
-        torch_other_tensor,
-        dtype=input_b_dtype,
-        layout=input_b_layout,
-        device=device,
-        memory_config=input_b_memory_config,
-    )
-
     start_time = start_measuring_time()
 
     output_tensor = ttnn.subtract(input_tensor_a, input_tensor_b, memory_config=output_memory_config)

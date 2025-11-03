@@ -101,7 +101,6 @@ def run_matmul(
     input_b_dtype,
     output_dtype,
     input_layout,
-) -> list:
     batch_sizes, input_shapes, batch_matrix_multiply, create_program_config_specs = matmul_specs
 
     (core_grid, use_1d_systolic_array) = create_program_config_specs

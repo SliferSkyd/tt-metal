@@ -81,8 +81,8 @@ def run(
     traced_config_name=None,
     *,
     device,
-) -> list:
     torch.manual_seed(0)
+) -> list:
 
     torch_input_tensor_a = gen_func_with_cast_tt(gen_bin, input_a_dtype)(input_shape["shape1"])
     torch_input_tensor_b = gen_func_with_cast_tt(

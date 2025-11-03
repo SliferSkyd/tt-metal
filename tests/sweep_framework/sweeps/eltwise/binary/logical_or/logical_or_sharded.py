@@ -12,7 +12,7 @@ import ttnn
 from tests.sweep_framework.sweep_utils.utils import gen_shapes, tensor_to_dtype, sanitize_shape_rm
 
 # Import master config loader for traced model configurations
-from tests.sweep_framework.master_config_loader import MasterConfigLoader, unpack_traced_config
+from tests.sweep_framework.master_config_loader import MasterConfigLoader, unpack_binary_traced_config
 
 from tests.sweep_framework.sweep_utils.sharding_utils import (
     gen_sharded_spec_unary,
@@ -68,41 +68,8 @@ def invalidate_vector(test_vector) -> Tuple[bool, Optional[str]]:
 # If you defined a device_mesh_fixture above, the object you yielded will be passed into this function as 'device'. Otherwise, it will be the default ttnn device opened by the infra.
 def run(
     input_spec=None, input_a_dtype=None, input_b_dtype=None, output_dtype=None, traced_config_name=None, *, device
+)
 ) -> list:
-    data_seed = random.randint(0, 20000000)
-    torch.manual_seed(data_seed)
-
-    (
-        input_shape,
-        core_grid,
-        sharding_strategy,
-        shard_orientation,
-        tensor_hw_as_shard_shape,
-        input_layout,
-        shard_height_mul_of_32,
-    ) = parse_sharding_spec(input_spec)
-
-    if input_layout == ttnn.ROW_MAJOR_LAYOUT:
-        input_shape = sanitize_shape_rm(input_shape)
-
-    torch_input_tensor_a = gen_func_with_cast_tt(
-        partial(torch_random, low=-100, high=100, dtype=torch.float32), input_a_dtype
-    )(input_shape)
-    torch_input_tensor_b = gen_func_with_cast_tt(
-        partial(torch_random, low=-100, high=100, dtype=torch.float32), input_b_dtype
-    )(input_shape)
-
-    torch_output_tensor = tensor_to_dtype(torch.logical_or(torch_input_tensor_a, torch_input_tensor_b), output_dtype)
-
-    sharded_config = ttnn.create_sharded_memory_config_(
-        shape=input_shape,
-        core_grid=core_grid,
-        strategy=sharding_strategy,
-        orientation=shard_orientation,
-        use_height_and_width_as_shard_shape=tensor_hw_as_shard_shape,
-        tile_layout=shard_height_mul_of_32,
-    )
-
     input_tensor_a = ttnn.from_torch(
         torch_input_tensor_a,
         dtype=input_a_dtype,

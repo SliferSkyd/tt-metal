@@ -69,5 +69,4 @@ def test_pytorch(device, height, width, dim, dtype, layout):
         logger.info(f"E2E Performance: {e2e_perf}")
 
 
-def run(height=None, width=None, dim=None, dtype=None, layout=None, traced_config_name=None, *, device) -> list:
     return run_argmax(device, height, width, dim, dtype, layout)
