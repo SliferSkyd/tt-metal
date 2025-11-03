@@ -10,12 +10,8 @@ ARG WHEEL_ARTIFACT_NAME
 
 FROM ${BASE_IMAGE}
 
-ADD /artifacts ./artifacts
+WORKDIR /work
+ADD . /work
 
-WORKDIR ./artifacts
-RUN tar --zstd -xf ttm_any.tar.zst
-RUN pip3 install "$(ls -1 *.whl)"
-
-
-WORKDIR /tt-metalium/
-ADD . /tt-metalium
+RUN tar --zstd -xf artifacts/ttm_any.tar.zst -C /work
+RUN pip3 install artifacts/*.whl
