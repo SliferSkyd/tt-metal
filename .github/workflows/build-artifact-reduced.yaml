@@ -190,9 +190,23 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path: ./artifacts
 
-      - name: Set evaluation image name
+      - name: Set image names and tags
         id: image_names
+        env:
+          CI_BUILD_IMAGE_NAME: ${{ inputs.distro }}-${{ inputs.version }}-ci-build-${{ inputs.architecture }}
         run: |
+          HASH=$(cat \
+            .github/workflows/build-docker-artifact.yaml \
+            dockerfile/Dockerfile \
+            docs/requirements-docs.txt \
+            install_dependencies.sh \
+            tests/sweep_framework/requirements-sweeps.txt \
+            tt_metal/python_env/requirements-dev.txt \
+            tt_metal/sfpi-info.sh \
+            tt_metal/sfpi-version \
+            scripts/ttexalens_ref.txt \
+            tools/triage/requirements.txt \
+            | sha1sum | cut -d' ' -f1)
           echo "evaluation-image-name=${{ inputs.distro }}-${{ inputs.version }}-evaluation-${{ inputs.architecture }}" >> $GITHUB_OUTPUT
           echo "ci-build-tag=ghcr.io/${{ github.repository }}/tt-metalium/${{ env.CI_BUILD_IMAGE_NAME }}:${HASH}" >> $GITHUB_OUTPUT
 
