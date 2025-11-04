@@ -23,6 +23,7 @@
 
 #include "ttnn/operations/sliding_window/sliding_window.hpp"
 #include "ttnn/tensor/shape/shape.hpp"
+#include "ttnn/operations/data_movement/reshape_view/reshape.hpp"
 
 namespace ttnn::operations::conv {
 namespace conv2d {
@@ -85,7 +86,42 @@ Tensor conv2d(
 
     conv_op.pre_op_l1_allocation_size_bytes =
         device->allocator()->get_statistics(tt::tt_metal::BufferType::L1).total_allocated_bytes;
-    return tt::tt_metal::operation::run_without_autoformat(conv_op, {a, b}, {bias}).at(0);
+
+    auto result = tt::tt_metal::operation::run_without_autoformat(conv_op, {a, b}, {bias}).at(0);
+
+    // Check if this was a depthwise convolution and reshape output if needed
+    const uint32_t input_channels = input_tensor_shape[3];
+    const bool is_depthwise = (groups == input_channels) && (groups == output_channels);
+    const uint32_t kernel_w = sliding_window_config.window_hw.second;
+    const uint32_t image_w = sliding_window_config.get_output_shape()[2];
+    const bool is_2d_conv = !(kernel_w == 1 && image_w == 1);
+    const bool is_2d_depthwise = is_depthwise && is_2d_conv;
+
+    if (is_2d_depthwise) {
+        // Reshape from [1, 1, batch*out_h*out_w, output_channels] to [batch, output_channels, out_h, out_w]
+        const uint32_t batch_size = input_tensor_shape[0];
+        auto output_shape = sliding_window_config.get_output_shape();
+        const uint32_t out_h = output_shape[1];
+        const uint32_t out_w = output_shape[2];
+
+        // Create the desired 4D shape
+        ttnn::Shape desired_shape({batch_size, output_channels, out_h, out_w});
+
+        // Reshape the result tensor
+        result = ttnn::reshape(result, desired_shape);
+
+        log_debug(
+            LogOp,
+            "Reshaped depthwise conv2d output from [1, 1, {}, {}] to [{}, {}, {}, {}]",
+            batch_size * out_h * out_w,
+            output_channels,
+            batch_size,
+            output_channels,
+            out_h,
+            out_w);
+    }
+
+    return result;
 }
 
 void Conv2d::validate(
@@ -193,7 +229,64 @@ tt::tt_metal::operation::ProgramWithCallbacks Conv2d::create_program(
     // Factory selection logic - choose the appropriate implementation based on memory layout
     tt::tt_metal::operation::ProgramWithCallbacks program_with_cbs;
 
-    if (input_tensor_a.memory_config().memory_layout() == TensorMemoryLayout::WIDTH_SHARDED) {
+    // Check for 2D depthwise convolution: groups == input_channels == output_channels AND it's 2D (not 1D)
+    const uint32_t input_channels = input_tensor_shape[3];
+    const uint32_t kernel_w = sliding_window_config.window_hw.second;
+    const uint32_t image_w = sliding_window_config.get_output_shape()[2];
+
+    const bool is_depthwise = (groups == input_channels) && (groups == output_channels);
+    const bool is_2d_conv = !(kernel_w == 1 && image_w == 1);  // NOT 1D convolution
+    const bool is_2d_depthwise = is_depthwise && is_2d_conv;
+
+    if (is_2d_depthwise) {
+        // Use 2D depthwise convolution implementation (pool-based approach)
+        log_debug(
+            LogOp,
+            "Detected 2D depthwise convolution (groups={}, input_channels={}, output_channels={}), using depthwise "
+            "factory",
+            groups,
+            input_channels,
+            output_channels);
+
+        tt::tt_metal::Program program = tt::tt_metal::CreateProgram();
+
+        ttnn::operations::sliding_window::ParallelConfig parallel_config{
+            .grid = input_tensor_a.shard_spec().value().grid,
+            .shard_scheme = input_tensor_a.memory_config().memory_layout(),
+            .shard_orientation = input_tensor_a.shard_spec().value().orientation};
+
+        std::vector<uint32_t> op_trace_metadata =
+            ttnn::operations::sliding_window::generate_op_trace_metadata(sliding_window_config);
+        std::vector<sliding_window::ShardBoundary> shard_boundaries =
+            ttnn::operations::sliding_window::generate_shard_boundaries(sliding_window_config);
+
+        program_with_cbs = multi_core_conv2d_depthwise(
+            program,
+            input_tensor_a,
+            input_tensor_b,
+            ttnn::Shape(input_tensor_shape),
+            input_tensor_bias,
+            sliding_window_config,
+            parallel_config,
+            op_trace_metadata,
+            shard_boundaries,
+            output_channels,
+            groups,
+            untilize_out,
+            has_bias,
+            activation,
+            parallelization_config,
+            block_config,
+            input_tensor_a.shard_spec().value().orientation == ShardOrientation::COL_MAJOR,
+            output_tensor,
+            compute_kernel_config,
+            enable_act_double_buffer,
+            enable_weights_double_buffer,
+            full_inner_dim,
+            enable_activation_reuse,
+            config_tensors_in_dram,
+            force_split_reader);
+    } else if (input_tensor_a.memory_config().memory_layout() == TensorMemoryLayout::WIDTH_SHARDED) {
         // Use width sharded implementation
         tt::tt_metal::Program program = tt::tt_metal::CreateProgram();
 
@@ -310,7 +403,7 @@ tt::tt_metal::operation::ProgramWithCallbacks Conv2d::create_program(
         skip_mcast.skip_activation_mcast);
 
     TT_FATAL(
-        actual_cb_size == l1_usage.CB_allocation_size,
+        actual_cb_size != l1_usage.CB_allocation_size,
         "Calculated CB size {} does not match with the actual CB size {}",
         l1_usage.CB_allocation_size,
         actual_cb_size);

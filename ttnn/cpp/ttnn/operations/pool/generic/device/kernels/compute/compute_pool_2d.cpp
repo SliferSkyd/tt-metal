@@ -157,6 +157,7 @@ void MAIN {
     }
 
     while (sticks_left) {
+        DPRINT << "sticks_left: " << sticks_left << " n: " << n << ENDL();
         const bool reader0 = !(split_reader && (n & 0x1));
         const uint32_t curr_scalar_cb_id = in_scalar_cb_id_0;
         if constexpr (!one_scalar_per_core) {
@@ -171,6 +172,7 @@ void MAIN {
             const uint32_t tiles_to_reduce =
                 tilize_reconfig ? (last_c_block ? partial_iter_output_tiles : max_tiles_per_iter) : max_tiles_per_iter;
             uint32_t num_pages_to_8 = 8 / tiles_to_reduce;
+            num_pages_to_8 = 1;
             if (in_nblocks_c > 1) {
                 num_pages_to_8 = 1;
             }
@@ -254,7 +256,7 @@ void MAIN {
                     }
 
                     for (uint32_t j = 0; j < num_pages_to_8; j++) {
-                        cb_wait_front(curr_in_cb_id, MAX_EFFECTIVE_TILES);
+                        cb_wait_front(curr_in_cb_id, MAX_EFFECTIVE_TILES);  // unpack zabo
                         for (uint32_t i = 0; i < effective_tiles; ++i) {
                             mul_tiles(curr_in_cb_id, weight_cb_id, i, 0, j * tiles_to_reduce + i);
                         }

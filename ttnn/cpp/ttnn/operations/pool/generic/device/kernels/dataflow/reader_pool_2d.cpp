@@ -302,6 +302,7 @@ ALWI void read_kernel_with_top_left_index(uint32_t ind, uint32_t in_l1_read_base
         if constexpr (!is_large_kernel) {
             if (reader_id == 0 || !return_indices) {
                 noc_async_read_barrier();
+                DPRINT << "poslao " << MAX_EFFECTIVE_TILES << " tiles za c_i " << c_i << "\n";
                 cb_push_back(in_cb_id, MAX_EFFECTIVE_TILES);
             }
             if constexpr (reader_id == 1 && return_indices) {
@@ -447,6 +448,8 @@ void kernel_main() {
     constexpr uint32_t face_r_dim = window_size_hw < FACE_HEIGHT && !return_indices ? window_size_hw : FACE_HEIGHT;
     constexpr uint32_t num_faces_in_input_tile =
         (max_sticks_for_reduction < TILE_WIDTH || window_size_hw <= FACE_HEIGHT) && !return_indices ? 2 : 4;
+    DPRINT << "window_size_hw: " << window_size_hw << " , max_sticks_for_reduction: " << max_sticks_for_reduction
+           << ", face_r_dim: " << face_r_dim << ", num_faces_in_input_tile: " << num_faces_in_input_tile << "\n";
     constexpr bool is_large_kernel = window_size_hw > max_sticks_for_reduction;
     constexpr uint32_t remaining_elems = window_size_hw % max_sticks_for_reduction;
     constexpr uint32_t interm_reduction_chunks =
@@ -545,9 +548,12 @@ void kernel_main() {
     }
 
     while (num_segments--) {
+        DPRINT << "num_segments: " << num_segments << ", reader_indices_on_core: " << reader_indices_on_core << "\n";
         uint32_t start_end_segment = reader_indices_ptr[segments_counter++];
         uint16_t start = start_end_segment & 0xffff;
         uint16_t end = start_end_segment >> 16;
+
+        DPRINT << "Processing segment: [" << start << ", " << end << "]\n";
 
         if (!first_row_value) {
             start += stride_w;

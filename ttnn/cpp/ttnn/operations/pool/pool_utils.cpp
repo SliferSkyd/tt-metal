@@ -231,16 +231,16 @@ uint32_t calculate_L1_usage(
 
     uint32_t clear_value_cb_size = tt::constants::TILE_HW * params.nbytes;
 
-    uint32_t in_cb_sz = 0;
-    if (return_indices) {
-        in_cb_sz = params.MAX_TILES_PER_REDUCTION * tt::constants::TILE_WIDTH * tt::constants::TILE_HEIGHT;
-    } else {
-        if (params.is_wide_reduction) {
-            in_cb_sz = params.MAX_TILES_PER_REDUCTION * tt::constants::TILE_WIDTH * params.num_tilized_rows;
-        } else {
-            in_cb_sz = params.in_ntiles_c * tt::constants::TILE_WIDTH * params.num_tilized_rows;
-        }
-    }
+    // uint32_t in_cb_sz = 0;
+    // if (return_indices) {
+    //     in_cb_sz = params.MAX_TILES_PER_REDUCTION * tt::constants::TILE_WIDTH * tt::constants::TILE_HEIGHT;
+    // } else {
+    //     if (params.is_wide_reduction) {
+    //         in_cb_sz = params.MAX_TILES_PER_REDUCTION * tt::constants::TILE_WIDTH * params.num_tilized_rows;
+    //     } else {
+    //         in_cb_sz = params.in_ntiles_c * tt::constants::TILE_WIDTH * params.num_tilized_rows;
+    //     }
+    // }
 
     uint32_t num_pages_to_8 = 1;
 
