@@ -270,6 +270,7 @@ void py_module(nb::module_& m) {
         // py_unary.def("sum", &ttml::ops::sum,
         //              nb::arg("tensor"));
         py_unary.def("broadcast_batch", &ttml::ops::broadcast_batch, nb::arg("tensor"), nb::arg("new_batch_dim"));
+        py_unary.def("softmax", &ttml::ops::softmax, nb::arg("tensor"), nb::arg("dim"));
         py_unary.def("log_softmax", &ttml::ops::log_softmax, nb::arg("tensor"), nb::arg("dim"));
         py_unary.def("log_softmax_moreh", &ttml::ops::log_softmax_moreh, nb::arg("tensor"), nb::arg("dim"));
     }

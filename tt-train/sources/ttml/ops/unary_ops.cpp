@@ -106,6 +106,11 @@ autograd::TensorPtr log_softmax_moreh(const autograd::TensorPtr& tensor, int dim
     return out;
 }
 
+autograd::TensorPtr softmax(const autograd::TensorPtr& tensor, int dim) {
+    auto out = ttnn_fixed::softmax(tensor->get_value(), dim);
+    return autograd::create_tensor(out);
+}
+
 autograd::TensorPtr mean(const autograd::TensorPtr& tensor) {
     auto shape = ttnn::Shape({1, 1, 1, 1});
     auto out =
