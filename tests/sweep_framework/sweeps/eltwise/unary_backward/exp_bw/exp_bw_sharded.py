@@ -129,3 +129,23 @@ def run(
 
     pcc = check_with_pcc(torch_output_tensor, output_tensor, 0.999)
     return [pcc, e2e_perf]
+
+
+if __name__ == "__main__":
+    device = ttnn.open_device(device_id=0)
+    test_vector = {
+        "input_spec": {
+            "input_shape": [2, 160, 64],
+            "X": 8,
+            "Y": 6,
+            "sharding_strategy": "BLOCK",
+            "shard_orientation": "COL_MAJOR",
+            "tensor_hw_as_shard_shape": True,
+            "input_layout": "TILE_LAYOUT",
+            "shard_height_mul_of_32": False,
+        },
+        "grad_dtype": ttnn.bfloat16,
+        "input_a_dtype": ttnn.bfloat16,
+    }
+    invalidate_vector(test_vector)
+    run(test_vector["input_spec"], test_vector["grad_dtype"], test_vector["input_a_dtype"], device=device)
