@@ -126,6 +126,7 @@ struct WorkerToFabricEdmSenderImpl {
         auto worker_teardown_sem_addr =
             reinterpret_cast<volatile uint32_t* const>(get_semaphore<my_core_type>(get_arg_val<uint32_t>(arg_idx++)));
         const auto worker_buffer_index_semaphore_addr = get_semaphore<my_core_type>(get_arg_val<uint32_t>(arg_idx++));
+        DPRINT << "WorkerToFabricEdmSenderImpl " << (uint32_t)direction << ENDL();
         return WorkerToFabricEdmSenderImpl(
             is_persistent_fabric,
             edm_worker_x,
@@ -141,6 +142,7 @@ struct WorkerToFabricEdmSenderImpl {
             worker_buffer_index_semaphore_addr,
             worker_free_slots_stream_id,
             my_fc_stream_channel_id,
+            direction,
             write_reg_cmd_buf,
             write_at_cmd_buf);
     }
@@ -166,8 +168,11 @@ struct WorkerToFabricEdmSenderImpl {
         StreamId
             worker_credits_stream_id,  // To locally track downstream EDM's free slots. Only used by EDM. Sending EDM
                                        // decrements locally. Downstream EDM increments over noc when a slot is freed.
+        uint8_t direction = 0,
         uint8_t data_noc_cmd_buf = write_reg_cmd_buf,
         uint8_t sync_noc_cmd_buf = write_at_cmd_buf) {
+        this->direction_ = direction;
+
         this->edm_buffer_addr = edm_buffer_base_addr;
         this->worker_credits_stream_id = worker_credits_stream_id.get();
 
@@ -230,6 +235,7 @@ struct WorkerToFabricEdmSenderImpl {
         uint32_t local_buffer_index_addr,
         uint32_t sender_channel_credits_stream_id,
         StreamId worker_credits_stream_id,
+        uint8_t direction = 0,
         uint8_t data_noc_cmd_buf = write_reg_cmd_buf,
         uint8_t sync_noc_cmd_buf = write_at_cmd_buf) {
         this->init<my_core_type>(
@@ -247,6 +253,7 @@ struct WorkerToFabricEdmSenderImpl {
             local_buffer_index_addr,
             sender_channel_credits_stream_id,
             worker_credits_stream_id,
+            direction,
             data_noc_cmd_buf,
             sync_noc_cmd_buf);
     }
@@ -522,6 +529,7 @@ struct WorkerToFabricEdmSenderImpl {
     // the cmd buffer is used for edm-edm path
     uint8_t data_noc_cmd_buf;
     uint8_t sync_noc_cmd_buf;
+    uint8_t direction_;
 
 private:
     template <

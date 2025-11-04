@@ -121,6 +121,8 @@ void kernel_main() {
     tt::tt_fabric::WorkerToFabricMuxSender<fabric_mux_num_buffers_per_channel>* mux_connection_handle;
     tt::tt_fabric::WorkerToFabricMuxSender<fabric_mux_num_buffers_per_channel> mux_connection;
     if (mux_connection_valid) {
+        DPRINT << "Setting up fabric mux connection mux Core X: " << (uint32_t)fabric_mux_x << ", Y: " << (uint32_t)fabric_mux_y << "direction : " << (uint32_t)direction << ", fabric_mux_channel_id : " << (uint32_t)fabric_mux_channel_id << ENDL();
+
         mux_connection = tt::tt_fabric::build_connection_to_fabric_endpoint<fabric_mux_num_buffers_per_channel>(
             fabric_mux_x,
             fabric_mux_y,
@@ -300,6 +302,7 @@ void kernel_main() {
                         output_addrgen, tile_two_id, 0);
                     if constexpr (direction == 1) {
                         if constexpr (num_targets_backward_direction) {
+                            // DPRINT << "Send Mux direction = 1 chunk_count " << (uint32_t)chunk_count << ", tiles_read " << (uint32_t)tiles_read << ENDL();
                             fabric_unicast_noc_scatter_write_with_state<UnicastScatterWriteUpdateMask::DstAddrs>(
                                 mux_connection_handle,
                                 pkt_scatter_hdr,
@@ -314,6 +317,7 @@ void kernel_main() {
                         noc_async_write_barrier();
                     } else {
                         if constexpr (num_targets_forward_direction) {
+                            // DPRINT << "Send Mux direction = 0 chunk_count " << (uint32_t)chunk_count << ", tiles_read " << (uint32_t)tiles_read << ENDL();
                             fabric_unicast_noc_scatter_write_with_state<UnicastScatterWriteUpdateMask::DstAddrs>(
                                 mux_connection_handle,
                                 pkt_scatter_hdr,
@@ -328,6 +332,7 @@ void kernel_main() {
                 default: {
                     if constexpr (direction == 1) {
                         if (num_targets_backward_direction) {
+                            // DPRINT << "Send Mux direction = 1 chunk_count " << (uint32_t)chunk_count << ", tiles_read " << (uint32_t)tiles_read << ENDL();
                             fabric_unicast_noc_unicast_write_with_state<UnicastWriteUpdateMask::DstAddr>(
                                 mux_connection_handle,
                                 pkt_unicast_hdr,
@@ -339,6 +344,7 @@ void kernel_main() {
                         noc_async_write_barrier();
                     } else {
                         if constexpr (num_targets_forward_direction) {
+                            // DPRINT << "Send Mux direction = 0 chunk_count " << (uint32_t)chunk_count << ", tiles_read " << (uint32_t)tiles_read << ENDL();
                             fabric_unicast_noc_unicast_write_with_state<UnicastWriteUpdateMask::DstAddr>(
                                 mux_connection_handle,
                                 pkt_unicast_hdr,
@@ -397,6 +403,7 @@ void kernel_main() {
         pages_read_in_row = start_pages_read_in_row;
         row_offset = start_row_offset;
     }
+    DPRINT << "Writer Done" << ENDL();
 
     // increment locally
     if constexpr (fuse_op && direction == 1) {
@@ -554,22 +561,24 @@ void kernel_main() {
         }
         slice_writes++;
     }
+    {
+        DeviceZoneScopedN("WRITER_DONE");
+        noc_async_write_barrier();
+        noc_async_atomic_barrier();
 
-    noc_async_write_barrier();
-    noc_async_atomic_barrier();
+        if (mux_connection_valid) {
+            tt::tt_fabric::fabric_client_disconnect(*mux_connection_handle);
 
-    if (mux_connection_valid) {
-        tt::tt_fabric::fabric_client_disconnect(*mux_connection_handle);
-
-        if constexpr (is_termination_master) {
-            auto* termination_sync_ptr = reinterpret_cast<volatile tt_l1_ptr uint32_t*>(termination_sync_address);
-            noc_semaphore_wait(termination_sync_ptr, num_mux_clients - 1);
-            tt::tt_fabric::fabric_endpoint_terminate(fabric_mux_x, fabric_mux_y, fabric_mux_termination_signal_address);
-        } else {
-            uint64_t dest_addr =
-                safe_get_noc_addr(termination_master_noc_x, termination_master_noc_y, termination_sync_address, 0);
-            noc_semaphore_inc(dest_addr, 1);
-            noc_async_atomic_barrier();
+            if constexpr (is_termination_master) {
+                auto* termination_sync_ptr = reinterpret_cast<volatile tt_l1_ptr uint32_t*>(termination_sync_address);
+                noc_semaphore_wait(termination_sync_ptr, num_mux_clients - 1);
+                tt::tt_fabric::fabric_endpoint_terminate(fabric_mux_x, fabric_mux_y, fabric_mux_termination_signal_address);
+            } else {
+                uint64_t dest_addr =
+                    safe_get_noc_addr(termination_master_noc_x, termination_master_noc_y, termination_sync_address, 0);
+                noc_semaphore_inc(dest_addr, 1);
+                noc_async_atomic_barrier();
+            }
         }
     }
     noc_async_write_barrier();

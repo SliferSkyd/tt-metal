@@ -4,8 +4,9 @@
 
 // clang-format off
 #include "dataflow_api.h"
-#include "tt_metal/fabric/hw/inc/tt_fabric_mux.hpp"
 #include "debug/dprint.h"
+#include "hostdevcommon/fabric_common.h"
+#include "tt_metal/fabric/hw/inc/tt_fabric_mux.hpp"
 #include "tt_metal/fabric/hw/inc/tt_fabric_utils.h"
 #include "tt_metal/fabric/hw/inc/tt_fabric_api.h"
 #include "fabric/fabric_edm_packet_header.hpp"
@@ -114,8 +115,8 @@ void forward_data(
         auto packet_header = reinterpret_cast<volatile tt_l1_ptr PACKET_HEADER_TYPE*>(buffer_address);
 
         fabric_connection.wait_for_empty_write_slot();
-
-        DPRINT << "Send packet direction: " << (uint32_t)fabric_connection.direction_ << ENDL();
+        
+        // DPRINT << "Send packet " << (uint32_t)packet_header->get_noc_send_type() << ", direction: " << (uint32_t)fabric_connection.direction_ << ENDL();
         fabric_connection.send_payload_flush_non_blocking_from_address(
             (uint32_t)packet_header, packet_header->get_payload_size_including_header());
 
@@ -143,15 +144,28 @@ void kernel_main() {
     status_ptr[0] = tt::tt_fabric::FabricMuxStatus::STARTED;
 
     // clear out memory regions
-    auto num_regions_to_clear = get_arg_val<uint32_t>(rt_args_idx++);
-    for (uint32_t i = 0; i < num_regions_to_clear; i++) {
+    auto num_regions_to_clear1 = get_arg_val<uint32_t>(rt_args_idx++);
+    for (uint32_t i = 0; i < num_regions_to_clear1; i++) {
         auto address = get_arg_val<uint32_t>(rt_args_idx++);
         auto size = get_arg_val<uint32_t>(rt_args_idx++);
         zero_l1_buf(reinterpret_cast<tt_l1_ptr uint32_t*>(address), size);
     }
 
-    auto fabric_connection = tt::tt_fabric::FabricMuxToEdmSender::build_from_args<CORE_TYPE>(rt_args_idx);
+    // DPRINT << "fabric_connection_fwd" << ENDL();
+    auto fabric_connection_fwd = tt::tt_fabric::FabricMuxToEdmSender::build_from_args<CORE_TYPE>(rt_args_idx);
+    // DPRINT << "fabric_connection_fwd arg_idx = " << (uint32_t)rt_args_idx << ENDL();
+    auto num_regions_to_clear2 = get_arg_val<uint32_t>(rt_args_idx++);
+    for (uint32_t i = 0; i < num_regions_to_clear2; i++) {
+        auto address = get_arg_val<uint32_t>(rt_args_idx++);
+        auto size = get_arg_val<uint32_t>(rt_args_idx++);
+        zero_l1_buf(reinterpret_cast<tt_l1_ptr uint32_t*>(address), size);
+    }
 
+    // DPRINT << "fabric_connection_bwd" << ENDL();
+    auto fabric_connection_bwd = tt::tt_fabric::FabricMuxToEdmSender::build_from_args<CORE_TYPE>(rt_args_idx);
+    // DPRINT << "fabric_connection_bwd arg_idx = " << (uint32_t)rt_args_idx << ENDL();
+
+    // DPRINT << "other NUM_FULL_SIZE_CHANNELS = "<< (uint32_t)NUM_FULL_SIZE_CHANNELS << ENDL();
     std::array<tt::tt_fabric::FabricMuxChannelBuffer<NUM_BUFFERS_FULL_SIZE_CHANNEL>, NUM_FULL_SIZE_CHANNELS>
         full_size_channels;
     std::array<
@@ -211,21 +225,33 @@ void kernel_main() {
 
     // wait for fabric router to be ready before setting up the connection
     if constexpr (wait_for_fabric_endpoint) {
+        DPRINT << "wait_for_fabric_endpoint_ready fwd" << ENDL();
         tt::tt_fabric::wait_for_fabric_endpoint_ready(
-            fabric_connection.edm_noc_x,
-            fabric_connection.edm_noc_y,
+            fabric_connection_fwd.edm_noc_x,
+            fabric_connection_fwd.edm_noc_y,
+            fabric_router_status_address,
+            local_fabric_router_status_address);
+
+        DPRINT << "wait_for_fabric_endpoint_ready bwd" << ENDL();
+        tt::tt_fabric::wait_for_fabric_endpoint_ready(
+            fabric_connection_bwd.edm_noc_x,
+            fabric_connection_bwd.edm_noc_y,
             fabric_router_status_address,
             local_fabric_router_status_address);
     }
 
     constexpr bool use_worker_allocated_credit_address = CORE_TYPE == ProgrammableCoreType::IDLE_ETH;
-    fabric_connection.open<use_worker_allocated_credit_address>();
+    // DPRINT << "fabric_connection_fwd.open" << ENDL();
+    fabric_connection_fwd.open<use_worker_allocated_credit_address>();
+    // DPRINT << "fabric_connection_bwd.open" << ENDL();
+    fabric_connection_bwd.open<use_worker_allocated_credit_address>();
 
     status_ptr[0] = tt::tt_fabric::FabricMuxStatus::READY_FOR_TRAFFIC;
 
 #if defined(COMPILE_FOR_IDLE_ERISC)
     uint32_t heartbeat = 0;
 #endif
+    // DPRINT << "Entering main loop" << ENDL();
     while (!got_immediate_termination_signal(termination_signal_ptr)) {
         bool got_graceful_termination = got_graceful_termination_signal(termination_signal_ptr);
         if (got_graceful_termination) {
@@ -244,26 +270,42 @@ void kernel_main() {
         }
 
         for (size_t i = 0; i < NUM_ITERS_BETWEEN_TEARDOWN_CHECKS; i++) {
+            // Forward
+            // DPRINT << "Sending Forward" << ENDL();
+            
             {
-                DeviceZoneScopedN("Send");
-                for (size_t iter = 0; iter < NUM_FULL_SIZE_CHANNELS_ITERS; iter++) {
-                    for (uint8_t channel_id = 0; channel_id < NUM_FULL_SIZE_CHANNELS; channel_id++) {
-                        forward_data<NUM_BUFFERS_FULL_SIZE_CHANNEL>(
-                            full_size_channels[channel_id],
-                            full_size_channel_worker_interfaces[channel_id],
-                            fabric_connection,
-                            full_size_channel_connection_established[channel_id],
-                            StreamId{channel_stream_ids[channel_id]},
-                            channel_id);
-                    }
+                DeviceZoneScopedN("SendForward");
+                for (uint8_t channel_id = 0; channel_id < NUM_FULL_SIZE_CHANNELS / 2; channel_id++) {
+                    forward_data<NUM_BUFFERS_FULL_SIZE_CHANNEL>(
+                        full_size_channels[channel_id],
+                        full_size_channel_worker_interfaces[channel_id],
+                        fabric_connection_fwd,
+                        full_size_channel_connection_established[channel_id],
+                        StreamId{channel_stream_ids[channel_id]},
+                        channel_id);
                 }
             }
+            // DPRINT << "Sending Backward" << ENDL();
+            // Backward
+            {
+                DeviceZoneScopedN("SendBackward");
+                for (uint8_t channel_id = NUM_FULL_SIZE_CHANNELS / 2; channel_id < NUM_FULL_SIZE_CHANNELS; channel_id++) {
+                    forward_data<NUM_BUFFERS_FULL_SIZE_CHANNEL>(
+                        full_size_channels[channel_id],
+                        full_size_channel_worker_interfaces[channel_id],
+                        fabric_connection_bwd,
+                        full_size_channel_connection_established[channel_id],
+                        StreamId{channel_stream_ids[channel_id]},
+                        channel_id);
+                }
+            }
+            // DPRINT << "Sending Done" << ENDL();
 
             // for (uint8_t channel_id = 0; channel_id < NUM_HEADER_ONLY_CHANNELS; channel_id++) {
             //     forward_data<NUM_BUFFERS_HEADER_ONLY_CHANNEL>(
             //         header_only_channels[channel_id],
             //         header_only_channel_worker_interfaces[channel_id],
-            //         fabric_connection,
+            //         fabric_connection_bwd,
             //         header_only_channel_connection_established[channel_id],
             //         StreamId{channel_stream_ids[channel_id + NUM_FULL_SIZE_CHANNELS]},
             //         channel_id + NUM_FULL_SIZE_CHANNELS);
@@ -275,7 +317,10 @@ void kernel_main() {
     }
     {
         DeviceZoneScopedN("MUX_DONE");
-        fabric_connection.close();
+        DPRINT << "Mux Done" << ENDL();
+
+        fabric_connection_fwd.close();
+        fabric_connection_bwd.close();
         noc_async_write_barrier();
         noc_async_atomic_barrier();
 

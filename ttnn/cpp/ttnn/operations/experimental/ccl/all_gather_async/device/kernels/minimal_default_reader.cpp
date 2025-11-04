@@ -213,10 +213,12 @@ void kernel_main() {
                 chunk_count = 0;
                 while (tiles_read < tiles_to_read) {
                     if (chunk_count % chunks_per_sync == 0) {
-                        noc_semaphore_wait_min(
-                            reinterpret_cast<volatile tt_l1_ptr uint32_t*>(out_ready_sem), sem_target + 1);
+                        // DPRINT << "Read Outout chunk_count << " << (uint32_t)chunk_count << " tiles_read: " << (uint32_t)tiles_read << " Wait Sem" << ENDL();
+                        // noc_semaphore_wait_min(
+                        //     reinterpret_cast<volatile tt_l1_ptr uint32_t*>(out_ready_sem), sem_target + 1);
                         sem_target++;
                     }
+                    // DPRINT << "Read Outout chunk_count << " << (uint32_t)chunk_count << " tiles_read: " << (uint32_t)tiles_read << ENDL();
                     chunk_count++;
 
                     uint32_t tiles_remaining_to_read = tiles_to_read - tiles_read;
@@ -266,8 +268,8 @@ void kernel_main() {
                 tiles_to_read = input_tile_id_end;
                 while (tiles_read < tiles_to_read) {
                     if (chunk_count % chunks_per_sync == 0) {
-                        noc_semaphore_wait_min(
-                            reinterpret_cast<volatile tt_l1_ptr uint32_t*>(out_ready_sem), sem_target + 1);
+                        // noc_semaphore_wait_min(
+                        //     reinterpret_cast<volatile tt_l1_ptr uint32_t*>(out_ready_sem), sem_target + 1);
                         sem_target++;
                     }
                     chunk_count++;
@@ -291,6 +293,9 @@ void kernel_main() {
             op_signaler.synchronize_workers_and_signal_op(actual_sender_chip_id);
         }
     }
+    {
+        DPRINT << "Reader Done" << ENDL();
 
-    noc_semaphore_set(reinterpret_cast<volatile tt_l1_ptr uint32_t*>(out_ready_sem), 0);
+        noc_semaphore_set(reinterpret_cast<volatile tt_l1_ptr uint32_t*>(out_ready_sem), 0);
+    }
 }
