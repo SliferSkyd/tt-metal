@@ -146,16 +146,19 @@ def test_transformer(
         ).sample
 
     logger.info("running TT model...")
-    forward = tt_model.forward_traced if traced else tt_model.forward
-    tt_output = forward(
-        spatial=tt_spatial,
-        prompt=tt_prompt,
-        timestep=tt_timestep,
-        spatial_rope=(tt_spatial_rope_cos, tt_spatial_rope_sin),
-        prompt_rope=(tt_prompt_rope_cos, tt_prompt_rope_sin),
-        spatial_sequence_length=spatial_seq_len,
-        prompt_sequence_length=prompt_seq_len,
-    )
+    for _ in range(2):
+        # once for compilation or trace capture, once for compiled or traced execution
+        tt_output = tt_model.forward(
+            spatial=tt_spatial,
+            prompt=tt_prompt,
+            timestep=tt_timestep,
+            spatial_rope=(tt_spatial_rope_cos, tt_spatial_rope_sin),
+            prompt_rope=(tt_prompt_rope_cos, tt_prompt_rope_sin),
+            spatial_sequence_length=spatial_seq_len,
+            prompt_sequence_length=prompt_seq_len,
+            traced=traced,
+            trace_device=submesh_device,
+        )
 
     tt_output_torch = tensor.to_torch(tt_output, mesh_axes=[None, sp_axis, None])
     assert_quality(torch_output, tt_output_torch, pcc=0.99935, relative_rmse=0.037)

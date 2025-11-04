@@ -4,66 +4,167 @@
 
 from __future__ import annotations
 
+import functools
+from collections.abc import Hashable
 from typing import TYPE_CHECKING
 
 import ttnn
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping, Sequence
+    from collections.abc import Callable
     from typing import Any
 
 
-class Tracer:
-    def __init__(self, *, device: ttnn.MeshDevice, function: Callable) -> None:
-        self._trace_device = device
-        self._function = function
-        self._trace_tensors = {}
-        self._trace_id = None
+def tree_map(f: Callable, x: Any, *xs: Any) -> Any:
+    """Apply a function to leaves of nested data structures.
 
-    def __getitem__(self, key: str) -> ttnn.Tensor:
-        if key not in self._trace_tensors:
-            msg = f"tensor '{key}' is not set"
-            raise KeyError(msg)
+    Recursively traverses nested structures (tuples, lists, dicts) and applies
+    the given function to corresponding leaf elements across all input structures.
 
-        return self._trace_tensors[key]
+    Args:
+        f: A callable that takes N arguments, where N is the number of input
+            structures (1 + len(xs)). Applied to leaf elements.
+        x: The first nested data structure to traverse.
+        *xs: Additional nested data structures with the same shape as x.
 
-    def __setitem__(self, key: str, value: ttnn.Tensor) -> None:
-        if value.device() is not None and value.device() != self._trace_device:
-            msg = f"tensor '{key}' must be on device {self._trace_device}, but got {value.device()}"
+    Returns:
+        A new nested structure with the same shape as the inputs, where each
+        leaf has been transformed by applying f to the corresponding leaves
+        from all input structures.
+
+    Raises:
+        ValueError: If the input structures don't have matching types at
+            corresponding positions, or if dicts have different keys.
+
+    Examples:
+        >>> tree_map(lambda a: a * 2, [1, 2, 3])
+        [2, 4, 6]
+
+        >>> tree_map(lambda a, b: a + b, [1, 2], [10, 20])
+        [11, 22]
+
+        >>> tree_map(lambda a, b: a + b,
+        ...          {"a": 1, "b": [2, 3]},
+        ...          {"a": 10, "b": [20, 30]})
+        {'a': 11, 'b': [22, 33]}
+    """
+    tx = type(x)
+    for y in xs:
+        if type(y) is not tx:
+            msg = f"types should be the same: {tx} != {type(y)}"
             raise ValueError(msg)
 
-        if self._trace_id is None:
-            if value.device() is None:
-                value = value.to(self._trace_device)
+    if isinstance(x, tuple):
+        return tuple(tree_map(f, *elts) for elts in zip(x, *xs, strict=True))
 
-            self._trace_tensors[key] = value
-            return
+    if isinstance(x, list):
+        return [tree_map(f, *elts) for elts in zip(x, *xs, strict=True)]
 
-        if key not in self._trace_tensors:
-            msg = f"tensor '{key}' was not set before tracing"
+    if isinstance(x, dict):
+        for y in xs:
+            if x.keys() != y.keys():
+                msg = "dict keys should be the same"
+                raise ValueError(msg)
+        return {key: tree_map(f, *(d[key] for d in (x, *xs))) for key in x}
+
+    return f(x, *xs)
+
+
+def tree_to_nested_tuples(value: Any) -> Any:
+    if isinstance(value, (list, tuple)):
+        return tuple(tree_to_nested_tuples(x) for x in value)
+    if isinstance(value, dict):
+        return tuple((k, tree_to_nested_tuples(v)) for k, v in sorted(value.items()))
+    return value
+
+
+def check(value: Any) -> Any:
+    if isinstance(value, (ttnn.Tensor, Hashable)):
+        return value
+
+    msg = f"unsupported type: {type(value)}"
+    raise TypeError(msg)
+
+
+def move_to_device_if_tensor(device: ttnn.MeshDevice, value: Any) -> Any:
+    if not isinstance(value, ttnn.Tensor):
+        return value
+
+    if value.device() is None:
+        return value.to(device)
+
+    if value.device() != device:
+        msg = f"tensor is on device {value.device()}, expected {device}"
+        raise ValueError(msg)
+
+    return value
+
+
+def copy_if_tensor(src: Any, dst: Any) -> None:
+    if not isinstance(src, ttnn.Tensor):
+        return
+
+    if src.device() is None:
+        ttnn.copy_host_to_device_tensor(src, dst)
+    else:
+        ttnn.copy(src, dst)
+
+
+def tensor_to_properties(value: Any) -> Any:
+    if not isinstance(value, ttnn.Tensor):
+        return value
+
+    return tuple(value.shape), value.dtype, value.layout
+
+
+# TODO: the biggest issue with this is that all inputs are copied with every call, even it they are
+# unchanged.
+def autotrace(f: Callable) -> Callable:
+    traces = {}
+
+    @functools.wraps(f)
+    def wrapper(
+        *args: Any,
+        traced: bool = False,
+        trace_device: ttnn.MeshDevice = None,
+        **kwargs: Any,
+    ) -> Any:
+        if not traced:
+            return f(*args, **kwargs)
+
+        if trace_device is None:
+            msg = "trace_device must be specified when traced=True"
             raise ValueError(msg)
 
-        if value.device() is None:
-            ttnn.copy_host_to_device_tensor(value, self._trace_tensors[key])
-        else:
-            ttnn.copy(value, self._trace_tensors[key])
+        inputs = {"args": args, "kwargs": kwargs, "device": trace_device}
+        inputs = tree_map(check, inputs)
+        inputs_key = tree_to_nested_tuples(tree_map(tensor_to_properties, inputs))
 
-    def capture_or_execute_trace(
-        self, *, cq_id: int = 0, args: Sequence[Any] = (), kwargs: Mapping[str, Any] | None = None
-    ) -> None:
-        if kwargs is None:
-            kwargs = {}
+        if inputs_key in traces:
+            trace = traces[inputs_key]
 
-        if self._trace_id is not None:
-            ttnn.execute_trace(self._trace_device, self._trace_id, cq_id=cq_id, blocking=False)
-            return
+            tree_map(copy_if_tensor, inputs, trace["inputs"])
+            ttnn.execute_trace(trace_device, trace["id"], cq_id=0, blocking=False)
+            return trace["outputs"]
 
-        self._function(*args, **kwargs)
+        inputs = tree_map(lambda value: move_to_device_if_tensor(trace_device, value), inputs)
 
-        trace_id = ttnn.begin_trace_capture(self._trace_device, cq_id=cq_id)
+        # compile
+        f(*inputs["args"], **inputs["kwargs"])
+
+        # capture trace
+        trace_id = ttnn.begin_trace_capture(trace_device, cq_id=0)
         try:
-            self._function(*args, **kwargs)
+            outputs = f(*inputs["args"], **inputs["kwargs"])
         finally:
-            ttnn.end_trace_capture(self._trace_device, trace_id, cq_id=cq_id)
+            ttnn.end_trace_capture(trace_device, trace_id, cq_id=0)
 
-        self._trace_id = trace_id
+        traces[inputs_key] = {
+            "id": trace_id,
+            "inputs": inputs,
+            "outputs": tree_map(check, outputs),
+        }
+
+        return outputs
+
+    return wrapper
