@@ -31,8 +31,15 @@ from ....utils.padding import PaddingConfig
     ],
 )
 @pytest.mark.parametrize(
+    "traced",
+    [
+        pytest.param(False, id="not_traced"),
+        pytest.param(True, id="traced"),
+    ],
+)
+@pytest.mark.parametrize(
     "device_params",
-    [{"fabric_config": ttnn.FabricConfig.FABRIC_1D, "trace_region_size": 31000000}],
+    [{"fabric_config": ttnn.FabricConfig.FABRIC_1D, "trace_region_size": 34000000}],
     indirect=True,
 )
 def test_transformer(
@@ -45,6 +52,7 @@ def test_transformer(
     latents_height: int,
     latents_width: int,
     prompt_seq_len: int,
+    traced: bool,
 ) -> None:
     submesh_device = mesh_device.create_submesh(ttnn.MeshShape(*submesh_shape))
 
@@ -138,7 +146,8 @@ def test_transformer(
         ).sample
 
     logger.info("running TT model...")
-    tt_output = tt_model.forward(
+    forward = tt_model.forward_traced if traced else tt_model.forward
+    tt_output = forward(
         spatial=tt_spatial,
         prompt=tt_prompt,
         timestep=tt_timestep,

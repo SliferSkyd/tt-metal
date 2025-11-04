@@ -14,6 +14,7 @@ from ...layers.linear import ColParallelLinear, Linear
 from ...layers.module import Module, ModuleList
 from ...layers.normalization import DistributedLayerNorm, RMSNorm
 from ...utils.substate import rename_substate
+from ...utils.tracer import Tracer
 
 if TYPE_CHECKING:
     import torch
@@ -118,6 +119,8 @@ class QwenImageTransformer(Module):
             mesh_device=mesh_device,
         )
 
+        self._tracer = Tracer(device=mesh_device, function=self._tracer_forward)
+
     def _prepare_torch_state(self, state: dict[str, torch.Tensor]) -> None:
         rename_substate(state, "norm_out.linear", "time_embed_out")
         rename_substate(state, "norm_out.norm", "norm_out")
@@ -183,6 +186,42 @@ class QwenImageTransformer(Module):
         spatial = spatial * (1 + scale) + shift
 
         return self.proj_out(spatial)
+
+    def _tracer_forward(self, spatial_sequence_length: int, prompt_sequence_length: int) -> ttnn.Tensor:
+        self._tracer["out"] = self.forward(
+            spatial=self._tracer["spatial"],
+            prompt=self._tracer["prompt"],
+            timestep=self._tracer["timestep"],
+            spatial_rope=(self._tracer["spatial_rope_cos"], self._tracer["spatial_rope_sin"]),
+            prompt_rope=(self._tracer["prompt_rope_cos"], self._tracer["prompt_rope_sin"]),
+            spatial_sequence_length=spatial_sequence_length,
+            prompt_sequence_length=prompt_sequence_length,
+        )
+
+    def forward_traced(
+        self,
+        spatial: ttnn.Tensor,
+        prompt: ttnn.Tensor,
+        timestep: ttnn.Tensor,
+        spatial_rope: tuple[ttnn.Tensor, ttnn.Tensor],
+        prompt_rope: tuple[ttnn.Tensor, ttnn.Tensor],
+        spatial_sequence_length: int,
+        prompt_sequence_length: int,
+    ) -> ttnn.Tensor:
+        self._tracer["spatial"] = spatial
+        self._tracer["prompt"] = prompt
+        self._tracer["timestep"] = timestep
+        self._tracer["spatial_rope_cos"], self._tracer["spatial_rope_sin"] = spatial_rope
+        self._tracer["prompt_rope_cos"], self._tracer["prompt_rope_sin"] = prompt_rope
+
+        self._tracer.capture_or_execute_trace(
+            kwargs=dict(
+                spatial_sequence_length=spatial_sequence_length,
+                prompt_sequence_length=prompt_sequence_length,
+            )
+        )
+
+        return self._tracer["out"]
 
 
 def _chunk_time3d(t: ttnn.Tensor, count: int) -> list[ttnn.Tensor]:
