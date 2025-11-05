@@ -47,17 +47,3 @@ constexpr uint32_t get_max_code_profiling_timer_types() {
     // get the bit offset of LAST
     return __builtin_ctz(static_cast<uint32_t>(CodeProfilingTimerType::LAST));
 }
-
-CodeProfilingTimerType string_to_code_profiling_timer_type(const std::string& timer_str) {
-    if (timer_str.empty()) {
-        return CodeProfilingTimerType::NONE;
-    }
-
-    if (timer_str == "RX_CH_FWD") {
-        return CodeProfilingTimerType::RECEIVER_CHANNEL_FORWARD;
-    } else if (timer_str == "TX_CH_FWD") {
-        return CodeProfilingTimerType::SENDER_CHANNEL_FORWARD;
-    } else {
-        TT_THROW("Invalid code profiling timer string: {}", timer_str);
-    }
-}

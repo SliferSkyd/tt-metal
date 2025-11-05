@@ -87,6 +87,10 @@ using tt::tt_fabric::fabric_tests::fetch_pattern_ntype;
 using tt::tt_fabric::fabric_tests::fetch_pattern_num_packets;
 using tt::tt_fabric::fabric_tests::fetch_pattern_packet_size;
 
+// Helper functions for code profiling
+using tt::tt_fabric::convert_code_profiling_timer_type_to_str;
+using tt::tt_fabric::convert_to_code_profiling_timer_type;
+
 // Bandwidth Summary Statistics
 // If you want to add new statistics, populate this enum with their names
 enum class BandwidthStatistics {

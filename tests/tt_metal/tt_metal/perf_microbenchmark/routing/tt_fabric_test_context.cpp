@@ -159,9 +159,13 @@ void TestContext::read_code_profiling_results() {
     // Process results for each enabled timer type
     std::vector<CodeProfilingTimerType> enabled_timers;
     if (rtoptions.fabric_code_profiling_enabled()) {
-        CodeProfilingTimerType timer_type =
-            string_to_code_profiling_timer_type(rtoptions.get_fabric_code_profiling_timer_str());
-        enabled_timers.push_back(timer_type);
+        CodeProfilingTimerType code_profiling_timer_type =
+            convert_to_code_profiling_timer_type(rtoptions.get_fabric_code_profiling_timer_str());
+        TT_FATAL(
+            code_profiling_timer_type != CodeProfilingTimerType::NONE,
+            "Invalid code profiling timer string: {}",
+            rtoptions.get_fabric_code_profiling_timer_str());
+        enabled_timers.push_back(code_profiling_timer_type);
     }
 
     for (const auto& location : results) {
@@ -212,21 +216,13 @@ void TestContext::report_code_profiling_results() {
 
     log_info(tt::LogTest, "Code Profiling Results:");
 
-    // Helper function to get timer type name
-    auto get_timer_type_name = [](CodeProfilingTimerType timer_type) -> std::string {
-        switch (timer_type) {
-            case CodeProfilingTimerType::RECEIVER_CHANNEL_FORWARD: return "RECEIVER_CHANNEL_FORWARD";
-            default: return "UNKNOWN";
-        }
-    };
-
     for (const auto& entry : code_profiling_entries_) {
         log_info(
             tt::LogTest,
             "  Device {} Core {}: {} - Total Cycles: {}, Instances: {}, Avg Cycles/Instance: {:.2f}",
             entry.coord,
             entry.eth_channel,
-            get_timer_type_name(entry.timer_type),
+            convert_code_profiling_timer_type_to_str(entry.timer_type),
             entry.total_cycles,
             entry.num_instances,
             entry.avg_cycles_per_instance);
