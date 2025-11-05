@@ -5,7 +5,6 @@
 #include <stdint.h>
 #include "circular_buffer.h"
 #include "dataflow_api.h"
-#include "debug/dprint.h"
 void kernel_main() {
 
     const uint32_t src_addr                 = get_arg_val<uint32_t>(0);
@@ -28,7 +27,6 @@ void kernel_main() {
     cb_reserve_back(cb_id_in0, block_height);
     uint32_t l1_write_addr = get_write_ptr(cb_id_in0);
     if (aligned) {
-        DPRINT<<"aligned"<<ENDL();
         for (uint32_t h = 0; h < block_height; ++h) {
             uint64_t src_noc_addr = get_noc_addr(stick_id, s0);
             noc_async_read(src_noc_addr, l1_write_addr, block_width_bytes);
@@ -37,8 +35,13 @@ void kernel_main() {
         }
         noc_async_read_barrier();
     } else {
-        DPRINT<<"unaligned"<<ENDL();
-        // State machine approach for unaligned path
+        enum SlotState : uint8_t {
+            IDLE = 0,
+            DRAM_PENDING = 1,
+            SCRATCH_READY = 2,
+            SCRATCH_PENDING = 3
+        };
+
         constexpr uint32_t num_trids = 4;
         constexpr uint32_t dram_trid_base = 0;
         constexpr uint32_t scratch_trid_base = dram_trid_base + num_trids;
@@ -46,55 +49,53 @@ void kernel_main() {
         cb_reserve_back(cb_id_in1, num_trids);
         uint32_t scratch_l1_write_addr_base = get_write_ptr(cb_id_in1);
         uint32_t scratch_cb_page_size = get_local_cb_interface(cb_id_in1).fifo_page_size;
-        // Slot states: 0=idle, 1=dram_pending, 2=scratch_ready, 3=scratch_pending
-        uint32_t slot_states[num_trids];
+        SlotState slot_states[num_trids];
         uint32_t l1_write_addrs[num_trids];
         uint32_t scratch_l1_write_addrs[num_trids];
 
         // Initialize slots
         for (uint32_t i = 0; i < num_trids; i++) {
-            slot_states[i] = 0;  // idle
+            slot_states[i] = SlotState::IDLE;
             scratch_l1_write_addrs[i] = scratch_l1_write_addr_base + i * scratch_cb_page_size;
         }
 
         uint32_t rows_issued = 0;      // Number of DRAM->scratch transfers started
         uint32_t rows_completed = 0;   // Number of scratch->L1 transfers completed
 
-        // Main state machine loop
         while (rows_completed < block_height) {
             for (uint32_t slot = 0; slot < num_trids; slot++) {
                 uint32_t dram_trid = dram_trid_base + slot;
                 uint32_t scratch_trid = scratch_trid_base + slot;
 
-                if (slot_states[slot] == 0 && rows_issued < block_height) {
-                    // State 0 (idle): Start new DRAM->scratch transfer
+                if (slot_states[slot] == SlotState::IDLE && rows_issued < block_height) {
+                    // Start new DRAM->scratch transfer
                     noc_async_read_tile_dram_sharded_set_trid(dram_trid);
                     uint64_t src_noc_addr = get_noc_addr(stick_id, s0);
                     noc_async_read(src_noc_addr, scratch_l1_write_addrs[slot], aligned_block_width_bytes);
                     l1_write_addrs[slot] = l1_write_addr;
-                    slot_states[slot] = 1;  // dram_pending
+                    slot_states[slot] = SlotState::DRAM_PENDING;
 
                     stick_id++;
                     l1_write_addr += padded_block_width_bytes;
                     rows_issued++;
 
-                } else if (slot_states[slot] == 1) {
-                    // State 1 (dram_pending): Check if DRAM->scratch is complete
+                } else if (slot_states[slot] == SlotState::DRAM_PENDING) {
+                    // Check if DRAM->scratch is complete
                     if (ncrisc_noc_read_with_transaction_id_flushed(noc_index, dram_trid) == 1) {
-                        slot_states[slot] = 2;  // scratch_ready
+                        slot_states[slot] = SlotState::SCRATCH_READY;
                     }
 
-                } else if (slot_states[slot] == 2) {
-                    // State 2 (scratch_ready): Start scratch->L1 transfer
+                } else if (slot_states[slot] == SlotState::SCRATCH_READY) {
+                    // Start scratch->L1 transfer
                     noc_async_read_tile_dram_sharded_set_trid(scratch_trid);
                     uint64_t scratch_l1_noc_read_addr = get_noc_addr(scratch_l1_write_addrs[slot] + aligned_offset);
                     noc_async_read(scratch_l1_noc_read_addr, l1_write_addrs[slot], block_width_bytes);
-                    slot_states[slot] = 3;  // scratch_pending
+                    slot_states[slot] = SlotState::SCRATCH_PENDING;
 
-                } else if (slot_states[slot] == 3) {
-                    // State 3 (scratch_pending): Check if scratch->L1 is complete
+                } else if (slot_states[slot] == SlotState::SCRATCH_PENDING) {
+                    // Check if scratch->L1 is complete
                     if (ncrisc_noc_read_with_transaction_id_flushed(noc_index, scratch_trid) == 1) {
-                        slot_states[slot] = 0;  // idle - ready to reuse
+                        slot_states[slot] = SlotState::IDLE;
                         rows_completed++;
                     }
                 }
