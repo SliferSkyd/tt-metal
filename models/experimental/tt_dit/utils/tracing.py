@@ -4,13 +4,15 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import ttnn
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
-class Tracer(Callable):
+
+class Tracer:
     """Wrapper for capturing and executing a trace of a given function."""
 
     def __init__(self, function: Callable[..., Any], /, *, device: ttnn.MeshDevice) -> None:
