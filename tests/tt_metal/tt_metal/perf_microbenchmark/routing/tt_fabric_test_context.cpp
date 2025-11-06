@@ -248,7 +248,7 @@ void TestContext::initialize_code_profiling_results_csv_file() {
     }
 
     // Write detailed header
-    code_profiling_csv_stream << "test_name,ftype,ntype,topology,num_links,iteration_number,";
+    code_profiling_csv_stream << "test_name,ftype,ntype,topology,num_links,packet_size,iteration_number,";
     code_profiling_csv_stream
         << "device_coord,core,code_profiling_timer_type,total_cycles,num_instances,avg_cycles_per_instance";
     code_profiling_csv_stream << "\n";
@@ -263,10 +263,11 @@ std::string TestContext::convert_coord_to_string(const ::tt::tt_metal::distribut
 }
 
 void TestContext::dump_code_profiling_results_to_csv(const TestConfig& config) {
-    // Extract representative ftype and ntype from first sender's first pattern
+    // Extract representative ftype, ntype, packet_size from first sender's first pattern
     const TrafficPatternConfig& first_pattern = fetch_first_traffic_pattern(config);
     std::string ftype_str = fetch_pattern_ftype(first_pattern);
     std::string ntype_str = fetch_pattern_ntype(first_pattern);
+    uint32_t packet_size = fetch_pattern_packet_size(first_pattern);
 
     // Open CSV file in append mode
     std::ofstream code_profiling_csv_stream(code_profiling_csv_file_path_, std::ios::out | std::ios::app);
@@ -283,7 +284,8 @@ void TestContext::dump_code_profiling_results_to_csv(const TestConfig& config) {
         std::string coord_str = convert_coord_to_string(entry.coord);
         code_profiling_csv_stream << config.name << "," << ftype_str << "," << ntype_str << ","
                                   << enchantum::to_string(config.fabric_setup.topology) << ","
-                                  << config.fabric_setup.num_links << "," << config.iteration_number << ",";
+                                  << config.fabric_setup.num_links << "," << packet_size << ","
+                                  << config.iteration_number << ",";
         code_profiling_csv_stream << "\"" << coord_str << "\"," << entry.eth_channel << ","
                                   << convert_code_profiling_timer_type_to_str(entry.timer_type) << ","
                                   << entry.total_cycles << "," << entry.num_instances << "," << std::fixed

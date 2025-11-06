@@ -188,7 +188,7 @@ int main(int argc, char** argv) {
             test_context.set_benchmark_mode(test_config.benchmark_mode);
             test_context.set_telemetry_enabled(test_config.benchmark_mode);
 
-            // TODO: Check to see if code profiling can be enabled even without benchmark mode
+            // TODO: Check to see if code profiling can be enabled even without benchmark mode (Issue #32036)
             if (!test_config.benchmark_mode) {
                 if (code_profiling_enabled) {
                     log_warning(
