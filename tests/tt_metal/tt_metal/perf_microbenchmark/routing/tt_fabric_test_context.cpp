@@ -279,7 +279,7 @@ void TestContext::dump_code_profiling_results_to_csv(const TestConfig& config) {
         return;
     }
 
-    // Write data rows (header already written in initialize_bandwidth_results_csv_file)
+    // Write data rows (header already written in initialize_code_profiling_results_csv_file)
     for (const auto& entry : code_profiling_entries_) {
         std::string coord_str = convert_coord_to_string(entry.coord);
         code_profiling_csv_stream << config.name << "," << ftype_str << "," << ntype_str << ","
