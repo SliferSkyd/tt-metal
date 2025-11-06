@@ -253,7 +253,7 @@ void TestContext::initialize_code_profiling_results_csv_file() {
         << "device_coord,core,code_profiling_timer_type,total_cycles,num_instances,avg_cycles_per_instance";
     code_profiling_csv_stream << "\n";
 
-    log_info(tt::LogTest, "Initialized codepath profiling CSV file: {}", code_profiling_csv_file_path_.string());
+    log_info(tt::LogTest, "Initialized code profiling CSV file: {}", code_profiling_csv_file_path_.string());
 
     code_profiling_csv_stream.close();
 }
