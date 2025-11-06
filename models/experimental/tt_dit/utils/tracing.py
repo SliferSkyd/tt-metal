@@ -22,11 +22,18 @@ class Tracer(Callable):
         """
         self._function = function
         self._device = device
-        self._inputs: dict[str, Any] = {}
+        self._args: tuple[Any] = ()
+        self._kwargs: dict[str, Any] = {}
         self._outputs: Any = None
         self._trace_id: ttnn.MeshTraceId | None = None
 
-    def __call__(self, *, tracer_cq_id: int = 0, tracer_blocking_execution: bool = True, **kwargs: Any) -> Any:
+    def __call__(
+        self,
+        *args: Any,
+        tracer_cq_id: int = 0,
+        tracer_blocking_execution: bool = True,
+        **kwargs: Any,
+    ) -> Any:
         """Capture or execute trace.
 
         On the first call, runs the wrapped function twice, once to compile, and once to capture the
@@ -35,6 +42,9 @@ class Tracer(Callable):
         Args:
             tracer_cq_id: Command queue id.
             tracer_blocking_execution: Whether `ttnn.execute_trace` should block.
+            *args: Positional inputs to pass to the wrapped function. On the first call, these are
+                   used to initialize the trace inputs. On subsequent calls, these are used to
+                   update the trace inputs. Only tensor inputs can be changed.
             **kwargs: Named inputs to pass to the wrapped function. On the first call, these are
                       used to initialize the trace inputs. On subsequent calls, these are optional
                       and used to update the trace inputs. Only tensor inputs can be changed.
@@ -47,17 +57,19 @@ class Tracer(Callable):
             Any exception raised by the wrapped function during first invocation.
         """
         if self._trace_id is None:
+            args = _tree_map(_verify_value, args, path_label="args")
             kwargs = _tree_map(_verify_value, kwargs, path_label="kwargs")
-            self._inputs = _tree_map(self._move_to_device_if_tensor, kwargs, path_label="kwargs")
+            self._args = _tree_map(self._move_to_device_if_tensor, args, path_label="args")
+            self._kwargs = _tree_map(self._move_to_device_if_tensor, kwargs, path_label="kwargs")
 
             # compile
-            self._function(**self._inputs)
+            self._function(*self._args, **self._kwargs)
 
             # capture trace
             trace_id = ttnn.begin_trace_capture(self._device, cq_id=tracer_cq_id)
             try:
                 try:
-                    outputs = self._function(**self._inputs)
+                    outputs = self._function(*self._args, **self._kwargs)
                 finally:
                     ttnn.end_trace_capture(self._device, trace_id, cq_id=tracer_cq_id)
 
@@ -69,11 +81,13 @@ class Tracer(Callable):
             self._trace_id = trace_id
             self._outputs = outputs
         else:
+            _tree_map(self._update_input, self._args, args, path_label="args")
+
             for name, new in kwargs.items():
-                if name not in self._inputs:
+                if name not in self._kwargs:
                     msg = f"input '{name}' was not in the initial inputs"
                     raise KeyError(msg)
-                prev = self._inputs[name]
+                prev = self._kwargs[name]
 
                 _tree_map(self._update_input, prev, new, path_label=f'kwargs["{name}"]')
 
@@ -87,7 +101,8 @@ class Tracer(Callable):
 
         if trace_id is not None:
             self._trace_id = None
-            self._inputs = {}
+            self._args = ()
+            self._kwargs = {}
             self._outputs = None
             ttnn.release_trace(self._device, trace_id)
 
