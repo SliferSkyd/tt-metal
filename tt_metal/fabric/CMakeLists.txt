@@ -88,6 +88,8 @@ target_include_directories(fabric SYSTEM PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
 target_link_libraries(
     fabric
+    PUBLIC
+        TT::ScaleoutTools
     PRIVATE
         Metalium::Metal::LLRT
         umd::device
@@ -99,7 +101,6 @@ target_link_libraries(
         TT::Metalium::HostDevCommon
         FlatBuffers::FlatBuffers
         protobuf::libprotobuf
-        TT::ScaleoutTools
 )
 
 target_precompile_headers(fabric REUSE_FROM TT::CommonPCH)
