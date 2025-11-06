@@ -14,14 +14,8 @@ from loguru import logger
 import ttnn
 from models.common.utility_functions import is_blackhole, is_wormhole_b0, nearest_32
 from models.demos.gemma3.tt.load_checkpoints import (
-    convert_hf_to_meta,
-    convert_meta_to_hf,
     convert_vision_hf_to_meta,
     convert_vision_meta_to_hf,
-    load_hf_state_dict,
-    load_meta_state_dict,
-    reverse_permute,
-    standardize_hf_keys,
     standardize_hf_keys_multimodal,
 )
 from models.demos.t3000.llama2_70b.reference.llama.llama31_8b.model import Transformer
@@ -34,6 +28,14 @@ from models.tt_transformers.tt.common import (
     nearest_multiple,
     num_to_core_range_set,
     rope_scaling_model_factory,
+)
+from models.tt_transformers.tt.load_checkpoints import (
+    convert_hf_to_meta,
+    convert_meta_to_hf,
+    load_hf_state_dict,
+    load_meta_state_dict,
+    reverse_permute,
+    standardize_hf_keys,
 )
 from models.tt_transformers.tt.model_config import (
     CheckpointType,
