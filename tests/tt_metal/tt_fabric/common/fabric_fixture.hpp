@@ -180,7 +180,7 @@ protected:
     }
 };
 
-class Fabric1DTensixUdmFixture : public BaseFabricFixture {
+class Fabric2DTensixUdmFixture : public BaseFabricFixture {
 private:
     inline static bool should_skip_ = false;
 
@@ -192,7 +192,7 @@ protected:
             return;
         }
         BaseFabricFixture::DoSetUpTestSuite(
-            tt::tt_fabric::FabricConfig::FABRIC_1D, std::nullopt, tt::tt_fabric::FabricTensixConfig::UDM);
+            tt::tt_fabric::FabricConfig::FABRIC_2D, std::nullopt, tt::tt_fabric::FabricTensixConfig::UDM);
     }
     static void TearDownTestSuite() {
         if (!should_skip_) {
