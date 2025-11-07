@@ -343,6 +343,7 @@ tt::tt_metal::operation::ProgramWithCallbacks minimal_matmul_factory_helper(
     if (fuse_op) {
         // Create semaphores
         fused_op_signaler->init_fused_op(program, device, in0_sender_cores);
+        defines["FUSE_AG"] = "1";
     }
 
     uint32_t in0_addr = input_tensor.buffer()->address();
@@ -377,7 +378,6 @@ tt::tt_metal::operation::ProgramWithCallbacks minimal_matmul_factory_helper(
         in0_valid_semaphore_id,
         in0_is_output_writer,
         true,  // is_injector_core
-        fuse_op,
     };
     append_accessors(in0_sender_compile_time_args, input_tensor, output_tensor, bias_tensor);
 
@@ -408,7 +408,6 @@ tt::tt_metal::operation::ProgramWithCallbacks minimal_matmul_factory_helper(
         in0_valid_semaphore_id,
         in0_is_output_writer,
         false,  // is_injector_core
-        false,  // fuse_op (unused for receiver)
     };
     append_accessors(in0_receiver_compile_time_args, input_tensor, output_tensor, bias_tensor);
 
@@ -439,7 +438,6 @@ tt::tt_metal::operation::ProgramWithCallbacks minimal_matmul_factory_helper(
         in1_valid_semaphore_id,
         in1_is_output_writer,
         true,  // is_injector_core
-        fuse_op,
     };
     append_accessors(in1_sender_compile_time_args, weight_tensor, output_tensor, bias_tensor);
     auto in1_sender_kernels_id = CreateKernel(
@@ -469,7 +467,6 @@ tt::tt_metal::operation::ProgramWithCallbacks minimal_matmul_factory_helper(
         in1_valid_semaphore_id,
         in1_is_output_writer,
         false,  // is_injector_core
-        false,  // fuse_op (unused for receiver)
     };
     append_accessors(in1_receiver_compile_time_args, weight_tensor, output_tensor, bias_tensor);
     auto in1_receiver_kernels_id = CreateKernel(
