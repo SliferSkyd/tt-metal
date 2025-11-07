@@ -44,8 +44,8 @@ from models.common.utility_functions import skip_for_blackhole, skip_for_wormhol
     indirect=["device_params"],
     ids=["fabric_linear"],
 )
-@pytest.mark.parametrize("chunks_per_sync", [20])
-@pytest.mark.parametrize("num_workers_per_link", [2])
+@pytest.mark.parametrize("chunks_per_sync", [160])
+@pytest.mark.parametrize("num_workers_per_link", [4])
 @pytest.mark.parametrize("num_buffers_per_channel", [2])
 @pytest.mark.parametrize(
     "all_gather_function",
