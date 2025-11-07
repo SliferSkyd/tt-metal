@@ -130,6 +130,14 @@ tt::tt_metal::operation::ProgramWithCallbacks grid_sample_program_factory(
         output_nsticks_per_core = output_tensor.shard_spec().value().shape[0];
         logical_cores = corerange_to_cores(
             all_cores, num_cores, grid_shard_spec.orientation == tt::tt_metal::ShardOrientation::ROW_MAJOR);
+    } else if (output_tensor.shard_spec().has_value()) {
+        const auto output_shard_spec = output_tensor.shard_spec().value();
+        all_cores = output_shard_spec.grid;
+        num_cores = output_shard_spec.num_cores();
+        grid_nsticks_per_core = output_shard_spec.shape[0];
+        output_nsticks_per_core = output_tensor.shard_spec().value().shape[0];
+        logical_cores = corerange_to_cores(
+            all_cores, num_cores, output_shard_spec.orientation == tt::tt_metal::ShardOrientation::ROW_MAJOR);
     } else {
         const auto compute_grid_size = device->compute_with_storage_grid_size();
         uint32_t grid_nsticks = grid_tensor.physical_volume() / grid_shape[-1];
