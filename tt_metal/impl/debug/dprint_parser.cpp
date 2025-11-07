@@ -9,12 +9,14 @@
 #include <iomanip>
 #include <string>
 
+#include <enchantum/enchantum.hpp>
 #include <tt-metalium/blockfloat_common.hpp>
 #include <tt_stl/assert.hpp>
 
 #include "fmt/base.h"
 #include "hostdevcommon/dprint_common.h"
 #include "hostdevcommon/kernel_structs.h"
+#include "tt_backend_api_types.hpp"
 
 using std::setw;
 using std::string;
