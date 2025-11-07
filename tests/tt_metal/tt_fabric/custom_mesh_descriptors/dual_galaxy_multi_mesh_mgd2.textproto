@@ -1,0 +1,37 @@
+# SPDX-FileCopyrightText: © 2025 Tenstorrent AI ULC
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# Dual Galaxy Multi Mesh Graph Descriptor (MGD 2.0)
+# Each Galaxy configured as its own 8x4 mesh
+# Mesh 0 and Mesh 1 connected via relaxed ethernet links
+
+# --- Mesh Descriptors -----------------------------------------------------------
+
+mesh_descriptors {
+  name: "DualGalaxyMesh"
+  arch: WORMHOLE_B0
+  device_topology {
+    dims: [ 8, 4 ]
+  }
+  host_topology {
+    dims: [ 1, 1 ]
+  }
+  channels {
+    count: 4
+    policy: RELAXED
+  }
+}
+
+# --- Graph Descriptors ----------------------------------------------------------
+
+graph_descriptors {
+  name: "DualGalaxyFabric"
+  type: "FABRIC"
+  instances { mesh { mesh_descriptor: "DualGalaxyMesh" mesh_id: 0 } }
+  instances { mesh { mesh_descriptor: "DualGalaxyMesh" mesh_id: 1 } }
+}
+
+# --- Top Level Instance ---------------------------------------------------------
+
+top_level_instance { graph { graph_descriptor: "DualGalaxyFabric" graph_id: 0 } }
