@@ -6,15 +6,14 @@ import re
 
 from models.tt_transformers.tt.load_checkpoints import (
     convert_hf_qkv_to_meta_format,
-    convert_meta_qkv_to_hf_format,
     map_hf_to_meta_keys,
-    map_meta_to_hf_keys,
-    replace_keys,
+    map_hf_to_meta_keys_vision_only,
     split_hf_keys,
     standardize_hf_keys,
 )
 
 
+# NE MOZE DA SE MENJA
 def standardize_hf_keys_multimodal(state_dict):
     all_keys = tuple(state_dict.keys())
     new_state_dict = {}
@@ -40,6 +39,7 @@ def standardize_hf_keys_multimodal(state_dict):
     return output
 
 
+# NE MOZE DA SE MENJA, jer koristi map_vision_hf_to_meta_keys koji je specifican za GEMMA3
 def convert_vision_hf_to_meta(state_dict, head_dim):
     state_dict = split_hf_keys(state_dict)
     state_dict = map_vision_hf_to_meta_keys(state_dict, head_dim)
@@ -47,35 +47,7 @@ def convert_vision_hf_to_meta(state_dict, head_dim):
     return state_dict
 
 
-def map_hf_to_meta_keys_vision_only(state_dict):
-    """
-    Map Hugging Face checkpoint keys to Meta checkpoint keys.
-    You can use this to support other models by adding more mappings.
-    See replace_keys for more details on the format of replacements.
-    """
-    replacements = [
-        ("self_attn", "attn"),
-        ("q_proj", "wq"),
-        ("k_proj", "wk"),
-        ("v_proj", "wv"),
-        ("o_proj", "wo"),
-        ("out_proj", "wo"),
-        ("q_norm", "q_norm"),
-        ("k_norm", "k_norm"),
-        ("fc1", "c_fc"),
-        ("fc2", "c_proj"),
-        ("layer_norm1", "ln_1"),
-        ("layer_norm2", "ln_2"),
-        ("post_layernorm", "ln_post"),
-        ("embeddings.patch_embedding._linear", "embeddings.patch_embedding"),
-        ("embeddings.patch_embedding", "embeddings.patch_embedding._linear"),
-        # ("embeddings.position_embedding.positional_embedding.weight", "embeddings.position_embedding.positional_embedding"),
-        ("embeddings.position_embedding.weight", "embeddings.position_embedding.positional_embedding"),
-    ]
-
-    return replace_keys(state_dict, replacements)
-
-
+# NE MOZE DA SE MENJA
 def map_vision_hf_to_meta_keys_split_to_submodels(state_dict):
     vision_state_dict = dict()
     text_state_dict = dict()
@@ -94,6 +66,7 @@ def map_vision_hf_to_meta_keys_split_to_submodels(state_dict):
     return vision_state_dict, text_state_dict, other_state_dict
 
 
+# NE MOZE DA SE MENJA
 def map_vision_hf_to_meta_keys(state_dict, head_dim):
     vision_state_dict, text_state_dict, other_state_dict = map_vision_hf_to_meta_keys_split_to_submodels(state_dict)
 
@@ -107,13 +80,18 @@ def map_vision_hf_to_meta_keys(state_dict, head_dim):
 
 # VIDETI NA OSNOVU TESTOVA DA LI TREBA OBRISATI,
 # AKO TESTOVI PROLAZE ONDA ZNACI DA TREBA OBRISATI, JER JE BESKORISNO SAMO SE IMPORTUJE OVO IZ TT_TRANSFORMERS
-def convert_meta_to_hf(state_dict, head_dim):
-    state_dict = convert_meta_qkv_to_hf_format(state_dict, head_dim)
-    state_dict = map_meta_to_hf_keys(state_dict)
-    return state_dict
+# def convert_meta_to_hf(state_dict, head_dim):
+#     state_dict = convert_meta_qkv_to_hf_format(state_dict, head_dim)
+#     state_dict = map_meta_to_hf_keys(state_dict)
+#     return state_dict
+
+
+# Funkcija map_vision_meta_to_hf_keys nigde nije deklarisana, tako da time
+# convert_vision_meta_to_hf nece raditi, sto znaci da moze da se obrise.
 
 
 def convert_vision_meta_to_hf(state_dict, head_dim):
     # state_dict = convert_meta_qkv_to_hf_format(state_dict, head_dim)
     state_dict = map_vision_meta_to_hf_keys(state_dict)
+    # state_dict = None
     return state_dict
