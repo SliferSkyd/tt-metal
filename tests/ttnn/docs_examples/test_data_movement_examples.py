@@ -2,7 +2,6 @@
 
 # SPDX-License-Identifier: Apache-2.0
 
-import pytest
 import ttnn
 import torch
 
@@ -176,7 +175,7 @@ def test_indexed_fill(device):
     input_a_shape = (32, 1, 1, 4)
     input_b_shape = (6, 1, 1, 4)
 
-    # Create a tensors to perform indexed fill
+    # Create tensors to perform indexed fill
     batch_id = torch.randint(0, (32 - 1), (1, 1, 1, 6))
     batch_id_ttnn = ttnn.Tensor(batch_id, ttnn.uint32).to(
         device, ttnn.MemoryConfig(ttnn.TensorMemoryLayout.INTERLEAVED, ttnn.BufferType.L1)

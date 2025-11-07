@@ -33,7 +33,7 @@ def process_docstring(app, what, name, obj, options, lines):
         None: Modifies the lines parameter in place
 
     Notes:
-        - Only processes objects whose names are present in the global EXAMPLES_DICT
+        - Only processes objects whose names are present in the global FUNCTION_TO_EXAMPLES_MAPPING_DICT
         - Extracts function body from example functions, removing the function definition
         - Formats the example code as a reStructuredText code block with proper indentation
         - Preserves existing docstring content and appends the example section
