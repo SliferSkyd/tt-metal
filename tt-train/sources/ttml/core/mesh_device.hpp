@@ -26,3 +26,7 @@ private:
     std::shared_ptr<ttnn::distributed::MeshDevice> m_mesh_device;
 };
 }  // namespace ttml::core
+
+namespace ttml {
+    using MeshDevice = ttml::core::MeshDevice;
+}

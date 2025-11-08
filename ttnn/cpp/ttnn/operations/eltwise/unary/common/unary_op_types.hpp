@@ -6,6 +6,7 @@
 
 #include <vector>
 #include <tt_stl/reflection.hpp>
+#include <span>
 
 namespace ttnn::operations::unary {
 

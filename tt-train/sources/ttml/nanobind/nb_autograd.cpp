@@ -15,6 +15,8 @@
 #include <ttnn/tensor/layout/layout.hpp>
 #include <ttnn/tensor/types.hpp>
 
+#include "../../../../tt_metal/api/tt-metalium/mesh_device.hpp"
+
 #include "autograd/auto_context.hpp"
 #include "autograd/autocast_tensor.hpp"
 #include "autograd/graph.hpp"
@@ -251,6 +253,20 @@ void py_module(nb::module_& m) {
         py_auto_context.def("get_profiler", &AutoContext::get_profiler, "Get profiler");
         py_auto_context.def("close_profiler", &AutoContext::close_profiler, "Close profiler");
         py_auto_context.def("get_ccl_resources", &AutoContext::get_ccl_resources, "Get CCL resources");
+
+        py_auto_context.def_static(
+            "synchronize_device",
+            [](tt::tt_metal::distributed::MeshDevice* device,
+            std::optional<ttnn::QueueId> cq_id,
+            const std::vector<tt::tt_metal::SubDeviceId>& sub_device_ids) {
+                tt::tt_metal::distributed::Synchronize(
+                    device, tt::tt_metal::raw_optional(cq_id), sub_device_ids);
+            },
+            nb::arg("device"),
+            nb::arg("cq_id") = std::nullopt,
+            nb::arg("sub_device_ids") = std::vector<tt::tt_metal::SubDeviceId>(),
+            "Synchronize device");
+
 
         // Socket manager controls
         py_auto_context.def(
