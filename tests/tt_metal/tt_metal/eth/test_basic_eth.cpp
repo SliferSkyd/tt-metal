@@ -211,7 +211,7 @@ bool writer_kernel_no_receive(
     return pass;
 }
 
-bool noc_reader_and_writer_kernels(
+bool dram_noc_reader_and_writer_kernels(
     const std::shared_ptr<tt_metal::distributed::MeshDevice>& mesh_device,
     const uint32_t byte_size,
     const uint32_t eth_dst_l1_address,
@@ -233,6 +233,121 @@ bool noc_reader_and_writer_kernels(
 
     auto reader_dram_buffer = distributed::MeshBuffer::create(buffer_config, dram_config, mesh_device.get());
     auto writer_dram_buffer = distributed::MeshBuffer::create(buffer_config, dram_config, mesh_device.get());
+
+    // eth_test_common::set_arch_specific_eth_config(reader_eth_config);
+    // eth_test_common::set_arch_specific_eth_config(writer_eth_config);
+
+    log_info(
+        tt::LogTest,
+        "Device {}: reading {} bytes from dram bank 0 addr {} to ethernet core {} addr {}",
+        device->id(),
+        byte_size,
+        reader_dram_buffer->address(),
+        logical_eth_core.str(),
+        eth_dst_l1_address);
+    log_info(
+        tt::LogTest,
+        "Device {}: writing {} bytes from ethernet core {} addr {} to dram bank 0 addr {}",
+        device->id(),
+        byte_size,
+        logical_eth_core.str(),
+        eth_src_l1_address,
+        writer_dram_buffer->address());
+
+    auto eth_noc_xy = device->ethernet_core_from_logical_core(logical_eth_core);
+
+    auto eth_reader_kernel = tt_metal::CreateKernel(
+        program,
+        "tests/tt_metal/tt_metal/test_kernels/dataflow/unit_tests/erisc/direct_reader_dram_to_l1.cpp",
+        logical_eth_core,
+        reader_eth_config);
+
+    tt_metal::SetRuntimeArgs(
+        program,
+        eth_reader_kernel,
+        logical_eth_core,
+        {
+            (uint32_t)reader_dram_buffer->address(),
+            0,
+            (uint32_t)byte_size,
+            (uint32_t)eth_dst_l1_address,
+        });
+
+    auto eth_writer_kernel = tt_metal::CreateKernel(
+        program,
+        "tests/tt_metal/tt_metal/test_kernels/dataflow/unit_tests/erisc/direct_writer_l1_to_dram.cpp",
+        logical_eth_core,
+        writer_eth_config);
+
+    tt_metal::SetRuntimeArgs(
+        program,
+        eth_writer_kernel,
+        logical_eth_core,
+        {
+            (uint32_t)writer_dram_buffer->address(),
+            0,
+            (uint32_t)byte_size,
+            (uint32_t)eth_src_l1_address,
+        });
+
+    auto reader_inputs = generate_uniform_random_vector<uint32_t>(0, 100, byte_size / sizeof(uint32_t));
+    distributed::WriteShard(cq, reader_dram_buffer, reader_inputs, zero_coord);
+
+    auto writer_inputs = generate_uniform_random_vector<uint32_t>(0, 100, byte_size / sizeof(uint32_t));
+    tt::tt_metal::MetalContext::instance().get_cluster().write_core(
+        device->id(), eth_noc_xy, writer_inputs, eth_src_l1_address);
+
+    // Clear expected values at output locations
+    std::vector<uint32_t> all_zeros(byte_size / sizeof(uint32_t), 0);
+    tt::tt_metal::MetalContext::instance().get_cluster().write_core(
+        device->id(), eth_noc_xy, all_zeros, eth_dst_l1_address);
+    distributed::WriteShard(cq, writer_dram_buffer, all_zeros, zero_coord);
+
+    workload.add_program(device_range, std::move(program));
+    distributed::EnqueueMeshWorkload(cq, workload, true);
+
+    auto eth_readback_vec = tt::tt_metal::MetalContext::instance().get_cluster().read_core(
+        device->id(), eth_noc_xy, eth_dst_l1_address, byte_size);
+    pass &= (eth_readback_vec == reader_inputs);
+    if (not pass) {
+        log_info(
+            tt::LogTest,
+            "Mismatch at eth core: {}, eth kernel read incorrect values from DRAM",
+            logical_eth_core.str());
+    }
+    std::vector<uint32_t> dram_readback_vec;
+    distributed::ReadShard(cq, dram_readback_vec, writer_dram_buffer, zero_coord);
+    pass &= (dram_readback_vec == writer_inputs);
+    if (not pass) {
+        log_info(
+            tt::LogTest, "Mismatch at eth core: {}, eth kernel wrote incorrect values to DRAM", logical_eth_core.str());
+    }
+
+    return pass;
+}
+
+bool l1_noc_reader_and_writer_kernels(
+    const std::shared_ptr<tt_metal::distributed::MeshDevice>& mesh_device,
+    const uint32_t byte_size,
+    const uint32_t eth_dst_l1_address,
+    const uint32_t eth_src_l1_address,
+    const CoreCoord& logical_eth_core,
+    tt_metal::EthernetConfig reader_eth_config,
+    tt_metal::EthernetConfig writer_eth_config) {
+    bool pass = true;
+
+    distributed::MeshWorkload workload;
+    auto zero_coord = distributed::MeshCoordinate(0, 0);
+    auto device_range = distributed::MeshCoordinateRange(zero_coord, zero_coord);
+    tt_metal::Program program = tt_metal::Program();
+    auto device = mesh_device->get_devices()[0];
+    auto& cq = mesh_device->mesh_command_queue();
+
+    distributed::DeviceLocalBufferConfig l1_config{.page_size = byte_size, .buffer_type = tt_metal::BufferType::L1};
+    distributed::ReplicatedBufferConfig buffer_config{.size = byte_size};
+
+    auto reader_dram_buffer = distributed::MeshBuffer::create(buffer_config, l1_config, mesh_device.get());
+    auto writer_dram_buffer = distributed::MeshBuffer::create(buffer_config, l1_config, mesh_device.get());
 
     eth_test_common::set_arch_specific_eth_config(reader_eth_config);
     eth_test_common::set_arch_specific_eth_config(writer_eth_config);
@@ -370,9 +485,6 @@ TEST_F(UnitMeshCQSingleCardProgramFixture, ActiveEthKernelsNocReadNoSend) {
 }
 
 TEST_F(UnitMeshCQSingleCardProgramFixture, ActiveEthKernelsNocWriteNoReceive) {
-    if (arch_ == ARCH::BLACKHOLE) {
-        GTEST_SKIP() << "See GH Issue #18384";
-    }
     using namespace CMAKE_UNIQUE_NAMESPACE;
     const size_t src_eth_l1_byte_address = tt::tt_metal::MetalContext::instance().hal().get_dev_addr(
         HalProgrammableCoreType::ACTIVE_ETH, HalL1MemAddrType::UNRESERVED);
@@ -398,6 +510,47 @@ TEST_F(UnitMeshCQSingleCardProgramFixture, ActiveEthKernelsNocWriteNoReceive) {
                     eth_core,
                     ethernet_config));
             }
+        }
+    }
+}
+
+TEST_F(UnitMeshCQSingleCardProgramFixture, ActiveEthKernelsMultiEriscDynamicNocReadWriteNoReceive) {
+    using namespace CMAKE_UNIQUE_NAMESPACE;
+
+    uint32_t read_write_size_bytes = WORD_SIZE * 2048;
+    uint32_t reader_dst_address =
+        MetalContext::instance().hal().get_dev_addr(HalProgrammableCoreType::ACTIVE_ETH, HalL1MemAddrType::UNRESERVED);
+    uint32_t writer_src_address = reader_dst_address + read_write_size_bytes;
+    tt_metal::EthernetConfig erisc0_ethernet_config{
+        .eth_mode = Eth::SENDER,
+        .noc = tt_metal::NOC::NOC_0,
+        .processor = tt_metal::DataMovementProcessor::RISCV_0,
+        .noc_mode = DM_DEDICATED_NOC};
+    tt_metal::EthernetConfig erisc1_ethernet_config{
+        .eth_mode = Eth::SENDER,
+        .noc = tt_metal::NOC::NOC_1,
+        .processor = tt_metal::DataMovementProcessor::RISCV_1,
+        .noc_mode = DM_DEDICATED_NOC};
+
+    const auto erisc_count =
+        tt::tt_metal::MetalContext::instance().hal().get_num_risc_processors(HalProgrammableCoreType::ACTIVE_ETH);
+    if (erisc_count < 2) {
+        GTEST_SKIP() << "At least 2 eriscs are required for this test";
+    }
+
+    log_info(tt::LogTest, "{} devices", devices_.size());
+
+    for (const auto& mesh_device : devices_) {
+        auto device = mesh_device->get_devices()[0];
+        for (const auto& eth_core : device->get_active_ethernet_cores(true)) {
+            ASSERT_TRUE(unit_tests::erisc::kernels::dram_noc_reader_and_writer_kernels(
+                mesh_device,
+                read_write_size_bytes,
+                reader_dst_address,
+                writer_src_address,
+                eth_core,
+                erisc0_ethernet_config,
+                erisc1_ethernet_config));
         }
     }
 }
@@ -606,7 +759,7 @@ TEST_F(BlackholeSingleCardFixture, IdleEthKernelOnBothIdleEriscs) {
         .eth_mode = Eth::IDLE, .noc = tt_metal::NOC::NOC_1, .processor = tt_metal::DataMovementProcessor::RISCV_1};
 
     for (const auto& eth_core : device->get_inactive_ethernet_cores()) {
-        ASSERT_TRUE(unit_tests::erisc::kernels::noc_reader_and_writer_kernels(
+        ASSERT_TRUE(unit_tests::erisc::kernels::dram_noc_reader_and_writer_kernels(
             mesh_device,
             read_write_size_bytes,
             reader_dst_address,
@@ -616,7 +769,7 @@ TEST_F(BlackholeSingleCardFixture, IdleEthKernelOnBothIdleEriscs) {
             erisc1_ethernet_config));
         erisc0_ethernet_config.noc = tt_metal::NOC::NOC_1;
         erisc1_ethernet_config.noc = tt_metal::NOC::NOC_1;
-        ASSERT_TRUE(unit_tests::erisc::kernels::noc_reader_and_writer_kernels(
+        ASSERT_TRUE(unit_tests::erisc::kernels::dram_noc_reader_and_writer_kernels(
             mesh_device,
             read_write_size_bytes,
             reader_dst_address,

@@ -27,17 +27,18 @@ inline __attribute__((always_inline)) void risc_context_switch() {
     ncrisc_noc_full_sync();
     rtos_context_switch_ptr();
     ncrisc_noc_counters_init();
-#elif defined(COMPILE_FOR_AERISC) && (PHYSICAL_AERISC_ID == 0)
-    // Sync is only needed when running on ERISC0 and DM_DEDICATED_NOC
+#elif defined(COMPILE_FOR_AERISC) && (PHYSICAL_AERISC_ID == 0) && (COMPILE_FOR_AERISC == 0)
+    // Sync is only needed when running on active_erisc on ERISC0 and DM_DEDICATED_NOC
     // With Dynamic NOC, the counters are shared in L1
-    if constexpr (NOC_MODE == DM_DEDICATED_NOC) {
-        ncrisc_noc_full_sync<1>();
-    }
+    // NOC_MODE is only defined in the kernel build
+    // #if !defined(NOC_MODE) || (NOC_MODE == DM_DEDICATED_NOC)
+    ncrisc_noc_full_sync<1>();
+    // #endif
     service_eth_msg();
     update_boot_results_eth_link_status_check();
-    if constexpr (NOC_MODE == DM_DEDICATED_NOC) {
-        ncrisc_noc_counters_init<1>();
-    }
+    // #if !defined(NOC_MODE) || (NOC_MODE == DM_DEDICATED_NOC)
+    ncrisc_noc_counters_init<1>();
+// #endif
 #endif
 #endif
 }
@@ -46,9 +47,9 @@ inline __attribute__((always_inline)) void risc_context_switch_without_noc_sync(
 #if defined(COMPILE_FOR_ERISC)
 #if defined(COOPERATIVE_ERISC)
     rtos_context_switch_ptr();
-#elif defined(COMPILE_FOR_AERISC) && (PHYSICAL_AERISC_ID == 0)
+#elif defined(COMPILE_FOR_AERISC) && (PHYSICAL_AERISC_ID == 0) && (COMPILE_FOR_AERISC == 0)
     update_boot_results_eth_link_status_check();
-#elif defined(COMPILE_FOR_AERISC) && (PHYSICAL_AERISC_ID == 1)
+#elif defined(COMPILE_FOR_AERISC) && (PHYSICAL_AERISC_ID == 1) && (COMPILE_FOR_AERISC == 1)
     lite_fabric::service_lite_fabric_channels();
 #endif
 #endif
